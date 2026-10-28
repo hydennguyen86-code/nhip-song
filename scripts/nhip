@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# nhip-song <start|stop|restart|status|logs|backup|test|seed> [args]
+# Một lệnh duy nhất để vận hành ứng dụng trên Mac.
+set -euo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$HERE"
+
+# Ưu tiên Node của Homebrew/local nếu có, nếu không dùng PATH.
+NODE="${NHIP_NODE:-$(command -v node || echo /Users/admin/.local/opt/node-v24.22.1-darwin-arm64/bin/node)}"
+PORT="${PORT:-8899}"
+PID_FILE="$HERE/data/server.pid"
+LOG_FILE="$HERE/data/server.log"
+mkdir -p "$HERE/data"
+
+running() { [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; }
+
+case "${1:-status}" in
+  start)
+    if running; then echo "Đang chạy, PID $(cat "$PID_FILE"), http://127.0.0.1:$PORT"; exit 0; fi
+    nohup "$NODE" server/index.mjs > "$LOG_FILE" 2>&1 &
+    echo $! > "$PID_FILE"
+    sleep 1
+    if running; then
+      LAN=$(ipconfig getifaddr en0 2>/dev/null || echo '(bạn tự xem Wi-Fi)')
+      echo "Đã khởi động (PID $(cat "$PID_FILE"))."
+      echo "  Trên Mac:      http://127.0.0.1:$PORT"
+      echo "  Trên iPhone:   http://$LAN:$PORT  (cùng Wi-Fi)"
+    else
+      echo "Khởi động thất bại. Xem $LOG_FILE"; exit 1
+    fi
+    ;;
+  stop)
+    if running; then
+      kill "$(cat "$PID_FILE")"; rm -f "$PID_FILE"; echo "Đã dừng."
+    else echo "Không có tiến trình đang chạy."; fi
+    ;;
+  restart) "$0" stop; "$0" start ;;
+  status)
+    if running; then echo "ĐANG CHẠY · PID $(cat "$PID_FILE") · cổng $PORT"; curl -sS "http://127.0.0.1:$PORT/api/health"; echo
+    else echo "DỪNG"; fi
+    ;;
+  logs) tail -n "${2:-80}" "$LOG_FILE" ;;
+  backup) bash "$HERE/scripts/backup.sh" ;;
+  test) "$NODE" --test 'test/*.test.mjs' ;;
+  seed) "$NODE" scripts/seed-demo.mjs ;;
+  *) echo "Dùng: nhip <start|stop|restart|status|logs [N]|backup|test|seed>"; exit 2 ;;
+esac

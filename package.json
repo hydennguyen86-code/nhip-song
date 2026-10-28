@@ -1,0 +1,15 @@
+{
+  "name": "nhip-song",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Nhịp Sống — app sức khỏe cá nhân cho gia đình, dữ liệu từ Intervals.icu, chạy trong mạng nội bộ.",
+  "type": "module",
+  "engines": { "node": ">=22.5" },
+  "scripts": {
+    "start": "node server/index.mjs",
+    "test": "node --test 'test/*.test.mjs'",
+    "seed": "node scripts/seed-demo.mjs",
+    "reset": "rm -f data/nhip-song.db* data/secret.key",
+    "backup": "bash scripts/backup.sh"
+  }
+}

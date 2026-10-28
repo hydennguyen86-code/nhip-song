@@ -1,0 +1,30 @@
+# Dữ liệu cá nhân — không bao giờ commit
+data/
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+secret.key
+backups/
+*.bak
+
+# Bí mật & cấu hình thật
+.env
+.env.local
+*.pem
+*.p12
+*.key
+
+# Nhật ký, file tạm
+*.log
+.DS_Store
+tmp/
+.tmp/
+
+# Node
+node_modules/
+npm-debug.log*
+
+# CSV/Screenshot sức khỏe thật (tài liệu hướng dẫn, không chứa dữ liệu)
+*.real.csv
+sample-data/real/
