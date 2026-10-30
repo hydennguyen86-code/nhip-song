@@ -213,7 +213,8 @@ describe('advice engine', () => {
     // one mildly low night right before the assessment day
     wellness.push({ date: '2026-10-01', resting_hr: 53, hrv_rmssd: 76, sleep_secs: 28000 });
     const a = buildAdvice({ today: '2026-10-01', wellness, activities: [], checkin: null });
-    // rolling 7-day mean ≈ (76 + 6×~81)/7 ≈ 80.3 vs baseline 81 (sd≈0.8) → |z| < 1
+    // last night ln(76/81) ≈ −0.064 over the 0.07 spread floor → acute z ≈ −0.9;
+    // 7-day mean is almost on baseline → mixed z ≈ −0.6, above the −1 threshold
     const hrv = a.reasons.find((r) => r.kind === 'hrv');
     assert.ok(hrv.smoothed);
     assert.ok(hrv.z > -1, `z=${hrv.z}`);
@@ -231,8 +232,8 @@ describe('advice engine', () => {
   test('disabled factor via settings is skipped and reported', () => {
     const wellness = [];
     for (let i = 1; i <= 30; i++) wellness.push({ date: `2026-09-${String(i).padStart(2, '0')}`, resting_hr: 52 + (i % 3), hrv_rmssd: 80 + (i % 3), sleep_secs: 28000 });
-    wellness.push({ date: '2026-10-01', resting_hr: 70, hrv_rmssd: 50, sleep_secs: 20000 });
-    const a = buildAdvice({ today: '2026-10-01', wellness, activities: [], checkin: null, settings: { rhr_on: 0, hrv_on: 0, sleep_z: 5 } });
+    wellness.push({ date: '2026-10-01', resting_hr: 70, hrv_rmssd: 50, sleep_secs: 28000 });
+    const a = buildAdvice({ today: '2026-10-01', wellness, activities: [], checkin: null, settings: { rhr_on: 0, hrv_on: 0 } });
     assert.ok(a.reasons.some((r) => r.kind === 'hrv-off'));
     assert.ok(a.reasons.some((r) => r.kind === 'rhr-off'));
     assert.equal(a.verdict, 'plan');

@@ -43,6 +43,15 @@ function rows({
 }
 
 describe('recovery index', () => {
+  test('explains missing current values separately from insufficient baseline', () => {
+    const r = computeRecovery({ wellness: rows({ todayRhr: null, todaySleep: null, todayResp: null }), today: TODAY });
+    for (const key of ['rhr', 'sleep']) {
+      assert.match(r.factors.find((f) => f.key === key).text, /chưa có.*2026-10-27/i);
+    }
+    assert.equal(r.factors.find((f) => f.key === 'resp').respState, 'missing_today');
+    const insufficient = computeRecovery({ wellness: rows({ n: 3 }), today: TODAY });
+    assert.match(insufficient.factors.find((f) => f.key === 'rhr').text, /hiện có 3/);
+  });
   test('weights are explicit and sum to 1', () => {
     const sum = Object.values(RECOVERY_WEIGHTS).reduce((a, b) => a + b, 0);
     assert.ok(Math.abs(sum - 1) < 1e-12);
@@ -58,9 +67,11 @@ describe('recovery index', () => {
     assert.equal(f.status, 'bad');
   });
 
-  test('all four factors are used, contributions add up to score − 50', () => {
+  test('all three scored factors are used, contributions add up to score − 50', () => {
     const r = computeRecovery({ wellness: rows({ todayHrv: 86, todaySleep: 480 * 60 }), today: TODAY, checkin: null });
-    assert.equal(r.used, 4);
+    assert.equal(r.used, 3);
+    assert.equal(r.total, 3);
+    assert.equal(r.factors.find((f) => f.key === 'resp').subscore, null);
     assert.equal(r.confidence, 'cao');
     const sum = r.factors.reduce((a, f) => a + (f.contribution || 0), 0);
     assert.ok(Math.abs(sum - (r.score - 50)) <= 2, `contrib ${sum} vs ${r.score - 50}`);
@@ -124,13 +135,15 @@ describe('recovery index', () => {
       assert.match(f.text, /đã tắt/);
     }
     const resp = r.factors.find((f) => f.key === 'resp');
-    assert.ok(resp && resp.subscore != null && !resp.disabled);
+    assert.ok(resp && resp.flag && resp.subscore == null && !resp.disabled);
+    assert.equal(r.total, 0);
     assert.match(r.note, /bổ sung/);
   });
 
   test('one disabled factor lowers used but still yields a score', () => {
     const r = computeRecovery({ wellness: rows(), today: TODAY, checkin: null, settings: { sleep_on: 0 } });
-    assert.equal(r.used, 3);
+    assert.equal(r.used, 2);
+    assert.equal(r.total, 2);
     assert.equal(r.confidence, 'vừa');
     assert.equal(r.factors.find((f) => f.key === 'sleep').disabled, true);
     assert.ok(r.score != null && r.score > 0);

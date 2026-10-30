@@ -11,16 +11,20 @@
  *   3. Serious data gap → "Chưa đủ dữ liệu".
  *   4. Baseline comparisons → "Ưu tiên hồi phục" / "Theo kế hoạch vừa sức".
  *
- * Signal handling follows standard sports-science practice for wearables:
- *   - HRV is compared as a 7-day rolling mean (Plews et al.), because a single
- *     night of rMSSD has day-to-day CV of ~5–10% and one low night is often
- *     noise, not a training state.
- *   - RHR, sleep and respiratory rate use last night's value (they are less
- *     noisy), compared to a personal 30-day window as z-scores.
- *   - The z thresholds are user-adjustable reference rules, not clinical
- *     cutoffs (see advice_settings).
+ * Signal handling (models in signals.mjs):
+ *   - HRV: ln(rMSSD), 60% last night + 40% 7-day mean, robust z vs a 60-day
+ *     median/MAD baseline (spread floor 0.07 so one noisy night is not drama);
+ *     SWC and 7-day CV are reported (Plews, Buchheit et al.).
+ *   - RHR: last night vs 30-day median, robust z.
+ *   - Sleep: obtained / need. < 85% = warning, < 70% = strong warning.
+ *   - Respiratory rate: one-sided flag. Only a rise counts; a rise together
+ *     with RHR up or HRV down = "body may be fighting something" → recover.
+ *   - Only the BAD direction of a signal can count as a warning.
+ *   - RHR/HRV z thresholds are user-adjustable reference rules, not clinical
+ *     cutoffs (see advice_settings). The sleep cut-off is fixed at 85% of need.
  */
-import { computeBaselines, compare, recentLoad, rollingMean } from './baseline.mjs';
+import { computeBaselines, recentLoad } from './baseline.mjs';
+import { hrvModel, rhrModel, sleepPerformance, respiratorySignal, SLEEP_PERF } from './signals.mjs';
 
 const VERDICT = {
   EMERGENCY: 'emergency',
@@ -52,7 +56,11 @@ function hasRedFlag(checkin) {
 
 function fmtBpm(n) { return n === null || n === undefined ? '—' : `${Math.round(n)}`; }
 function fmtMs(n) { return n === null || n === undefined ? '—' : `${n.toFixed(1)}`; }
-function fmtMin(n) { return n === null || n === undefined ? '—' : `${Math.floor(n / 60)}h${String(Math.round(n % 60)).padStart(2, '0')}`; }
+function fmtMin(n) {
+  if (n === null || n === undefined) return '—';
+  const m = Math.round(n);
+  return `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}`;
+}
 function fmtResp(n) { return n === null || n === undefined ? '—' : `${n.toFixed(1)}`; }
 
 const DEFAULT_SETTINGS = {
@@ -61,7 +69,7 @@ const DEFAULT_SETTINGS = {
 };
 
 /** Build the morning card. `settings` comes from advice_settings (per user). */
-export function buildAdvice({ user, today, wellness, activities, checkin, settings = DEFAULT_SETTINGS }) {
+export function buildAdvice({ user, today, wellness, activities = [], checkin, settings = DEFAULT_SETTINGS, sickDates = null }) {
   const s = { ...DEFAULT_SETTINGS, ...settings };
   const reasons = [];
   const gaps = [];
@@ -84,52 +92,75 @@ export function buildAdvice({ user, today, wellness, activities, checkin, settin
   }
 
   // Wellness rows are already exclusion-filtered upstream.
-  const baselines = computeBaselines(wellness, today);
-  const latest = wellness.filter((w) => w.date === today)[0] || null;
+  const baselines = computeBaselines(wellness, today, { sickDates });
 
-  // ---- RHR (last night vs 30-day baseline) ----
+  // ---- RHR (last night vs robust 30-day median) ----
   if (s.rhr_on) {
-    if (baselines.rhr.count >= 7 && latest?.resting_hr) {
-      const c = compare(latest.resting_hr, baselines.rhr, { higherIsBetter: false });
+    const rhr = rhrModel(wellness, today, { sickDates });
+    if (rhr.ready) {
+      const word = rhr.z <= -0.5 ? 'tốt hơn nền' : rhr.z >= 0.5 ? 'cao hơn nền' : 'trong khoảng nền';
       reasons.push({
         kind: 'rhr',
-        text: `Nhịp tim nghỉ hôm nay ${fmtBpm(c.value)} vs nền 30 ngày ${fmtBpm(c.mean)} bpm — ${c.word}.`,
-        ...c,
+        text: `Nhịp tim nghỉ hôm nay ${fmtBpm(rhr.value)} vs trung vị 30 ngày ${fmtBpm(rhr.median)} bpm — ${word}.`,
+        ready: true, value: rhr.value, mean: rhr.median, z: rhr.z, word,
       });
     } else {
-      gaps.push({ kind: 'rhr', text: `Chưa đủ dữ liệu RHR (cần ≥7 ngày trong 30 ngày nền và có số hôm nay). Hiện có ${baselines.rhr.count} ngày nền.` });
+      gaps.push({ kind: 'rhr', text: `Chưa đủ dữ liệu RHR (cần ≥7 ngày trong 30 ngày nền và có số hôm nay). Hiện có ${rhr.count} ngày nền.` });
     }
   } else {
     reasons.push({ kind: 'rhr-off', text: 'Bạn đã tắt nhận xét RHR trong cài đặt ngưỡng.' });
   }
 
-  // ---- HRV (7-day rolling mean, rMSSD vs SDNN never merged) ----
-  const hrvSource = s.hrv_on ? chooseHrv(wellness, baselines) : null;
-  if (hrvSource) {
-    reasons.push({ kind: 'hrv', text: hrvSource.text, ...hrvSource.comparison });
-  } else if (s.hrv_on) {
-    gaps.push({ kind: 'hrv', text: `HRV cần tối thiểu ${baselines.hrvRmssd.minDays} ngày cùng loại (rMSSD hoặc SDNN) và ≥3 ngày đo trong 7 ngày gần nhất. Hiện có rMSSD=${baselines.hrvRmssd.daysAvailable} ngày (${baselines.hrvRmssd.tier}), SDNN=${baselines.hrvSdnn.daysAvailable} ngày (${baselines.hrvSdnn.tier}).` });
+  // ---- HRV (ln, last night + 7-day mean, SWC, CV; rMSSD and SDNN never merged) ----
+  if (s.hrv_on) {
+    const hrv = hrvModel(wellness, today, { sickDates });
+    if (hrv.ready) {
+      const parts = [];
+      if (hrv.acute) parts.push(`đêm qua ${fmtMs(hrv.acute.value)} ms`);
+      if (hrv.chronic) parts.push(`TB ${hrv.chronic.count} ngày ${fmtMs(hrv.chronic.value)} ms`);
+      const word = hrv.z >= 0.5 ? 'tốt hơn nền' : hrv.z <= -0.5 ? 'thấp hơn nền' : 'trong khoảng nền';
+      let text = `HRV ${hrv.name} ${parts.join(', ')} so với nền ${fmtMs(hrv.baselineMs)} ms (SWC ${hrv.swc.low.toFixed(0)}–${hrv.swc.high.toFixed(0)}, ${hrv.daysAvailable} ngày, mức ${hrv.tier}) — ${word}.`;
+      if (hrv.cv7?.high) text += ` Dao động 7 ngày cao bất thường (CV ${hrv.cv7.value.toFixed(0)}% vs thường ${hrv.cv7.typical.toFixed(0)}%).`;
+      reasons.push({
+        kind: 'hrv', text, ready: true, value: (hrv.acute || hrv.chronic).value, mean: hrv.baselineMs, z: hrv.z, word,
+        which: hrv.name, smoothed: Boolean(hrv.chronic), smoothedDays: hrv.chronic?.count || 0, tier: hrv.tier,
+        acuteZ: hrv.acute?.z ?? null, chronicZ: hrv.chronic?.z ?? null, cvHigh: Boolean(hrv.cv7?.high),
+      });
+    } else {
+      gaps.push({ kind: 'hrv', text: `HRV cần tối thiểu ${hrv.minDays} ngày cùng loại (rMSSD hoặc SDNN) trong ${hrv.windowDays} ngày và số đêm qua hoặc ≥3 ngày trong 7 ngày gần nhất. Hiện có ${hrv.name}=${hrv.daysAvailable} ngày (${hrv.tier}).` });
+    }
   } else {
     reasons.push({ kind: 'hrv-off', text: 'Bạn đã tắt nhận xét HRV trong cài đặt ngưỡng.' });
   }
 
-  // ---- Sleep ----
+  // ---- Sleep (obtained / need, not vs own average) ----
   if (s.sleep_on) {
-    if (baselines.sleepMinutes.count >= 7 && latest?.sleep_secs) {
-      const minutes = latest.sleep_secs / 60;
-      const c = compare(minutes, baselines.sleepMinutes, { higherIsBetter: true });
-      reasons.push({ kind: 'sleep', text: `Ngủ ${fmtMin(minutes)} so với nền ${fmtMin(c.mean)} — ${c.word}.`, ...c });
+    const sp = sleepPerformance(wellness, activities, today);
+    if (sp.ready) {
+      const pct = Math.round(sp.pct * 100);
+      const word = sp.pct >= SLEEP_PERF.good ? 'đủ nhu cầu' : sp.pct >= SLEEP_PERF.warn ? 'gần đủ' : 'thiếu ngủ';
+      reasons.push({
+        kind: 'sleep',
+        text: `Ngủ ${fmtMin(sp.actualMin)} / nhu cầu ${fmtMin(sp.needMin)} (${pct}%) — ${word}.${sp.suspect ? ' Dưới 3 giờ: nếu là lỗi đồng bộ, hãy đánh dấu sai.' : ''}`,
+        ready: true, value: sp.actualMin, need: sp.needMin, pct: sp.pct, word,
+      });
     } else {
-      gaps.push({ kind: 'sleep', text: `Chưa đủ lịch sử ngủ (cần ≥7 ngày). Hiện có ${baselines.sleepMinutes.count} ngày.` });
+      gaps.push({ kind: 'sleep', text: 'Chưa có dữ liệu ngủ đêm qua.' });
     }
   } else {
     reasons.push({ kind: 'sleep-off', text: 'Bạn đã tắt nhận xét ngủ trong cài đặt ngưỡng.' });
   }
 
-  // ---- Respiratory rate (supplemental: illness marker, only when present) ----
-  if (baselines.respiration.count >= 7 && latest?.respiration) {
-    const c = compare(latest.respiration, baselines.respiration, { higherIsBetter: false });
-    reasons.push({ kind: 'resp', text: `Nhịp thở hôm nay ${fmtResp(c.value)} so với nền ${fmtResp(c.mean)} lần/phút — ${c.word}.`, ...c, supplemental: true });
+  // ---- Respiratory rate: one-sided illness flag, only a RISE counts ----
+  const resp = respiratorySignal(wellness, today, { sickDates });
+  if (resp.state === 'elevated' || resp.state === 'normal') {
+    reasons.push({
+      kind: 'resp',
+      text: resp.state === 'elevated'
+        ? `Nhịp thở ${fmtResp(resp.value)} lần/phút, cao hơn trung vị ${fmtResp(resp.median)} +${fmtResp(resp.delta)} — cờ cảnh báo sớm (sốt, nhiễm trùng, rượu, nóng).`
+        : `Nhịp thở ${fmtResp(resp.value)} lần/phút, trung vị ${fmtResp(resp.median)} — không tăng bất thường.`,
+      ready: true, value: resp.value, mean: resp.median, z: resp.z, elevated: resp.state === 'elevated', strong: resp.strong, supplemental: true,
+    });
   }
 
   // ---- Steps (today is never a "today total" until the day ends) ----
@@ -162,36 +193,37 @@ export function buildAdvice({ user, today, wellness, activities, checkin, settin
     return finalize(VERDICT.UNKNOWN, LABEL[VERDICT.UNKNOWN], 'Chưa có đủ RHR / HRV / ngủ để kết luận. Hãy bấm Đồng bộ hoặc chờ thêm ngày.', reasons, gaps, { checkin, today, baselines, load });
   }
 
-  // ---- Quantitative signal aggregation (z-score reference rules) ----
-  const warn = reasons.filter((r) => r.ready && r.z !== undefined && (
-    (r.kind === 'rhr' && r.z > s.rhr_z) ||
-    (r.kind === 'hrv' && r.z < -s.hrv_z) ||
-    (r.kind === 'sleep' && r.z < -s.sleep_z)
-  )).length;
-  const strongWarn = reasons.filter((r) => r.ready && r.z !== undefined && Math.abs(r.z) > s.strong_z).length;
-
-  if (strongWarn >= 2 || warn >= 3) return finalize(VERDICT.REST, LABEL[VERDICT.REST], 'Nhiều chỉ số lệch nền rõ rệt theo hướng xấu.', reasons, gaps, { checkin, today, baselines, load });
-  if (warn >= 2) return finalize(VERDICT.RECOVER, LABEL[VERDICT.RECOVER], 'Vài chỉ số dưới nền — nên ưu tiên hồi phục.', reasons, gaps, { checkin, today, baselines, load });
-  if (warn === 1) return finalize(VERDICT.EASE, LABEL[VERDICT.EASE], 'Một chỉ số lệch nền — buổi tập nên nhẹ hơn dự kiến.', reasons, gaps, { checkin, today, baselines, load });
-  return finalize(VERDICT.PLAN, LABEL[VERDICT.PLAN], 'Các chỉ số trong khoảng nền cá nhân.', reasons, gaps, { checkin, today, baselines, load });
-}
-
-function chooseHrv(wellness, baselines) {
-  // Prefer rMSSD when its baseline is ready; otherwise SDNN. Never blend.
-  const rmssdReady = baselines.hrvRmssd.baseline;
-  const sdnnReady = baselines.hrvSdnn.baseline;
-  if (!rmssdReady && !sdnnReady) return null;
-  const useRmssd = Boolean(rmssdReady) || !sdnnReady;
-  const name = useRmssd ? 'rMSSD' : 'SDNN';
-  const field = useRmssd ? 'hrv_rmssd' : 'hrv_sdnn';
-  const baseline = useRmssd ? baselines.hrvRmssd : baselines.hrvSdnn;
-  const roll = rollingMean(wellness, field, baselines.targetDate);
-  if (!roll) return null;
-  const cmp = compare(roll.value, baseline.baseline, { higherIsBetter: true });
-  return {
-    text: `HRV ${name} 7 ngày gần nhất ${fmtMs(cmp.value)} ms so với nền ${fmtMs(cmp.mean)} ms (${baseline.baseline.count} ngày, mức ${baseline.tier}) — ${cmp.word}.`,
-    comparison: { ...cmp, which: name, smoothed: true, smoothedDays: roll.count, tier: baseline.tier },
+  // ---- Quantitative signal aggregation (only the BAD direction counts) ----
+  const get = (k) => reasons.find((r) => r.kind === k && r.ready);
+  const rhrR = get('rhr');
+  const hrvR = get('hrv');
+  const sleepR = get('sleep');
+  const respR = get('resp');
+  const flags = {
+    rhr: Boolean(rhrR && rhrR.z > s.rhr_z),
+    hrv: Boolean(hrvR && hrvR.z < -s.hrv_z),
+    sleep: Boolean(sleepR && sleepR.pct < SLEEP_PERF.warn),
+    resp: Boolean(respR && respR.elevated),
   };
+  const strong = {
+    rhr: Boolean(rhrR && rhrR.z > s.strong_z),
+    hrv: Boolean(hrvR && hrvR.z < -s.strong_z),
+    sleep: Boolean(sleepR && sleepR.pct < SLEEP_PERF.strong),
+    resp: Boolean(respR && respR.strong),
+  };
+  const warn = Object.values(flags).filter(Boolean).length;
+  const strongWarn = Object.values(strong).filter(Boolean).length;
+  const illness = flags.resp && (flags.rhr || flags.hrv);
+  const extra = { checkin, today, baselines, load, flags };
+
+  if (strongWarn >= 2 || warn >= 3) return finalize(VERDICT.REST, LABEL[VERDICT.REST], 'Nhiều chỉ số lệch nền rõ rệt theo hướng xấu.', reasons, gaps, extra);
+  if (illness) return finalize(VERDICT.RECOVER, LABEL[VERDICT.RECOVER], `Nhịp thở tăng cùng ${flags.rhr ? 'nhịp tim nghỉ tăng' : 'HRV giảm'} — dấu hiệu cơ thể có thể đang chống bệnh. Theo dõi nhiệt độ, ưu tiên nghỉ.`, reasons, gaps, extra);
+  if (warn >= 2) return finalize(VERDICT.RECOVER, LABEL[VERDICT.RECOVER], 'Vài chỉ số xấu hơn nền hoặc thiếu ngủ — nên ưu tiên hồi phục.', reasons, gaps, extra);
+  if (warn === 1) {
+    const which = flags.sleep ? 'Ngủ chưa đủ nhu cầu' : flags.resp ? 'Nhịp thở tăng bất thường' : 'Một chỉ số lệch nền';
+    return finalize(VERDICT.EASE, LABEL[VERDICT.EASE], `${which} — buổi tập nên nhẹ hơn dự kiến.`, reasons, gaps, extra);
+  }
+  return finalize(VERDICT.PLAN, LABEL[VERDICT.PLAN], 'Các chỉ số trong khoảng nền cá nhân, ngủ đủ nhu cầu.', reasons, gaps, extra);
 }
 
 function finalize(verdict, label, headline, reasons, gaps, extra) {

@@ -1,25 +1,29 @@
 /**
  * A transparent 0–100 recovery index built from the user's own baselines.
  *
- * This is deliberately NOT a WHOOP Recovery clone. WHOOP's weights are secret
- * and proprietary; we cannot reproduce them and do not pretend to. What we do
- * instead is publish the whole formula:
+ * This is deliberately NOT a WHOOP Recovery clone. WHOOP's weights are secret;
+ * we publish the whole formula instead (models live in signals.mjs):
  *
- *   - each available signal becomes a z-score against the person's 30-day
- *     baseline (HRV uses the 7-day rolling mean, per Plews et al.);
- *   - the z-score maps to a 0–100 sub-score with 50 = personal baseline and
- *     22 points per standard deviation;
- *   - the final index is the weighted mean of available sub-scores, with
- *     weights re-normalised when a signal is missing, so the output is always
- *     in 0–100 and always says how many signals it used.
+ *   - HRV (45%): ln(rMSSD) — 60% last night + 40% 7-day mean — as robust
+ *     z vs a 60-day median/MAD baseline; SWC and 7-day CV are reported;
+ *   - resting HR (25%): last night vs 30-day median, sign inverted;
+ *   - sleep (30%): obtained / NEED (not vs own average), 85% → 50 points;
+ *   - each part maps to 50 + 22 × z, clamped 2–99; weights re-normalised when
+ *     a part is missing, so the output always says how many parts it used;
+ *   - respiratory rate is a one-sided illness flag, never points. Breathing up
+ *     together with RHR up or HRV down caps the index at 50.
  *
  * Missing data lowers confidence; it is never silently filled in. A "sick" or
  * "tired" check-in caps the index, because self-report outranks the watch.
+ * Implausible values (sleep < 3h, RHR outside 30–110, ...) and days reported
+ * as sick are kept out of baselines.
  */
 
-import { computeBaselines, compare, rollingMean } from './baseline.mjs';
+import { computeBaselines, rollingMean } from './baseline.mjs';
+import { hrvModel, rhrModel, sleepPerformance, sleepNeed, respiratorySignal, sickDatesFrom, plausible, SLEEP_PERF } from './signals.mjs';
 
-export const RECOVERY_WEIGHTS = Object.freeze({ hrv: 0.4, rhr: 0.25, sleep: 0.25, resp: 0.1 });
+/** Respiration is no longer scored (one-sided illness flag, see signals.mjs). */
+export const RECOVERY_WEIGHTS = Object.freeze({ hrv: 0.45, rhr: 0.25, sleep: 0.3 });
 export const BANDS = Object.freeze({ green: 67, yellow: 34 });
 
 const DEFAULT_SETTINGS = { rhr_on: 1, hrv_on: 1, sleep_on: 1, rhr_z: 1, hrv_z: 1, sleep_z: 1, strong_z: 2 };
@@ -63,28 +67,46 @@ function bandFor(score) {
   return 'red';
 }
 
-/** Pick rMSSD when its baseline is ready, otherwise SDNN. Never blends the two. */
-function hrvSeries(wellness, baselines, today) {
-  const rmssd = baselines.hrvRmssd.baseline;
-  const sdnn = baselines.hrvSdnn.baseline;
-  if (!rmssd && !sdnn) return null;
-  const useRmssd = Boolean(rmssd) || !sdnn;
-  const field = useRmssd ? 'hrv_rmssd' : 'hrv_sdnn';
-  const baseline = useRmssd ? baselines.hrvRmssd : baselines.hrvSdnn;
-  const roll = rollingMean(wellness, field, today);
-  if (!roll) return null;
-  return { name: useRmssd ? 'rMSSD' : 'SDNN', roll, baseline: baseline.baseline, tier: baseline.tier };
+function factorBase(key, label) {
+  return { key, label, basis: '—', valueText: '—', meanText: '—', z: null, subscore: null, weight: RECOVERY_WEIGHTS[key] || 0 };
+}
+
+/** Respiration as a one-sided flag row (never scored). */
+function respFactor(resp) {
+  const f = { ...factorBase('resp', 'Nhịp thở'), weight: 0, flag: true, supplemental: true, respState: resp.state };
+  if (resp.state === 'not_provided') {
+    return { ...f, status: 'info', valueText: 'nguồn không có', text: 'Đồng hồ/nguồn đồng bộ chưa gửi nhịp thở. Không ảnh hưởng điểm và độ tin cậy.' };
+  }
+  if (resp.state === 'insufficient') {
+    return { ...f, status: 'info', valueText: `${resp.count}/${resp.minNights} đêm`, text: `Cần ≥${resp.minNights} đêm có nhịp thở trong 30 ngày để bật cờ cảnh báo (hiện có ${resp.count}).` };
+  }
+  if (resp.state === 'missing_today') {
+    return { ...f, status: 'info', valueText: '—', meanText: `${resp.median.toFixed(1)} /ph`, text: 'Chưa có nhịp thở đêm qua. Cờ cảnh báo tạm tắt.' };
+  }
+  const elevated = resp.state === 'elevated';
+  return {
+    ...f,
+    basis: 'Đêm qua',
+    valueText: `${resp.value.toFixed(1)} /ph`,
+    meanText: `${resp.median.toFixed(1)} /ph`,
+    z: resp.z,
+    status: elevated ? 'bad' : 'neutral',
+    text: elevated
+      ? `Nhịp thở ${resp.value.toFixed(1)} lần/phút, cao hơn trung vị ${resp.median.toFixed(1)} khoảng +${resp.delta.toFixed(1)} (ngưỡng +${resp.threshold.toFixed(1)}). Đây là cờ cảnh báo sớm (sốt, nhiễm trùng, rượu, nóng), không phải điểm.`
+      : `Nhịp thở ${resp.value.toFixed(1)} lần/phút, trung vị ${resp.median.toFixed(1)} — không tăng bất thường. Thở chậm hơn không được cộng điểm.`,
+  };
 }
 
 /**
  * @returns {{
  *   score: number|null, band: string, bandLabel: string, action: string,
  *   factors: object[], used: number, total: number, confidence: string,
- *   capped: string|null, note: string
+ *   capped: string|null, note: string, illness: object|null
  * }}
  */
-export function computeRecovery({ wellness, today, checkin, settings = DEFAULT_SETTINGS }) {
+export function computeRecovery({ wellness, today, checkin, settings = DEFAULT_SETTINGS, activities = [], sickDates = null }) {
   const s = { ...DEFAULT_SETTINGS, ...settings };
+  const total = (s.hrv_on ? 1 : 0) + (s.rhr_on ? 1 : 0) + (s.sleep_on ? 1 : 0);
   const redFlag = Boolean(checkin && (checkin.red_flag === 1 || checkin.level === 'serious'));
   if (redFlag) {
     return {
@@ -95,118 +117,125 @@ export function computeRecovery({ wellness, today, checkin, settings = DEFAULT_S
       action: ACTIONS.emergency,
       factors: [],
       used: 0,
-      total: 4,
+      total,
       confidence: '—',
       capped: 'triệu chứng nặng',
+      illness: null,
       note: 'Bạn báo triệu chứng nặng. Chỉ số hồi phục bị ẩn để không khuyến khích tập.',
     };
   }
 
-  const baselines = computeBaselines(wellness, today);
-  const latest = wellness.find((w) => w.date === today) || null;
   const factors = [];
+  let hrv = null;
+  let rhr = null;
 
   if (s.hrv_on) {
-    const hrv = hrvSeries(wellness, baselines, today);
-    if (hrv) {
-      const c = compare(hrv.roll.value, hrv.baseline, { higherIsBetter: true });
-      const sub = subScore(c.z);
+    hrv = hrvModel(wellness, today, { sickDates });
+    if (hrv.ready) {
+      const sub = subScore(hrv.z);
+      const parts = [];
+      if (hrv.acute) parts.push(`đêm qua ${hrv.acute.value.toFixed(0)} ms (${signed(hrv.acute.z)}σ)`);
+      if (hrv.chronic) parts.push(`TB ${hrv.chronic.count} ngày ${hrv.chronic.value.toFixed(0)} ms (${signed(hrv.chronic.z)}σ, ${hrv.chronicState === 'inside' ? 'trong SWC' : hrv.chronicState === 'below' ? 'dưới SWC' : 'trên SWC'})`);
+      let text = `HRV ${hrv.name}: ${parts.join('; ')}. Nền ${hrv.baselineMs.toFixed(0)} ms, vùng thay đổi nhỏ nhất có ý nghĩa ${hrv.swc.low.toFixed(0)}–${hrv.swc.high.toFixed(0)} ms (${hrv.daysAvailable} ngày, ${hrv.tier}).`;
+      if (hrv.cv7?.high) text += ` HRV dao động mạnh bất thường 7 ngày qua (CV ${hrv.cv7.value.toFixed(0)}% so với thường ${hrv.cv7.typical.toFixed(0)}%).`;
       factors.push({
-        key: 'hrv',
-        label: `HRV ${hrv.name}`,
-        basis: `TB ${hrv.roll.count} ngày`,
-        valueText: `${c.value.toFixed(1)} ms`,
-        meanText: `${c.mean.toFixed(1)} ms`,
-        z: c.z,
+        ...factorBase('hrv', `HRV ${hrv.name}`),
+        basis: hrv.basis,
+        valueText: `${(hrv.acute || hrv.chronic).value.toFixed(1)} ms`,
+        meanText: `${hrv.baselineMs.toFixed(1)} ms`,
+        z: hrv.z,
         subscore: sub,
-        weight: RECOVERY_WEIGHTS.hrv,
-        status: c.z >= 0.5 ? 'good' : c.z <= -0.5 ? 'bad' : 'neutral',
-        word: c.word,
-        text: `HRV ${hrv.name} ${c.value.toFixed(1)} ms so với nền ${c.mean.toFixed(1)} ms (${signed(c.z)}σ) — ${c.word}.`,
+        status: hrv.z >= 0.5 ? 'good' : hrv.z <= -0.5 ? 'bad' : 'neutral',
+        word: hrv.z >= 0.5 ? 'tốt hơn nền' : hrv.z <= -0.5 ? 'thấp hơn nền' : 'trong khoảng nền',
+        text,
         tier: hrv.tier,
+        cvHigh: Boolean(hrv.cv7?.high),
       });
     } else {
-      factors.push(missing('hrv', 'HRV', 'Cần ≥14 ngày HRV cùng loại (rMSSD hoặc SDNN) và ≥3 ngày đo trong 7 ngày gần nhất.'));
+      factors.push({
+        ...factorBase('hrv', 'HRV'),
+        status: 'missing',
+        text: hrv.state === 'insufficient'
+          ? `Cần ≥${hrv.minDays} ngày HRV cùng loại trong ${hrv.windowDays} ngày nền (hiện có ${hrv.daysAvailable} ngày ${hrv.name}).`
+          : `Đã có nền HRV ${hrv.name}, nhưng chưa có số đêm qua và chưa đủ 3 ngày trong 7 ngày gần nhất.`,
+      });
     }
   } else {
-    factors.push({ ...missing('hrv', 'HRV', 'Bạn đã tắt HRV trong Cài đặt → Ngưỡng gợi ý.'), disabled: true });
+    factors.push({ ...factorBase('hrv', 'HRV'), status: 'missing', disabled: true, text: 'Bạn đã tắt HRV trong Cài đặt → Ngưỡng gợi ý.' });
   }
 
   if (s.rhr_on) {
-    if (baselines.rhr.count >= 7 && latest && isNum(latest.resting_hr)) {
-      const c = compare(latest.resting_hr, baselines.rhr, { higherIsBetter: false });
-      const sub = subScore(-c.z);
+    rhr = rhrModel(wellness, today, { sickDates });
+    if (rhr.ready) {
+      const sub = subScore(-rhr.z);
+      const word = rhr.z <= -0.5 ? 'tốt hơn nền' : rhr.z >= 0.5 ? 'cao hơn nền' : 'trong khoảng nền';
       factors.push({
-        key: 'rhr',
-        label: 'Nhịp tim nghỉ',
+        ...factorBase('rhr', 'Nhịp tim nghỉ'),
         basis: 'Đêm qua',
-        valueText: `${Math.round(c.value)} bpm`,
-        meanText: `${Math.round(c.mean)} bpm`,
-        z: c.z,
+        valueText: `${Math.round(rhr.value)} bpm`,
+        meanText: `${Math.round(rhr.median)} bpm`,
+        z: rhr.z,
         subscore: sub,
-        weight: RECOVERY_WEIGHTS.rhr,
-        status: c.z <= -0.5 ? 'good' : c.z >= 0.5 ? 'bad' : 'neutral',
-        word: c.word,
-        text: `Nhịp tim nghỉ ${Math.round(c.value)} bpm so với nền ${Math.round(c.mean)} bpm (${signed(c.z)}σ) — ${c.word}.`,
+        status: rhr.z <= -0.5 ? 'good' : rhr.z >= 0.5 ? 'bad' : 'neutral',
+        word,
+        text: `Nhịp tim nghỉ ${Math.round(rhr.value)} bpm so với trung vị ${Math.round(rhr.median)} bpm (${signed(rhr.z)}σ, ${rhr.count} ngày) — ${word}.`,
       });
     } else {
-      factors.push(missing('rhr', 'Nhịp tim nghỉ', `Cần ≥7 ngày RHR trong 30 ngày nền và số của đêm qua (hiện có ${baselines.rhr.count} ngày nền).`));
+      factors.push({
+        ...factorBase('rhr', 'Nhịp tim nghỉ'),
+        status: 'missing',
+        text: rhr.state === 'insufficient'
+          ? `Cần ≥7 ngày nhịp tim nghỉ trong 30 ngày nền (hiện có ${rhr.count}).`
+          : `Đã có ${rhr.count} ngày nền, nhưng chưa có nhịp tim nghỉ cho ngày ${today}.`,
+      });
     }
   } else {
-    factors.push({ ...missing('rhr', 'Nhịp tim nghỉ', 'Bạn đã tắt nhịp tim nghỉ trong Cài đặt → Ngưỡng gợi ý.'), disabled: true });
+    factors.push({ ...factorBase('rhr', 'Nhịp tim nghỉ'), status: 'missing', disabled: true, text: 'Bạn đã tắt nhịp tim nghỉ trong Cài đặt → Ngưỡng gợi ý.' });
   }
 
   if (s.sleep_on) {
-    if (baselines.sleepMinutes.count >= 7 && latest && isNum(latest.sleep_secs)) {
-      const minutes = latest.sleep_secs / 60;
-      const c = compare(minutes, baselines.sleepMinutes, { higherIsBetter: true });
-      const sub = subScore(c.z);
+    const sp = sleepPerformance(wellness, activities, today);
+    if (sp.ready) {
+      const pctTxt = `${Math.round(sp.pct * 100)}%`;
+      const extras = [];
+      if (sp.repayMin) extras.push(`+${sp.repayMin} phút trả nợ ngủ (nợ 7 đêm ${hhmm(sp.debtMin)})`);
+      if (sp.strainBumpMin) extras.push(`+${sp.strainBumpMin} phút vì hôm qua tập nhiều`);
+      let text = `Ngủ ${hhmm(sp.actualMin)} / nhu cầu ${hhmm(sp.needMin)} = ${pctTxt}. Nhu cầu = nền ${hhmm(sp.baseMin)}${extras.length ? ' ' + extras.join(', ') : ''}.`;
+      if (sp.nights < 7) text += ' Chưa đủ 7 đêm lịch sử nên nền tạm là 8h.';
+      if (sp.suspect) text += ' Dưới 3 giờ — nếu là lỗi đồng bộ, hãy đánh dấu sai.';
       factors.push({
-        key: 'sleep',
-        label: 'Giấc ngủ',
-        basis: 'Đêm qua',
-        valueText: hhmm(c.value),
-        meanText: hhmm(c.mean),
-        z: c.z,
-        subscore: sub,
-        weight: RECOVERY_WEIGHTS.sleep,
-        status: c.z >= 0.5 ? 'good' : c.z <= -0.5 ? 'bad' : 'neutral',
-        word: c.word,
-        text: `Ngủ ${hhmm(c.value)} so với nền ${hhmm(c.mean)} (${signed(c.z)}σ) — ${c.word}.`,
+        ...factorBase('sleep', 'Giấc ngủ'),
+        basis: 'Đêm qua · so với nhu cầu',
+        valueText: hhmm(sp.actualMin),
+        meanText: `cần ${hhmm(sp.needMin)}`,
+        z: (sp.subscore - 50) / 22,
+        chip: pctTxt,
+        subscore: sp.subscore,
+        status: sp.pct >= SLEEP_PERF.good ? 'good' : sp.pct < SLEEP_PERF.warn ? 'bad' : 'neutral',
+        word: sp.pct >= SLEEP_PERF.good ? 'đủ nhu cầu' : sp.pct < SLEEP_PERF.warn ? 'thiếu ngủ' : 'gần đủ',
+        pct: sp.pct,
+        needMin: sp.needMin,
+        text,
       });
     } else {
-      factors.push(missing('sleep', 'Giấc ngủ', `Cần ≥7 đêm có dữ liệu ngủ (hiện có ${baselines.sleepMinutes.count}).`));
+      factors.push({ ...factorBase('sleep', 'Giấc ngủ'), status: 'missing', text: `Chưa có dữ liệu ngủ cho ngày ${today}.` });
     }
   } else {
-    factors.push({ ...missing('sleep', 'Giấc ngủ', 'Bạn đã tắt giấc ngủ trong Cài đặt → Ngưỡng gợi ý.'), disabled: true });
+    factors.push({ ...factorBase('sleep', 'Giấc ngủ'), status: 'missing', disabled: true, text: 'Bạn đã tắt giấc ngủ trong Cài đặt → Ngưỡng gợi ý.' });
   }
 
-  if (baselines.respiration.count >= 7 && latest && isNum(latest.respiration)) {
-    const c = compare(latest.respiration, baselines.respiration, { higherIsBetter: false });
-    const sub = subScore(-c.z);
-    factors.push({
-      key: 'resp',
-      label: 'Nhịp thở',
-      basis: 'Đêm qua',
-      valueText: `${c.value.toFixed(1)} /ph`,
-      meanText: `${c.mean.toFixed(1)} /ph`,
-      z: c.z,
-      subscore: sub,
-      weight: RECOVERY_WEIGHTS.resp,
-      status: c.z <= -0.5 ? 'good' : c.z >= 0.5 ? 'bad' : 'neutral',
-      word: c.word,
-      text: `Nhịp thở ${c.value.toFixed(1)} lần/phút so với nền ${c.mean.toFixed(1)} (${signed(c.z)}σ) — ${c.word}.`,
-      supplemental: true,
-    });
-  } else {
-    factors.push(missing('resp', 'Nhịp thở', `Cần ≥7 đêm có nhịp thở (hiện có ${baselines.respiration.count}).`));
-  }
+  const resp = respiratorySignal(wellness, today, { sickDates });
+  factors.push(respFactor(resp));
+
+  // Illness pattern: breathing up AND (resting HR up OR HRV down).
+  const rhrUp = Boolean(rhr?.ready && rhr.z >= 1);
+  const hrvDown = Boolean(hrv?.ready && hrv.z <= -1);
+  const illness = resp.state === 'elevated' && (rhrUp || hrvDown)
+    ? { signals: ['nhịp thở tăng', rhrUp && 'nhịp tim nghỉ tăng', hrvDown && 'HRV giảm'].filter(Boolean) }
+    : null;
 
   const used = factors.filter((f) => f.subscore != null);
-  // Respiration is a supplemental illness signal; it must never produce a score
-  // on its own (same rule as the morning verdict).
-  const coreUsed = used.filter((f) => f.key !== 'resp');
-  if (!used.length || !coreUsed.length) {
+  if (!used.length) {
     return {
       score: null,
       rawScore: null,
@@ -215,13 +244,14 @@ export function computeRecovery({ wellness, today, checkin, settings = DEFAULT_S
       action: ACTIONS.unknown,
       factors,
       used: 0,
-      total: 4,
+      total,
       confidence: 'thấp',
       capped: null,
+      illness,
       weights: RECOVERY_WEIGHTS,
-      note: used.length
-        ? 'Nhịp thở chỉ là tín hiệu bổ sung. Cần ít nhất một trong HRV, nhịp tim nghỉ hoặc giấc ngủ để tính điểm.'
-        : 'Chưa đủ dữ liệu để tính chỉ số. Không có nghĩa là bạn hồi phục kém.',
+      note: total
+        ? 'Chưa đủ dữ liệu để tính chỉ số. Nhịp thở chỉ là cờ cảnh báo, không tự tạo ra điểm. Không có nghĩa là bạn hồi phục kém.'
+        : 'Bạn đã tắt cả HRV, nhịp tim nghỉ và giấc ngủ. Nhịp thở chỉ là cờ bổ sung nên không có điểm.',
     };
   }
 
@@ -237,23 +267,27 @@ export function computeRecovery({ wellness, today, checkin, settings = DEFAULT_S
   } else if (checkin && checkin.level === 'tired' && score > 50) {
     score = 50;
     capped = 'bạn báo mệt / ngủ kém';
+  } else if (illness && score > 50) {
+    score = 50;
+    capped = `dấu hiệu cơ thể có thể đang chống bệnh (${illness.signals.join(' + ')})`;
   }
 
   score = Math.round(clamp(score, 0, 100));
   const band = bandFor(score);
 
-  // Contribution in index points, summing to (score - 50) before any cap.
   for (const f of used) {
     f.contribution = Math.round((f.subscore - 50) * (f.weight / weightSum));
   }
   const ranked = [...used].sort((a, b) => Math.abs(b.contribution) - Math.abs(a.contribution));
 
-  const confidence = used.length >= 4 ? 'cao' : used.length === 3 ? 'vừa' : 'thấp';
+  let confidence = used.length >= 3 ? 'cao' : used.length === 2 ? 'vừa' : 'thấp';
+  const hrvUsed = used.find((f) => f.key === 'hrv');
+  if (confidence === 'cao' && hrvUsed && hrvUsed.tier === 'sơ bộ') confidence = 'vừa';
   const top = ranked[0];
   const explanation = top
     ? `${top.label} ${top.contribution >= 0 ? 'kéo điểm lên' : 'kéo điểm xuống'} ${Math.abs(top.contribution)} điểm so với mốc 50.`
     : '';
-  const missingFactors = factors.filter((f) => f.subscore == null);
+  const rest = factors.filter((f) => f.subscore == null);
 
   return {
     score,
@@ -261,34 +295,33 @@ export function computeRecovery({ wellness, today, checkin, settings = DEFAULT_S
     band,
     bandLabel: BAND_LABEL[band],
     action: ACTIONS[band === 'green' ? 'plan' : band === 'yellow' ? 'ease' : 'rest'],
-    factors: [...ranked, ...missingFactors],
+    factors: [...ranked, ...rest],
     used: used.length,
-    total: 4,
+    total,
     confidence,
     capped,
+    illness,
     explanation,
     weights: RECOVERY_WEIGHTS,
-    note: 'Chỉ số tham khảo, tính tuyến tính từ z-score cá nhân. Không phải thuật toán WHOOP, không phải thiết bị y tế.',
+    note: 'Chỉ số tham khảo, công thức công khai: HRV ln (đêm qua + 7 ngày), nhịp tim nghỉ so trung vị, giấc ngủ so với nhu cầu. Nhịp thở là cờ cảnh báo, không cộng điểm. Không phải thuật toán WHOOP, không phải thiết bị y tế.',
   };
 }
 
-function missing(key, label, why) {
-  return { key, label, basis: '—', valueText: '—', meanText: '—', z: null, subscore: null, weight: RECOVERY_WEIGHTS[key] || 0, status: 'missing', text: why };
-}
 function signed(z) { return `${z >= 0 ? '+' : ''}${z.toFixed(1)}`; }
 
 /** Recovery index for each of the last `days` days, for the trend strip. */
-export function recoveryHistory({ wellness, today, days = 30, settings, checkins = [] }) {
+export function recoveryHistory({ wellness, today, days = 30, settings, checkins = [], activities = [] }) {
   const byDate = new Map();
   for (const c of checkins) {
     const date = String(c.local_date).slice(0, 10);
     const prev = byDate.get(date);
     if (!prev || (c.id || 0) > (prev.id || 0)) byDate.set(date, c);
   }
+  const sickDates = sickDatesFrom(checkins);
   const out = [];
   for (let i = days - 1; i >= 0; i--) {
     const date = addDays(today, -i);
-    const r = computeRecovery({ wellness, today: date, checkin: byDate.get(date) || null, settings });
+    const r = computeRecovery({ wellness, today: date, checkin: byDate.get(date) || null, settings, activities, sickDates });
     out.push({ date, score: r.score, band: r.band });
   }
   return out;
@@ -311,7 +344,7 @@ export function buildSleepPlan({ wellness, activities, today }) {
   let nights = 0;
   for (let i = 0; i < 7; i++) {
     const w = byDate.get(addDays(today, -i));
-    if (w && isNum(w.sleep_secs)) {
+    if (w && plausible('sleep_secs', w.sleep_secs)) {
       nights++;
       debt += Math.max(0, base - w.sleep_secs / 60);
     }
@@ -406,18 +439,22 @@ export function buildLoadTarget({ activities, today, band }) {
 }
 
 /** Compact values for the four metric tiles. */
-export function buildMetrics({ wellness, today }) {
-  const baselines = computeBaselines(wellness, today);
+export function buildMetrics({ wellness, today, activities = [], sickDates = null }) {
+  const baselines = computeBaselines(wellness, today, { sickDates });
   const byDate = new Map(wellness.map((w) => [w.date, w]));
   const latest = byDate.get(today) || null;
   const previous = byDate.get(addDays(today, -1)) || null;
 
-  const hrv = hrvSeries(wellness, baselines, today);
-  const hrvBaseline = hrv ? hrv.baseline.mean : null;
+  const hrv = hrvModel(wellness, today, { sickDates });
   const rollRmssd = rollingMean(wellness, 'hrv_rmssd', today);
   const rollSdnn = rollingMean(wellness, 'hrv_sdnn', today);
   const roll = rollRmssd ? { ...rollRmssd, name: 'rMSSD' } : rollSdnn ? { ...rollSdnn, name: 'SDNN' } : null;
-  const hrvValue = hrv ? hrv.roll.value : roll ? roll.value : null;
+  const hrvValue = hrv.ready ? (hrv.acute || hrv.chronic).value : roll ? roll.value : null;
+  const hrvBaseline = hrv.ready ? hrv.baselineMs : null;
+
+  const sp = sleepPerformance(wellness, activities, today);
+  const need = sp.needMin ?? sleepNeed(wellness, activities, today).needMin;
+  const resp = respiratorySignal(wellness, today, { sickDates });
 
   const spark = [];
   for (let i = 13; i >= 0; i--) {
@@ -439,27 +476,35 @@ export function buildMetrics({ wellness, today }) {
       mean: hrvBaseline,
       deltaPct: hrvValue && hrvBaseline ? ((hrvValue - hrvBaseline) / hrvBaseline) * 100 : null,
       unit: 'ms',
-      basis: hrv ? `${hrv.name} · TB 7 ngày` : roll ? `${roll.name} · TB 7 ngày` : 'Chưa đủ dữ liệu',
-      tier: hrv?.tier || null,
+      basis: hrv.ready
+        ? `${hrv.name} · ${hrv.acute ? 'đêm qua' : 'TB 7 ngày'} · SWC ${hrv.swc.low.toFixed(0)}–${hrv.swc.high.toFixed(0)}`
+        : roll ? `${roll.name} · TB 7 ngày` : 'Chưa đủ dữ liệu',
+      tier: hrv.tier || null,
+      acute: hrv.acute || null,
+      chronic: hrv.chronic || null,
+      cv7: hrv.cv7 || null,
     },
     rhr: {
       value: latest && isNum(latest.resting_hr) ? latest.resting_hr : null,
-      mean: baselines.rhr.count ? baselines.rhr.mean : null,
+      mean: baselines.rhr.count ? baselines.rhr.median : null,
       unit: 'bpm',
       basis: 'Đêm qua',
     },
     sleep: {
       value: latest && isNum(latest.sleep_secs) ? latest.sleep_secs / 3600 : null,
-      mean: baselines.sleepMinutes.count ? baselines.sleepMinutes.mean / 60 : null,
+      mean: need ? need / 60 : null,
+      need: need || null,
+      pct: sp.ready ? sp.pct : null,
       score: latest && isNum(latest.sleep_score) ? latest.sleep_score : null,
       unit: 'giờ',
-      basis: 'Đêm qua',
+      basis: sp.ready ? `${Math.round(sp.pct * 100)}% nhu cầu ${hhmm(need)}` : 'Đêm qua',
     },
     resp: {
       value: latest && isNum(latest.respiration) ? latest.respiration : null,
-      mean: baselines.respiration.count ? baselines.respiration.mean : null,
+      mean: resp.median ?? null,
       unit: '/ph',
-      basis: 'Đêm qua',
+      basis: resp.state === 'not_provided' ? 'Nguồn không cung cấp' : resp.state === 'elevated' ? 'Tăng bất thường' : 'Cờ cảnh báo · đêm qua',
+      state: resp.state,
     },
     steps: {
       value: previous && isNum(previous.steps) ? previous.steps : null,
