@@ -18,6 +18,7 @@ import { computeRecovery, recoveryHistory, buildSleepPlan, buildLoadTarget, buil
 import { JOURNAL_TAGS, normalizeTags, buildJournalInsights } from './journal.mjs';
 import { previewWellness, previewActivities } from './csv.mjs';
 import { computeBaselines } from './baseline.mjs';
+import { sickDatesFrom } from './signals.mjs';
 import { startScheduler, getSchedule, setSchedule } from './scheduler.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -227,7 +228,8 @@ async function route(req, res) {
     const activities = listActivitiesRange(db, req.user.id, '1900-01-01', today);
     const checkin = latestCheckin(db, req.user.id, today);
     const settings = getAdviceSettings(db, req.user.id);
-    const advice = buildAdvice({ user: req.user, today, wellness, activities, checkin, settings });
+    const sickDates = sickDatesFrom(listCheckins(db, req.user.id, 120));
+    const advice = buildAdvice({ user: req.user, today, wellness, activities, checkin, settings, sickDates });
     const lastRow = db.prepare('SELECT last_sync_at AS at FROM users WHERE id = ?').get(req.user.id);
     return json(res, 200, { ...advice, lastSync: lastRow?.at || null, settings });
   }
@@ -238,17 +240,19 @@ async function route(req, res) {
     const today = localDate();
     const histDays = Math.max(7, Math.min(90, Number(u.searchParams.get('history')) || 30));
     const wellness = effectiveWellness(db, req.user.id, '1900-01-01', today);
-    const activities = listActivitiesRange(db, req.user.id, addDays(today, -35), today);
+    const activities = listActivitiesRange(db, req.user.id, addDays(today, -35 - histDays), today);
     const checkin = latestCheckin(db, req.user.id, today);
     const settings = getAdviceSettings(db, req.user.id);
+    const recentCheckins = listCheckins(db, req.user.id, histDays + 120);
+    const sickDates = sickDatesFrom(recentCheckins);
 
-    const advice = buildAdvice({ user: req.user, today, wellness, activities, checkin, settings });
-    const recovery = computeRecovery({ wellness, today, checkin, settings });
+    const advice = buildAdvice({ user: req.user, today, wellness, activities, checkin, settings, sickDates });
+    const recovery = computeRecovery({ wellness, today, checkin, settings, activities, sickDates });
     recovery.action = adviceAction(advice.verdict, recovery.action);
     const sleepPlan = buildSleepPlan({ wellness, activities, today });
     const load = buildLoadTarget({ activities, today, band: recovery.band });
-    const history = recoveryHistory({ wellness, today, days: histDays, settings, checkins: listCheckins(db, req.user.id, histDays + 7) });
-    const metrics = buildMetrics({ wellness, today });
+    const history = recoveryHistory({ wellness, today, days: histDays, settings, checkins: recentCheckins, activities });
+    const metrics = buildMetrics({ wellness, today, activities, sickDates });
 
     const userRow = db.prepare('SELECT last_sync_at AS lastSync, display_name AS displayName, created_at AS createdAt FROM users WHERE id = ?').get(req.user.id);
     const first = db.prepare('SELECT MIN(date) AS first, COUNT(*) AS days FROM wellness WHERE user_id = ?').get(req.user.id);
@@ -321,7 +325,8 @@ async function route(req, res) {
     const items = listCheckins(db, req.user.id, 60);
     const today = localDate();
     const wellness = effectiveWellness(db, req.user.id, '1900-01-01', today);
-    const history = recoveryHistory({ wellness, today, days: 60 });
+    const activities = listActivitiesRange(db, req.user.id, addDays(today, -100), today);
+    const history = recoveryHistory({ wellness, today, days: 60, activities });
     return json(res, 200, {
       items,
       tags: JOURNAL_TAGS,

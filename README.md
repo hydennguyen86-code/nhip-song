@@ -96,18 +96,27 @@ Trong app: tab **Cài đặt → Nhập CSV** → chọn file → bấm *Xem tr�
 
 Trang **Hôm nay** trả lời ba câu: hôm nay nên làm gì, vì sao, và cần ngủ bao nhiêu.
 
-### 7.1 Chỉ số hồi phục 0–100 (công thức công khai)
+### 7.1 Chỉ số hồi phục 0–100 (công thức công khai, v2 — 30/10/2026)
 
-Vòng lớn ở giữa là **chỉ số hồi phục tham khảo**, không phải điểm WHOOP. Công thức nằm trong `server/recovery.mjs` và dùng đúng nền của bạn:
+Vòng lớn ở giữa là **chỉ số hồi phục tham khảo**, không phải điểm WHOOP. Mô hình từng tín hiệu nằm trong `server/signals.mjs`, phép cộng điểm trong `server/recovery.mjs`:
 
 | Thành phần | Trọng số | Cách tính |
 | --- | --- | --- |
-| HRV rMSSD (hoặc SDNN nếu chưa đủ rMSSD) | 40% | trung bình cuộn 7 ngày, z-score so nền 30 ngày |
-| Nhịp tim nghỉ | 25% | z-score đêm qua so nền; **đảo dấu** vì nhịp cao hơn là xấu |
-| Giấc ngủ | 25% | z-score số phút ngủ đêm qua so nền |
-| Nhịp thở | 10% | z-score, đảo dấu; chỉ là tín hiệu bổ sung |
+| HRV rMSSD (hoặc SDNN nếu chưa đủ rMSSD) | 45% | **ln(rMSSD)**. 60% đêm qua + 40% trung bình 7 ngày, z so với **trung vị 60 ngày** (độ lệch = 1,4826 × MAD, sàn 0,07 ≈ 7%). Báo vùng **SWC** = nền ± 0,5 độ lệch và **CV 7 ngày** (cảnh báo khi ≥ 1,5 × CV thường lệ). |
+| Nhịp tim nghỉ | 25% | đêm qua so với **trung vị 30 ngày**, độ lệch MAD (sàn 1 bpm); **đảo dấu** vì cao hơn là xấu |
+| Giấc ngủ | 30% | **so với nhu cầu, không so với trung bình của bạn**: % = ngủ / nhu cầu. Nhu cầu = nền (TB 30 đêm, kẹp 7h30–8h30; < 7 đêm thì 8h) + 20% nợ ngủ 7 đêm trước (tối đa 60 phút) + tối đa 45 phút nếu hôm qua tập nhiều hơn TB 28 ngày. 85% nhu cầu = 50 điểm; mỗi 10% ≈ 22 điểm. |
+| Nhịp thở | **0%** | **Cờ cảnh báo một chiều**, không cộng điểm. Bật khi đêm qua cao hơn trung vị 30 đêm ≥ max(1,0; 2 × độ lệch) lần/phút. Thở chậm hơn **không** được cộng điểm. Nguồn không gửi nhịp thở → hiện "nguồn không có", **không** hạ độ tin cậy. |
 
-Mỗi z-score đổi thành điểm con `50 + z × 22`, kẹp trong 2–99. Điểm cuối là trung bình có trọng số; thiếu chỉ số nào thì **chia lại trọng số** và hạ mức tin cậy (4/4 = cao, 3/4 = vừa, ≤ 2 = thấp). Dải màu: **67–100 sẵn sàng**, **34–66 trung bình**, **0–33 cần hồi phục**. Không đủ dữ liệu → hiện "chưa đủ dữ liệu", không bịa điểm. Cần ít nhất **một trong HRV, nhịp tim nghỉ hoặc giấc ngủ**; nhịp thở chỉ là tín hiệu bổ sung nên không tự tạo ra điểm. Chỉ số bị tắt trong Cài đặt hiện là "đã tắt" (không phải "thiếu"), và mẫu số niêm yết giảm theo (ví dụ 3/3).
+Mỗi phần đổi thành điểm con `50 + z × 22`, kẹp 2–99 (giấc ngủ: `50 + (% − 0,85) × 220`). Điểm cuối là trung bình có trọng số; thiếu phần nào thì **chia lại trọng số** và hạ độ tin cậy (3/3 = cao, 2 = vừa, 1 = thấp; HRV còn "sơ bộ" < 28 ngày thì tối đa "vừa"). Dải màu: **67–100 sẵn sàng**, **34–66 trung bình**, **0–33 cần hồi phục**.
+
+**Mẫu hình ốm**: nhịp thở tăng **cùng lúc** với nhịp tim nghỉ tăng (z ≥ 1) hoặc HRV giảm (z ≤ −1) → điểm bị chặn ở 50 và kết luận buổi sáng ít nhất là "ưu tiên hồi phục".
+
+**Làm sạch nền**: giá trị vô lý (ngủ < 3h hoặc > 14h, RHR ngoài 30–110, HRV ngoài 5–250 ms, nhịp thở ngoài 6–30) và **ngày bạn báo "đang bệnh"** không vào mức nền. Đêm ngủ < 3h của *hôm nay* vẫn được tính (có thể là thức trắng thật) nhưng có ghi chú "nếu là lỗi đồng bộ, hãy đánh dấu sai".
+
+Vì sao đổi (v1 → v2), kiểm trên dữ liệu thật 17–30/10/2026:
+- v1 so giấc ngủ với trung bình của chính bạn (~6h56), nên thiếu ngủ kéo dài trông "bình thường". v2 thấy 13/14 đêm dưới 85% nhu cầu; điểm trung bình 14 ngày giảm từ ~51 xuống ~45.
+- v1 tính nhịp thở 10% dù 0/122 ngày có dữ liệu, nên độ tin cậy kẹt ở 3/4.
+- v1 dùng trung bình 7 ngày HRV làm "hôm nay", nên một đêm rất thấp gần như không đổi điểm.
 
 Cảm giác chủ quan luôn thắng: báo **đang bệnh** → điểm tối đa 30; **mệt / ngủ kém** → tối đa 50; báo triệu chứng nặng → **ẩn điểm** và hiện cảnh báo gọi 115. Khi mức chặn thực sự làm giảm điểm, app hiện cả **điểm thô** và **điểm sau chặn** (ví dụ 63 → 50) để không che mất dữ liệu.
 
@@ -120,7 +129,7 @@ Năm mức kết luận, cộng cấp cứu:
 | Kết luận | Khi nào |
 | --- | --- |
 | **NGƯNG TẬP — cần hỗ trợ y tế** | Người dùng báo đau ngực, khó thở rõ, ngất hoặc gần ngất. App hiện số 115 và **không** gợi ý "sẵn sàng tập". |
-| **Hôm nay nên nghỉ hoàn toàn** | Báo "đang bệnh", hoặc ≥ 2 chỉ số lệch nền rõ rệt (|z| > 2). |
+| **Hôm nay nên nghỉ hoàn toàn** | Báo "đang bệnh", hoặc ≥ 2 chỉ số xấu rõ rệt (RHR z > 2, HRV z < −2, ngủ < 70% nhu cầu, nhịp thở tăng mạnh), hoặc ≥ 3 cảnh báo. |
 | **Nên ưu tiên hồi phục** | Báo "mệt / ngủ kém", hoặc ≥ 2 chỉ số xấu hơn nền. |
 | **Nên giảm nhẹ giáo án** | 1 chỉ số lệch nền. |
 | **Có thể theo kế hoạch vừa sức** | Các chỉ số trong khoảng nền. |
@@ -128,7 +137,7 @@ Năm mức kết luận, cộng cấp cứu:
 
 Mỗi kết luận đi kèm **một hành động cụ thể cho hôm nay** (giữ kế hoạch, giảm 20–30%, chỉ vận động nhẹ, hoặc nghỉ hoàn toàn), không chỉ là nhãn màu.
 
-Ngưỡng z (mặc định 1.0 cho RHR/HRV/ngủ, 2.0 cho mức "rõ rệt") chỉnh được trong Cài đặt → **Ngưỡng gợi ý buổi sáng**; có thể tắt từng chỉ số.
+Ngưỡng z (mặc định 1.0 cho RHR/HRV, 2.0 cho mức "rõ rệt") chỉnh được trong Cài đặt → **Ngưỡng gợi ý buổi sáng**; có thể tắt từng chỉ số. Giấc ngủ dùng ngưỡng cố định: < 85% nhu cầu = cảnh báo, < 70% = rõ rệt. Chỉ **hướng xấu** của một chỉ số mới được tính là cảnh báo (HRV cao bất thường không còn bị đếm là "lệch rõ rệt"). Nhịp thở tăng = 1 cảnh báo; tăng kèm RHR tăng hoặc HRV giảm = "ưu tiên hồi phục".
 
 Thẻ hôm nay luôn hiển thị:
 
@@ -170,14 +179,14 @@ Sau khi một thói quen có **≥ 3 ngày** và có **≥ 3 ngày không có** 
 
 | Chỉ số | Cách tính trong app | Ghi chú |
 | --- | --- | --- |
-| **RHR** | Trung bình + độ lệch chuẩn 30 ngày hợp lệ **trước** ngày đang đánh giá | Ngày đang đánh giá không tự tính vào mức nền của chính nó. |
-| **HRV rMSSD** | Nền: cần ≥ 14 ngày rMSSD hợp lệ cùng nguồn (14–27 ngày = mức "sơ bộ", ≥ 28 = "ổn định"). So sánh: **trung bình cuộn 7 ngày** gần nhất (cần ≥ 3 ngày đo). | Không bao giờ trộn rMSSD và SDNN. Trung bình 7 ngày để một đêm thấp không làm lệch kết luận. |
+| **RHR** | **Trung vị** + độ lệch MAD của 30 ngày hợp lệ **trước** ngày đang đánh giá (loại ngày báo ốm, giá trị ngoài 30–110) | Ngày đang đánh giá không tự tính vào mức nền của chính nó. |
+| **HRV rMSSD** | ln(rMSSD); nền **60 ngày**, cần ≥ 14 ngày cùng loại (14–27 = "sơ bộ", ≥ 28 = "ổn định"); trung vị + MAD. So sánh: 60% đêm qua + 40% TB 7 ngày (≥ 3 ngày); kèm SWC và CV 7 ngày. | Không bao giờ trộn rMSSD và SDNN. Sàn độ lệch 7% để một đêm nhiễu không gây báo động giả. |
 | **HRV SDNN** | Tương tự, tách biệt với rMSSD | Ghi rõ số ngày đang có. |
-| **Ngủ** | Trung bình phút/đêm 30 ngày gần nhất | `sleepSecs` có thể gồm ngủ trưa; app nêu rõ giới hạn này. |
-| **Nhịp thở** | Nền 30 ngày, chỉ hiển thị khi có ≥ 7 ngày | Tín hiệu bổ sung (dấu hiệu bệnh), không tự quyết định kết luận. |
+| **Ngủ** | Trung bình phút/đêm 30 ngày (loại đêm < 3h) — chỉ dùng để đặt **nền nhu cầu** 7h30–8h30, không dùng làm chuẩn so sánh | `sleepSecs` có thể gồm ngủ trưa; app nêu rõ giới hạn này. |
+| **Nhịp thở** | Trung vị 30 đêm, cần ≥ 7 đêm | Cờ cảnh báo một chiều khi **tăng**; không cộng điểm. |
 | **Bước** | Trung bình ngày | Không coi 10.000 là mốc. Ngày hôm nay **chưa kết thúc** → không dùng làm số bước hôm nay. |
 | **Tải tập** | Tổng `icu_training_load` 7 ngày qua, so với trung bình tuần 28 ngày | Cảnh báo: không phản ánh đủ tập sức mạnh, bơi, yoga. |
-| **Chỉ số hồi phục** | Trung bình có trọng số các z-score: HRV 40%, RHR 25%, ngủ 25%, nhịp thở 10% | Công thức công khai; thiếu yếu tố thì chia lại trọng số và hạ độ tin cậy. Không phải thuật toán WHOOP. |
+| **Chỉ số hồi phục** | HRV 45%, RHR 25%, ngủ (so với nhu cầu) 30% | Công thức công khai; nhịp thở là cờ, không phải điểm. Không phải thuật toán WHOOP. |
 
 Không dùng nhãn `HIIT` làm bằng chứng cường độ cao (Intervals.icu lấy tên type từ file, chưa chắc đã phản ánh HR/pace thực). Không dùng HRmax mặc định (220 − tuổi) làm chuẩn đã kiểm chứng.
 

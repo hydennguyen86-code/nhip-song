@@ -398,6 +398,13 @@ function miniCard({ label, value, unit, basis, delta, spark, color }) {
 }
 
 function factorRow(f) {
+  if (f.flag) {
+    return `<div class="factor ${f.status === 'bad' ? '' : 'missing'}">
+      <div class="factor-top"><span class="factor-name">${esc(f.label)}</span><span class="factor-value">${esc(f.valueText)}</span></div>
+      ${f.status === 'bad' || f.status === 'neutral' ? `<div class="factor-mid"><span>${esc(f.basis)} · trung vị ${esc(f.meanText)}</span><span class="z-chip ${f.status}">${f.status === 'bad' ? 'tăng' : 'ổn'}</span></div>` : ''}
+      <div class="factor-bottom"><span>${esc(f.text)}</span><span class="pts muted">cờ cảnh báo</span></div>
+    </div>`;
+  }
   if (f.subscore == null) {
     return `<div class="factor missing ${f.disabled ? 'disabled' : ''}">
       <div class="factor-top"><span class="factor-name">${esc(f.label)}</span><span class="factor-value">${f.disabled ? 'đã tắt' : 'thiếu'}</span></div>
@@ -406,7 +413,7 @@ function factorRow(f) {
   }
   const fill = Math.min(Math.abs(f.z) / 3, 1) * 50;
   const left = f.z >= 0 ? 50 : 50 - fill;
-  const z = `${f.z >= 0 ? '+' : ''}${f.z.toFixed(1)}σ`;
+  const z = f.chip || `${f.z >= 0 ? '+' : ''}${f.z.toFixed(1)}σ`;
   const hasPts = Number.isFinite(f.contribution);
   const pts = hasPts ? `${f.contribution > 0 ? '+' : ''}${f.contribution} đ` : '';
   return `<div class="factor">
@@ -446,7 +453,7 @@ function heroCard(d) {
     ${emergency && d.advice.emergency?.show ? `<div class="emergency-box">${esc(d.advice.emergency.text)}</div>` : ''}
     <p class="hero-action">${esc(r.action)}</p>
     <div class="hero-foot">
-      <span>${r.used}/${4 - r.factors.filter((f) => f.disabled).length} yếu tố · tin cậy ${esc(r.confidence)}</span>
+      <span>${r.used}/${r.total} yếu tố · tin cậy ${esc(r.confidence)}</span>
       <span>${d.data.days} ngày dữ liệu</span>
       <span>${d.lastSync ? 'đồng bộ ' + esc(fmtDateTime(d.lastSync)) : 'chưa đồng bộ'}</span>
     </div>
@@ -464,7 +471,7 @@ function miniWrap(d) {
     ${miniCard({ label: 'HRV', value: m.hrv.value == null ? null : fmtNum(m.hrv.value, 1), unit: 'ms', basis: m.hrv.basis, delta: hrvDelta, spark: spark('hrv'), color: '#3ee08f' })}
     ${miniCard({ label: 'Nhịp tim nghỉ', value: m.rhr.value == null ? null : fmtNum(m.rhr.value), unit: 'bpm', basis: m.rhr.basis, delta: deltaChip(m.rhr.value, m.rhr.mean, { higherBetter: false }), spark: spark('rhr'), color: '#ff8a7a' })}
     ${miniCard({ label: 'Giấc ngủ', value: m.sleep.value == null ? null : fmtNum(m.sleep.value, 1), unit: 'giờ', basis: m.sleep.score != null ? `Điểm ngủ ${fmtNum(m.sleep.score)}` : m.sleep.basis, delta: deltaChip(m.sleep.value, m.sleep.mean, { digits: 1, higherBetter: true, unit: 'h' }), spark: spark('sleep'), color: '#a78bfa' })}
-    ${miniCard({ label: 'Nhịp thở', value: m.resp.value == null ? null : fmtNum(m.resp.value, 1), unit: '/ph', basis: m.resp.basis, delta: deltaChip(m.resp.value, m.resp.mean, { digits: 1, higherBetter: false }), spark: spark('resp'), color: '#67b7ff' })}
+    ${miniCard({ label: 'Nhịp thở', value: m.resp.value == null ? null : fmtNum(m.resp.value, 1), unit: '/ph', basis: m.resp.basis, delta: m.resp.state === 'elevated' ? deltaChip(m.resp.value, m.resp.mean, { digits: 1, higherBetter: false }) : `<span class="mini-delta flat">${m.resp.value == null ? '—' : 'ổn'}</span>`, spark: spark('resp'), color: '#67b7ff' })}
   </div>`;
 }
 
@@ -898,10 +905,12 @@ async function renderSettings(view) {
       <div class="card">
         <div class="card-head"><div><div class="eyebrow">Công khai cách tính</div><h3>Chỉ số hồi phục là gì?</h3></div><span class="confidence-chip amber">tham khảo</span></div>
         <div class="formula-list">
-          <div><b>1.</b> Mỗi chỉ số thành z-score so với nền 30 ngày của chính bạn: z = (hôm nay − nền) / độ lệch chuẩn.</div>
-          <div><b>2.</b> z đổi thành điểm con: 50 + z × 22, chặn trong 2–99. Với RHR và nhịp thở, dấu được đảo vì thấp hơn thường tốt hơn.</div>
-          <div><b>3.</b> Trung bình có trọng số: HRV 40%, RHR 25%, ngủ 25%, nhịp thở 10%. Thiếu yếu tố thì chia lại trọng số và hạ độ tin cậy.</div>
-          <div><b>4.</b> Dải màu: 67–100 xanh, 34–66 vàng, 0–33 đỏ. Đây là mốc hiển thị, không phải ngưỡng y khoa.</div>
+          <div><b>1. HRV (45%)</b>: dùng ln(rMSSD). 60% đêm qua + 40% trung bình 7 ngày, so với trung vị 60 ngày (độ lệch tính bằng MAD, sàn 7%). Hiện vùng SWC = nền ± 0,5 độ lệch và cảnh báo khi dao động 7 ngày (CV) cao gấp 1,5 lần thường lệ.</div>
+          <div><b>2. Nhịp tim nghỉ (25%)</b>: đêm qua so với trung vị 30 ngày; dấu đảo vì cao hơn là xấu.</div>
+          <div><b>3. Giấc ngủ (30%)</b>: so với <i>nhu cầu</i>, không so với trung bình của bạn. Nhu cầu = nền 7,5–8,5h + 20% nợ ngủ 7 đêm (tối đa 60 phút) + tối đa 45 phút nếu hôm qua tập nhiều. Đủ 85% nhu cầu = 50 điểm.</div>
+          <div><b>4. Nhịp thở</b>: không cộng điểm. Chỉ là cờ cảnh báo một chiều khi tăng ≥ 1 lần/phút so với trung vị. Tăng cùng lúc với nhịp tim nghỉ tăng hoặc HRV giảm → điểm bị chặn ở 50.</div>
+          <div><b>5.</b> Mỗi phần đổi thành điểm con 50 + z × 22, chặn 2–99, rồi lấy trung bình có trọng số. Thiếu phần nào thì chia lại trọng số và hạ độ tin cậy. Giá trị vô lý (ngủ &lt; 3h, RHR ngoài 30–110) và ngày bạn báo ốm bị loại khỏi mức nền.</div>
+          <div><b>6.</b> Dải màu: 67–100 xanh, 34–66 vàng, 0–33 đỏ. Đây là mốc hiển thị, không phải ngưỡng y khoa.</div>
           <div><b>Giới hạn:</b> WHOOP không công bố trọng số thật; chỉ số này không sao chép WHOOP. Đồng hồ quang học ở cổ tay có sai số; mọi so sánh chỉ có ý nghĩa với chính bạn. Cảm giác chủ quan luôn thắng.</div>
         </div>
       </div>
@@ -980,12 +989,12 @@ async function loadAdviceSettings(view) {
       <span class="k">${esc(label)}</span>
       <span class="threshold-controls">
         <label class="check-label"><input type="checkbox" id="on-${key}" ${s[key + '_on'] ? 'checked' : ''}> bật</label>
-        <input type="number" step="0.1" min="0.2" max="5" id="z-${key}" value="${s[zKey]}">
+        <input type="${zKey === 'sleep_z' ? 'hidden' : 'number'}" step="0.1" min="0.2" max="5" id="z-${key}" value="${s[zKey]}">
       </span>
     </div>`;
     box.innerHTML = row('rhr', 'RHR cảnh báo khi cao hơn nền', 'rhr_z') +
       row('hrv', 'HRV cảnh báo khi thấp hơn nền', 'hrv_z') +
-      row('sleep', 'Ngủ cảnh báo khi ngắn hơn nền', 'sleep_z') +
+      row('sleep', 'Ngủ cảnh báo khi < 85% nhu cầu (cố định)', 'sleep_z') +
       `<div class="threshold-row"><span class="k">Lệch rõ rệt (bất kỳ chỉ số)</span><span class="threshold-controls"><input type="number" step="0.1" min="0.2" max="5" id="z-strong" value="${s.strong_z}"></span></div>
       <div class="actions"><button class="btn primary small" id="saveAdvice">Lưu ngưỡng</button><button class="btn ghost small" id="resetAdvice">Về mặc định</button></div>`;
     box.querySelector('#saveAdvice').onclick = async () => {

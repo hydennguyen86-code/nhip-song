@@ -15,6 +15,8 @@
  * Every baseline is descriptive statistics, not a clinical threshold.
  */
 
+import { plausible } from './signals.mjs';
+
 const DAY_MS = 86400000;
 
 function iso(d) {
@@ -43,14 +45,19 @@ function stats(values) {
  * @param targetDate  the day being assessed (YYYY-MM-DD) — excluded from baseline
  * @param windowDays  baseline lookback (default 30)
  */
-export function computeBaselines(rows, targetDate, { windowDays = 30, hrvMinDays = 14 } = {}) {
-  const before = rows.filter((r) => r.date < targetDate && r.date >= addLocalDays(targetDate, -windowDays));
+export function computeBaselines(rows, targetDate, { windowDays = 30, hrvMinDays = 14, hrvWindowDays = 60, sickDates = null } = {}) {
+  // Implausible values (e.g. a 44-minute "night" from a sync glitch) and days
+  // the person reported as sick never enter a baseline.
+  const inWindow = (r, days) => r.date < targetDate && r.date >= addLocalDays(targetDate, -days) && !(sickDates && sickDates.has(r.date));
+  const before = rows.filter((r) => inWindow(r, windowDays));
+  const beforeHrv = rows.filter((r) => inWindow(r, hrvWindowDays));
 
-  const pick = (field) => before.map((r) => r[field]).filter((v) => typeof v === 'number' && Number.isFinite(v) && v > 0);
+  const pickFrom = (list, field) => list.map((r) => r[field]).filter((v) => typeof v === 'number' && Number.isFinite(v) && v > 0 && plausible(field, v));
+  const pick = (field) => pickFrom(before, field);
 
   const rhrValues = pick('resting_hr');
-  const rmssdValues = pick('hrv_rmssd');
-  const sdnnValues = pick('hrv_sdnn');
+  const rmssdValues = pickFrom(beforeHrv, 'hrv_rmssd');
+  const sdnnValues = pickFrom(beforeHrv, 'hrv_sdnn');
   const sleepValues = pick('sleep_secs').map((s) => s / 60);
   const sleepScoreValues = pick('sleep_score');
   const stepsValues = pick('steps');
@@ -71,8 +78,8 @@ export function computeBaselines(rows, targetDate, { windowDays = 30, hrvMinDays
     windowStart: addLocalDays(targetDate, -windowDays),
     windowEnd: addLocalDays(targetDate, -1),
     rhr: { metric: 'resting_hr', unit: 'bpm', ...(stats(rhrValues) || { count: 0 }), needs: 7 },
-    hrvRmssd: { metric: 'hrv_rmssd', unit: 'ms', daysAvailable: rmssdValues.length, minDays: hrvMinDays, tier: tier(rmssdValues.length, hrvMinDays), baseline: rmssdBaseline },
-    hrvSdnn: { metric: 'hrv_sdnn', unit: 'ms', daysAvailable: sdnnValues.length, minDays: hrvMinDays, tier: tier(sdnnValues.length, hrvMinDays), baseline: sdnnBaseline },
+    hrvRmssd: { metric: 'hrv_rmssd', unit: 'ms', windowDays: hrvWindowDays, daysAvailable: rmssdValues.length, minDays: hrvMinDays, tier: tier(rmssdValues.length, hrvMinDays), baseline: rmssdBaseline },
+    hrvSdnn: { metric: 'hrv_sdnn', unit: 'ms', windowDays: hrvWindowDays, daysAvailable: sdnnValues.length, minDays: hrvMinDays, tier: tier(sdnnValues.length, hrvMinDays), baseline: sdnnBaseline },
     sleepMinutes: { metric: 'sleep_secs', unit: 'phút', ...(stats(sleepValues) || { count: 0 }), note: 'Có thể gồm cả ngủ trưa; Intervals.icu chỉ báo tổng sleepSecs.' },
     sleepScore: { metric: 'sleep_score', unit: '/100', ...(stats(sleepScoreValues) || { count: 0 }) },
     steps: { metric: 'steps', unit: 'bước', ...(stats(stepsValues) || { count: 0 }) },
