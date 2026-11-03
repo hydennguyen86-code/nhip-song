@@ -81,16 +81,29 @@ function todayIso() {
 
 /* ---------------- icons / logo ---------------- */
 const ICONS = {
-  today: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4"/></svg>',
-  trends: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l5-6 4 3 7-9"/><path d="M4 21h16"/></svg>',
-  activities: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z"/></svg>',
-  journal: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 4h11a2 2 0 0 1 2 2v14H7a2 2 0 0 1-2-2V4z"/><path d="M8 8h7M8 12h7"/></svg>',
-  settings: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 6h9M17 6h3M4 12h4M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></svg>',
+  today: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.3 3.3a1 1 0 0 1 1.4 0l8 7.4a1 1 0 0 1-.7 1.8H19v7a1.5 1.5 0 0 1-1.5 1.5H15a1 1 0 0 1-1-1v-4.5a2 2 0 0 0-4 0V20a1 1 0 0 1-1 1H6.5A1.5 1.5 0 0 1 5 19.5v-7H4a1 1 0 0 1-.7-1.8l8-7.4z"/></svg>',
+  trends: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 20v-7M12 20V5M18 20v-10"/></svg>',
+  activities: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="14.5" cy="4.5" r="1.8"/><path d="M8 21l3-6 3 2.5V22M6 11.5l3.5-3.5 4 .5 2.5 3.5 3 1"/><path d="M13.5 8.5L11 15"/></svg>',
+  journal: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="5" y="3" width="14" height="18" rx="2.5"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>',
+  settings: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
   sync: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/></svg>',
   logout: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/><path d="M15 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"/></svg>',
   check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>',
+  chev: '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>',
+  recovery: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11l8-7 8 7v8.5A1.5 1.5 0 0 1 18.5 21h-13A1.5 1.5 0 0 1 4 19.5V11z"/><path d="M12 17.5s-3.2-1.9-3.2-4.1a1.8 1.8 0 0 1 3.2-1.1 1.8 1.8 0 0 1 3.2 1.1c0 2.2-3.2 4.1-3.2 4.1z"/></svg>',
+  hrv: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h4l2.5-6 4 13 3-9 1.5 2H22"/></svg>',
+  heart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.3a4.3 4.3 0 0 1 7.5 2.5C19.5 15.4 12 20 12 20z"/></svg>',
+  moon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>',
+  wind: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h11a3 3 0 1 0-3-3M3 12h16a3 3 0 1 1-3 3M3 16h8"/></svg>',
+  bulb: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2V16h5v-.1c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z"/></svg>',
+  bed: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18V7M3 14h18v4M21 14v-2a3 3 0 0 0-3-3h-7v5"/><circle cx="7" cy="11" r="1.6"/></svg>',
+  flame: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21a6 6 0 0 0 6-6c0-4-3-6-4-9-1 2.5-2.5 3.5-3.5 3.5C10 7.5 9 6 9 6c-2 2.5-3 5-3 9a6 6 0 0 0 6 6z"/></svg>',
+  leaf: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19c0-8 5-13 15-14-1 10-6 15-14 15"/><path d="M5 19c3-4 6-7 10-9"/></svg>',
+  chart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l5-6 4 3 7-9"/><path d="M4 21h16"/></svg>',
+  sun: '<svg class="pill-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4"/></svg>',
 };
-const LOGO = `<svg class="logo-mark" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="14" fill="none" stroke="#1d2b34" stroke-width="4"/><path d="M20 6a14 14 0 0 1 13.2 18.6" fill="none" stroke="#3ee08f" stroke-width="4" stroke-linecap="round"/><path d="M11 22h4l2-5 3 10 2-5h6" fill="none" stroke="#eef4f6" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+let logoN = 0;
+function logo() { const n = ++logoN; return `<svg class="logo-mark" viewBox="0 0 40 40" aria-hidden="true"><defs><linearGradient id="lfA${n}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#b8f5cf"/><stop offset="1" stop-color="#2fae6a"/></linearGradient><linearGradient id="lfB${n}" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8ff0b6"/><stop offset="1" stop-color="#22995a"/></linearGradient></defs><path d="M19.5 36c0-9 .5-15 3-20" fill="none" stroke="#3fcf84" stroke-width="2.4" stroke-linecap="round"/><path d="M20.5 22C9 23 4 15 5 4c10 0 16.5 6 15.5 18z" fill="url(#lfA${n})"/><path d="M21.5 19c-.5-9 4.5-15 14-15 .5 10-4.5 15.5-14 15z" fill="url(#lfB${n})"/></svg>`; }
 
 const NAV = [
   { id: 'today', label: 'Hôm nay', icon: 'today' },
@@ -128,7 +141,7 @@ function sparkline(values, hex) {
   </svg>`;
 }
 
-function lineChart(series, { color = '#3ee08f', digits = 1, unit = '' } = {}) {
+function lineChart(series, { color = '#5fe39a', digits = 1, unit = '' } = {}) {
   const valid = series.filter((s) => s.value != null && Number.isFinite(s.value));
   if (!valid.length) return '<div class="empty">Chưa có dữ liệu trong khoảng này.</div>';
   const W = 720, H = 220, P = { l: 44, r: 14, t: 18, b: 28 };
@@ -157,7 +170,7 @@ function lineChart(series, { color = '#3ee08f', digits = 1, unit = '' } = {}) {
     const gy = P.t + innerH * t;
     const val = max - (max - min) * t;
     return `<line x1="${P.l}" y1="${gy.toFixed(1)}" x2="${W - P.r}" y2="${gy.toFixed(1)}" stroke="rgba(255,255,255,.06)" stroke-width="1"/>
-      <text x="${P.l - 8}" y="${(gy + 3.5).toFixed(1)}" text-anchor="end" fill="#5d6c76" font-size="10">${fmtNum(val, digits)}</text>`;
+      <text x="${P.l - 8}" y="${(gy + 3.5).toFixed(1)}" text-anchor="end" fill="#7d9187" font-size="10">${fmtNum(val, digits)}</text>`;
   }).join('');
   const last = series[lastIdx];
   const lastX = x(lastIdx), lastY = y(last.value);
@@ -170,9 +183,9 @@ function lineChart(series, { color = '#3ee08f', digits = 1, unit = '' } = {}) {
     <path d="${d}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
     <circle cx="${lastX.toFixed(1)}" cy="${lastY.toFixed(1)}" r="4.5" fill="${color}" opacity=".22"/>
     <circle cx="${lastX.toFixed(1)}" cy="${lastY.toFixed(1)}" r="2.4" fill="${color}"/>
-    <text x="${P.l}" y="${H - 8}" fill="#5d6c76" font-size="10">${esc(fmtShort(series[0].date))}</text>
-    <text x="${W - P.r}" y="${H - 8}" text-anchor="end" fill="#5d6c76" font-size="10">${esc(fmtShort(series[n - 1].date))}</text>
-    <text x="${W - P.r}" y="${P.t - 5}" text-anchor="end" fill="#8fa0ab" font-size="10">TB ${fmtNum(mean, digits)}${unit ? ' ' + esc(unit) : ''}</text>
+    <text x="${P.l}" y="${H - 8}" fill="#7d9187" font-size="10">${esc(fmtShort(series[0].date))}</text>
+    <text x="${W - P.r}" y="${H - 8}" text-anchor="end" fill="#7d9187" font-size="10">${esc(fmtShort(series[n - 1].date))}</text>
+    <text x="${W - P.r}" y="${P.t - 5}" text-anchor="end" fill="#9bb0a4" font-size="10">TB ${fmtNum(mean, digits)}${unit ? ' ' + esc(unit) : ''}</text>
   </svg>`;
 }
 
@@ -183,7 +196,7 @@ function recoveryBars(history) {
   const n = history.length;
   const gap = n > 45 ? 1 : n > 20 ? 2 : 4;
   const bw = Math.max(1.5, (innerW - gap * (n - 1)) / n);
-  const colors = { green: '#3ee08f', yellow: '#f7c45b', red: '#ff6b6b', unknown: '#2a3742' };
+  const colors = { green: '#5fe39a', yellow: '#f6c445', red: '#ff7a6e', unknown: '#26372e' };
   const bars = history.map((h, i) => {
     const bx = P.l + i * (bw + gap);
     const score = h.score == null ? 0 : h.score;
@@ -196,18 +209,18 @@ function recoveryBars(history) {
   const avgY = avg == null ? null : P.t + innerH - (avg / 100) * innerH;
   const yLabels = [0, 50, 100].map((v) => {
     const gy = P.t + innerH - (v / 100) * innerH;
-    return `<line x1="${P.l}" y1="${gy}" x2="${W - P.r}" y2="${gy}" stroke="rgba(255,255,255,.055)" stroke-width="1"/><text x="${P.l - 7}" y="${gy + 3.5}" text-anchor="end" fill="#5d6c76" font-size="9">${v}</text>`;
+    return `<line x1="${P.l}" y1="${gy}" x2="${W - P.r}" y2="${gy}" stroke="rgba(255,255,255,.055)" stroke-width="1"/><text x="${P.l - 7}" y="${gy + 3.5}" text-anchor="end" fill="#7d9187" font-size="9">${v}</text>`;
   }).join('');
   return `<svg class="bar-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Lịch sử điểm hồi phục">
     ${yLabels}
-    ${avgY != null ? `<line x1="${P.l}" y1="${avgY.toFixed(1)}" x2="${W - P.r}" y2="${avgY.toFixed(1)}" stroke="rgba(255,255,255,.26)" stroke-width="1" stroke-dasharray="4 5"/><text x="${W - P.r}" y="${(avgY - 5).toFixed(1)}" text-anchor="end" fill="#8fa0ab" font-size="9.5">TB ${Math.round(avg)}</text>` : ''}
+    ${avgY != null ? `<line x1="${P.l}" y1="${avgY.toFixed(1)}" x2="${W - P.r}" y2="${avgY.toFixed(1)}" stroke="rgba(255,255,255,.26)" stroke-width="1" stroke-dasharray="4 5"/><text x="${W - P.r}" y="${(avgY - 5).toFixed(1)}" text-anchor="end" fill="#9bb0a4" font-size="9.5">TB ${Math.round(avg)}</text>` : ''}
     ${bars}
-    <text x="${P.l}" y="${H - 6}" fill="#5d6c76" font-size="9.5">${esc(fmtShort(history[0]?.date))}</text>
-    <text x="${W - P.r}" y="${H - 6}" text-anchor="end" fill="#5d6c76" font-size="9.5">${esc(fmtShort(history[n - 1]?.date))}</text>
+    <text x="${P.l}" y="${H - 6}" fill="#7d9187" font-size="9.5">${esc(fmtShort(history[0]?.date))}</text>
+    <text x="${W - P.r}" y="${H - 6}" text-anchor="end" fill="#7d9187" font-size="9.5">${esc(fmtShort(history[n - 1]?.date))}</text>
   </svg>`;
 }
 
-function loadBars(days, items, color = '#67b7ff') {
+function loadBars(days, items, color = '#7cc4ff') {
   const totals = new Map();
   for (const a of items) {
     const d = String(a.start_date_local).slice(0, 10);
@@ -227,11 +240,11 @@ function loadBars(days, items, color = '#67b7ff') {
   }).join('');
   const grid = [0, 0.5, 1].map((t) => {
     const gy = P.t + innerH * t;
-    return `<line x1="${P.l}" y1="${gy}" x2="${W - P.r}" y2="${gy}" stroke="rgba(255,255,255,.055)" stroke-width="1"/><text x="${P.l - 7}" y="${gy + 3.5}" text-anchor="end" fill="#5d6c76" font-size="9">${Math.round(max * (1 - t))}</text>`;
+    return `<line x1="${P.l}" y1="${gy}" x2="${W - P.r}" y2="${gy}" stroke="rgba(255,255,255,.055)" stroke-width="1"/><text x="${P.l - 7}" y="${gy + 3.5}" text-anchor="end" fill="#7d9187" font-size="9">${Math.round(max * (1 - t))}</text>`;
   }).join('');
   return `<svg class="bar-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Tải tập theo ngày">${grid}${bars}
-    <text x="${P.l}" y="${H - 6}" fill="#5d6c76" font-size="9.5">${esc(fmtShort(days[0]))}</text>
-    <text x="${W - P.r}" y="${H - 6}" text-anchor="end" fill="#5d6c76" font-size="9.5">${esc(fmtShort(days[days.length - 1]))}</text>
+    <text x="${P.l}" y="${H - 6}" fill="#7d9187" font-size="9.5">${esc(fmtShort(days[0]))}</text>
+    <text x="${W - P.r}" y="${H - 6}" text-anchor="end" fill="#7d9187" font-size="9.5">${esc(fmtShort(days[days.length - 1]))}</text>
   </svg>`;
 }
 
@@ -253,7 +266,7 @@ async function boot() {
 
 function authFrame(inner, sub) {
   app.innerHTML = `<div class="auth-screen"><div class="auth-wrap">
-    <div class="auth-brand">${LOGO}<div><div class="brand-name">Nhịp Sống</div><div class="brand-sub">${esc(sub)}</div></div></div>
+    <div class="auth-brand">${logo()}<div><div class="brand-name">Nhịp Sống</div><div class="brand-sub">${esc(sub)}</div></div></div>
     <div class="auth-card">${inner}</div>
     <div class="auth-foot">Chỉ chạy trong mạng riêng của gia đình. Không phải thiết bị y tế.</div>
   </div></div>`;
@@ -324,7 +337,7 @@ function renderShell() {
   const todayTxt = new Date().toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit', month: '2-digit' });
   app.innerHTML = `<div class="shell">
     <aside class="sidebar">
-      <div class="brand">${LOGO}<div><div class="brand-name">Nhịp Sống</div><div class="brand-sub">Sức khoẻ cá nhân</div></div></div>
+      <div class="brand">${logo()}<div><div class="brand-name">Nhịp Sống</div><div class="brand-sub">Sống khỏe mỗi ngày</div></div></div>
       <nav class="side-nav">${NAV.map((n) => navButton(n)).join('')}</nav>
       <div class="sidebar-foot">
         <div class="avatar">${esc(initials(me.displayName))}</div>
@@ -334,7 +347,7 @@ function renderShell() {
     </aside>
     <div class="main-wrap">
       <header class="mobile-head">
-        <div class="brand">${LOGO}<div><div class="brand-name">Nhịp Sống</div></div></div>
+        <div class="brand">${logo()}<div><div class="brand-name">Nhịp Sống</div><div class="brand-sub">Sống khỏe mỗi ngày</div></div></div>
         <div style="display:flex;align-items:center;gap:10px">
           <span class="mobile-date">${esc(todayTxt)}</span>
           <div class="avatar">${esc(initials(me.displayName))}</div>
@@ -378,21 +391,22 @@ async function renderView() {
 
 /* ---------------- today ---------------- */
 function deltaChip(value, mean, { digits = 0, higherBetter = true, unit = '' } = {}) {
-  if (value == null || mean == null) return '<span class="mini-delta flat">—</span>';
+  if (value == null || mean == null) return '<span class="mini-delta flat"><span class="arrow">–</span>—</span>';
   const diff = value - mean;
   const abs = Math.abs(diff);
   const threshold = digits > 0 ? 0.15 : 0.6;
   const kind = abs < threshold ? 'flat' : (diff > 0) === higherBetter ? 'good' : 'bad';
   const sign = kind === 'flat' ? '' : diff > 0 ? '+' : '−';
+  const arrow = kind === 'flat' ? '–' : diff > 0 ? '↑' : '↓';
   const txt = digits > 0 ? abs.toFixed(digits) : String(Math.round(abs));
-  return `<span class="mini-delta ${kind}">${sign}${txt}${unit}</span>`;
+  return `<span class="mini-delta ${kind}"><span class="arrow">${arrow}</span>${sign}${txt}${unit}</span>`;
 }
 
-function miniCard({ label, value, unit, basis, delta, spark, color }) {
-  return `<div class="mini">
-    <div class="mini-top"><span class="mini-label">${esc(label)}</span>${delta}</div>
+function miniCard({ label, value, unit, basis, delta, spark, color, icon }) {
+  return `<div class="mini" data-go="trends" role="button" tabindex="0" style="--chip:${color}">
+    <div class="mini-top"><span class="ico-chip">${ICONS[icon] || ''}</span><span class="mini-label">${esc(label)}</span>${ICONS.chev}</div>
     <div class="mini-value">${value == null ? '—' : esc(value)}<small>${esc(unit || '')}</small></div>
-    <div class="mini-basis">${esc(basis || '')}</div>
+    <div class="mini-delta-row"><div>${delta}<div class="mini-basis">${esc(basis || '')}</div></div></div>
     ${sparkline(spark, color)}
   </div>`;
 }
@@ -424,40 +438,72 @@ function factorRow(f) {
   </div>`;
 }
 
+function weekStrip(history) {
+  const last = (history || []).slice(-7);
+  const DOW = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+  const day = (iso) => { const t = new Date(String(iso) + 'T12:00:00'); return Number.isNaN(+t) ? '' : DOW[t.getDay()]; };
+  const bars = last.map((h, i) => {
+    const today = i === last.length - 1;
+    const hgt = h.score == null ? 6 : Math.max(8, h.score);
+    return `<div class="wb ${today ? 'today' : ''}" title="${esc(fmtDate(h.date))}: ${h.score == null ? 'chưa đủ dữ liệu' : h.score}">
+      <span class="wb-val">${h.score == null ? '–' : h.score}</span>
+      <span class="wb-bar ${h.score == null ? 'none' : ''}" style="height:${hgt}%"></span>
+    </div>`;
+  }).join('');
+  return `<div class="week">
+    <div class="week-label">7 ngày qua</div>
+    <div class="week-bars">${bars}</div>
+    <div class="week-days">${last.map((h) => `<span>${day(h.date)}</span>`).join('')}</div>
+  </div>`;
+}
+
 function heroCard(d) {
   const r = d.recovery;
-  const circ = 2 * Math.PI * 104;
+  const R = 92;
+  const circ = 2 * Math.PI * R;
   const dash = r.score == null ? 0 : (r.score / 100) * circ;
   const emergency = r.band === 'emergency';
-  const hex = { green: '#3ee08f', yellow: '#f7c45b', red: '#ff6b6b', unknown: '#8fa0ab', emergency: '#ff3c3c' }[r.band] || '#8fa0ab';
-  const hex2 = { green: '#b6ffd9', yellow: '#ffe4a8', red: '#ffb6b6', unknown: '#c3ced5', emergency: '#ffb6b6' }[r.band] || '#c3ced5';
+  const hex = { green: '#5fe39a', yellow: '#f6c445', red: '#ff7a6e', unknown: '#9bb0a4', emergency: '#ff3c3c' }[r.band] || '#9bb0a4';
+  const hex2 = { green: '#c8fadc', yellow: '#ffe6a0', red: '#ffbdb5', unknown: '#c3d2c9', emergency: '#ffbdb5' }[r.band] || '#c3d2c9';
   return `<section class="hero card band-${r.band} ${emergency ? 'hero-emergency' : ''}">
+    <div class="hero-glow"></div>
+    <svg class="hero-hills" viewBox="0 0 800 200" preserveAspectRatio="none" aria-hidden="true">
+      <path d="M0 120 C90 70 160 95 240 60 C320 25 380 80 460 55 C540 30 610 70 690 45 C740 30 780 40 800 35 V200 H0Z" fill="rgba(150,210,175,0.05)"/>
+      <path d="M0 150 C110 115 190 140 290 105 C380 75 450 125 540 100 C630 78 700 110 800 90 V200 H0Z" fill="rgba(110,180,140,0.06)"/>
+      <path d="M0 200 V170 C120 150 210 175 330 150 C430 130 520 165 620 145 C700 130 760 140 800 135 V200Z" fill="rgba(4,14,9,0.35)"/>
+      <path class="hill-line" d="M420 178 C520 150 600 168 700 120" fill="none" stroke="${hex}" stroke-opacity=".35" stroke-width="1.5"/>
+    </svg>
     <div class="hero-head">
-      <div><div class="eyebrow">Hồi phục hôm nay</div><div class="hero-date">${esc(fmtLong(d.today))}</div></div>
+      <div class="card-title"><span class="ico-chip">${ICONS.recovery}</span><div><h3>Điểm phục hồi</h3><div class="small">${esc(fmtLong(d.today))}</div></div></div>
       <button class="icon-btn" id="syncBtn" title="Đồng bộ Intervals.icu" aria-label="Đồng bộ">${ICONS.sync}</button>
     </div>
-    <div class="hero-verdict"><span class="dot"></span>${esc(d.advice.label)}</div>
-    <div class="ring-wrap">
-      <svg class="ring" viewBox="0 0 260 260" role="img" aria-label="Chỉ số hồi phục ${r.score == null ? 'chưa đủ dữ liệu' : r.score + ' trên 100'}">
-        <defs><linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${hex}"/><stop offset="1" stop-color="${hex2}"/></linearGradient></defs>
-        <circle class="ring-ticks" cx="130" cy="130" r="121"/>
-        <circle class="ring-track" cx="130" cy="130" r="104"/>
-        <circle class="ring-value" cx="130" cy="130" r="104" stroke-dasharray="${dash.toFixed(1)} ${circ.toFixed(1)}" style="stroke:url(#ringGrad);filter:drop-shadow(0 0 12px ${hex}44)"/>
-      </svg>
-      <div class="ring-center">
-        <div class="ring-score ${r.score == null ? 'empty' : ''}">${r.score == null ? '—' : r.score}</div>
-        <div class="ring-unit">TRÊN 100</div>
-        <div class="ring-band">${esc(r.bandLabel)}</div>
+    <div class="hero-body">
+      <div class="ring-wrap">
+        <svg class="ring" viewBox="0 0 220 220" role="img" aria-label="Chỉ số hồi phục ${r.score == null ? 'chưa đủ dữ liệu' : r.score + ' trên 100'}">
+          <defs><linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${hex2}"/><stop offset="1" stop-color="${hex}"/></linearGradient></defs>
+          <circle class="ring-track" cx="110" cy="110" r="${R}"/>
+          <circle class="ring-value" cx="110" cy="110" r="${R}" stroke-dasharray="${dash.toFixed(1)} ${circ.toFixed(1)}" style="stroke:url(#ringGrad);filter:drop-shadow(0 0 10px ${hex}88)"/>
+        </svg>
+        <div class="ring-center">
+          <div class="ring-score ${r.score == null ? 'empty' : ''}">${r.score == null ? '—' : r.score}</div>
+          <div class="ring-unit">/ 100</div>
+        </div>
       </div>
+      <div class="hero-info">
+        <div class="hero-band">${esc(r.bandLabel)}</div>
+        <div class="hero-verdict"><span class="dot"></span>${esc(d.advice.label)}</div>
+        <p class="hero-action">${esc(r.action)}</p>
+        <div class="hero-cta"><button class="btn small" data-go="trends">Xem xu hướng ${ICONS.chev}</button></div>
+      </div>
+      ${weekStrip(d.history)}
     </div>
     ${emergency && d.advice.emergency?.show ? `<div class="emergency-box">${esc(d.advice.emergency.text)}</div>` : ''}
-    <p class="hero-action">${esc(r.action)}</p>
+    ${r.capped ? `<div class="cap-note">Điểm bị giới hạn vì ${esc(r.capped)}. Cảm giác của bạn thắng đồng hồ.</div>` : ''}
     <div class="hero-foot">
       <span>${r.used}/${r.total} yếu tố · tin cậy ${esc(r.confidence)}</span>
       <span>${d.data.days} ngày dữ liệu</span>
       <span>${d.lastSync ? 'đồng bộ ' + esc(fmtDateTime(d.lastSync)) : 'chưa đồng bộ'}</span>
     </div>
-    ${r.capped ? `<div class="cap-note">Điểm bị giới hạn vì ${esc(r.capped)}. Cảm giác của bạn thắng đồng hồ.</div>` : ''}
   </section>`;
 }
 
@@ -466,18 +512,18 @@ function miniWrap(d) {
   const spark = (key) => m.spark.map((p) => p[key]);
   const hrvDelta = m.hrv.value != null && m.hrv.mean != null
     ? deltaChip(m.hrv.value, m.hrv.mean, { digits: 0, higherBetter: true })
-    : '<span class="mini-delta flat">—</span>';
+    : '<span class="mini-delta flat"><span class="arrow">–</span>—</span>';
   return `<div class="mini-wrap">
-    ${miniCard({ label: 'HRV', value: m.hrv.value == null ? null : fmtNum(m.hrv.value, 1), unit: 'ms', basis: m.hrv.basis, delta: hrvDelta, spark: spark('hrv'), color: '#3ee08f' })}
-    ${miniCard({ label: 'Nhịp tim nghỉ', value: m.rhr.value == null ? null : fmtNum(m.rhr.value), unit: 'bpm', basis: m.rhr.basis, delta: deltaChip(m.rhr.value, m.rhr.mean, { higherBetter: false }), spark: spark('rhr'), color: '#ff8a7a' })}
-    ${miniCard({ label: 'Giấc ngủ', value: m.sleep.value == null ? null : fmtNum(m.sleep.value, 1), unit: 'giờ', basis: m.sleep.score != null ? `Điểm ngủ ${fmtNum(m.sleep.score)}` : m.sleep.basis, delta: deltaChip(m.sleep.value, m.sleep.mean, { digits: 1, higherBetter: true, unit: 'h' }), spark: spark('sleep'), color: '#a78bfa' })}
-    ${miniCard({ label: 'Nhịp thở', value: m.resp.value == null ? null : fmtNum(m.resp.value, 1), unit: '/ph', basis: m.resp.basis, delta: m.resp.state === 'elevated' ? deltaChip(m.resp.value, m.resp.mean, { digits: 1, higherBetter: false }) : `<span class="mini-delta flat">${m.resp.value == null ? '—' : 'ổn'}</span>`, spark: spark('resp'), color: '#67b7ff' })}
+    ${miniCard({ label: 'HRV', value: m.hrv.value == null ? null : fmtNum(m.hrv.value, 1), unit: 'ms', basis: m.hrv.basis, delta: hrvDelta, spark: spark('hrv'), color: '#5fe39a', icon: 'hrv' })}
+    ${miniCard({ label: 'Nhịp tim nghỉ', value: m.rhr.value == null ? null : fmtNum(m.rhr.value), unit: 'bpm', basis: m.rhr.basis, delta: deltaChip(m.rhr.value, m.rhr.mean, { higherBetter: false }), spark: spark('rhr'), color: '#ff8577', icon: 'heart' })}
+    ${miniCard({ label: 'Giấc ngủ', value: m.sleep.value == null ? null : fmtNum(m.sleep.value, 1), unit: 'giờ', basis: m.sleep.score != null ? `Điểm ngủ ${fmtNum(m.sleep.score)}` : m.sleep.basis, delta: deltaChip(m.sleep.value, m.sleep.mean, { digits: 1, higherBetter: true, unit: 'h' }), spark: spark('sleep'), color: '#a99bff', icon: 'moon' })}
+    ${miniCard({ label: 'Nhịp thở', value: m.resp.value == null ? null : fmtNum(m.resp.value, 1), unit: '/ph', basis: m.resp.basis, delta: m.resp.state === 'elevated' ? deltaChip(m.resp.value, m.resp.mean, { digits: 1, higherBetter: false }) : `<span class="mini-delta flat"><span class="arrow">–</span>${m.resp.value == null ? '—' : 'ổn'}</span>`, spark: spark('resp'), color: '#7cc4ff', icon: 'wind' })}
   </div>`;
 }
 
 function factorsCard(d) {
   return `<div class="card factors-card">
-    <div class="card-head"><div><div class="eyebrow">Phân rã</div><h3>Vì sao điểm này?</h3></div><span class="confidence-chip ${d.recovery.confidence === 'cao' ? 'green' : d.recovery.confidence === 'vừa' ? 'amber' : 'red'}">${esc(d.recovery.confidence)}</span></div>
+    <div class="card-head"><div class="card-title"><span class="ico-chip" style="--chip:#f6c445">${ICONS.bulb}</span><div><div class="eyebrow">Phân rã</div><h3>Vì sao điểm này?</h3></div></div><span class="confidence-chip ${d.recovery.confidence === 'cao' ? 'green' : d.recovery.confidence === 'vừa' ? 'amber' : 'red'}">${esc(d.recovery.confidence)}</span></div>
     ${d.recovery.factors.map(factorRow).join('')}
     ${d.recovery.capped && d.recovery.rawScore != null ? `<div class="cap-line">Điểm thô ${d.recovery.rawScore} bị giới hạn còn ${d.recovery.score} vì ${esc(d.recovery.capped)}.</div>` : ''}
     ${d.recovery.score == null && d.recovery.factors.length ? `<div class="cap-line note-line">${esc(d.recovery.note)}</div>` : ''}
@@ -489,9 +535,9 @@ function historyCard(d) {
   const valid = d.history.filter((h) => h.score != null);
   const avg = valid.length ? Math.round(valid.reduce((a, h) => a + h.score, 0) / valid.length) : null;
   return `<div class="card history-card">
-    <div class="chart-head"><div><div class="chart-title">30 ngày hồi phục</div><div class="chart-meta">${avg == null ? 'Chưa đủ dữ liệu' : `TB ${avg} · ${valid.length} ngày có điểm`}</div></div></div>
+    <div class="chart-head"><div class="card-title"><span class="ico-chip">${ICONS.chart}</span><div><div class="chart-title">30 ngày hồi phục</div><div class="chart-meta">${avg == null ? 'Chưa đủ dữ liệu' : `TB ${avg} · ${valid.length} ngày có điểm`}</div></div></div></div>
     ${recoveryBars(d.history)}
-    <div class="chart-legend"><span><i class="sw" style="background:#3ee08f"></i>Sẵn sàng (67–100)</span><span><i class="sw" style="background:#f7c45b"></i>Trung bình (34–66)</span><span><i class="sw" style="background:#ff6b6b"></i>Cần hồi phục (0–33)</span></div>
+    <div class="chart-legend"><span><i class="sw" style="background:#5fe39a"></i>Sẵn sàng (67–100)</span><span><i class="sw" style="background:#f6c445"></i>Trung bình (34–66)</span><span><i class="sw" style="background:#ff7a6e"></i>Cần hồi phục (0–33)</span></div>
   </div>`;
 }
 
@@ -507,7 +553,7 @@ function sleepCard(d) {
   ];
   return `<div class="card sleep-card">
     <div class="card-head">
-      <div><div class="eyebrow">Kế hoạch ngủ</div><h3>Ngủ bao nhiêu tối nay?</h3></div>
+      <div class="card-title"><span class="ico-chip" style="--chip:#a99bff">${ICONS.bed}</span><div><div class="eyebrow">Kế hoạch ngủ</div><h3>Ngủ bao nhiêu tối nay?</h3></div></div>
       <label class="wake"><span>Thức dậy</span><input type="time" id="wakeTime" value="${esc(wake)}"></label>
     </div>
     <div class="tiers">
@@ -537,7 +583,7 @@ function loadCard(d) {
   const zone = target ? `<span class="load-zone" style="left:${(target.min / scale) * 100}%;width:${((target.max - target.min) / scale) * 100}%"></span>` : '';
   return `<div class="card load-card">
     <div class="card-head">
-      <div><div class="eyebrow">Tải vận động</div><h3>Mục tiêu tuần này</h3></div>
+      <div class="card-title"><span class="ico-chip">${ICONS.activities}</span><div><div class="eyebrow">Tải vận động</div><h3>Mục tiêu tuần này</h3></div></div>
       ${target ? `<span class="confidence-chip ${high ? 'red' : 'green'}">${esc(target.label)}</span>` : ''}
     </div>
     <div class="load-big">${pct == null ? '—' : pct + '%'}<small>${pct == null ? 'chưa đủ nền tập' : 'so với nền tuần 28 ngày'}</small></div>
@@ -606,7 +652,7 @@ function attachCheckin(root, tags) {
 
 function checkinCard(d) {
   return `<div class="card checkin-card">
-    <div class="card-head"><div><div class="eyebrow">Nhật ký</div><h3>Cảm giác hôm nay</h3></div></div>
+    <div class="card-head"><div class="card-title"><span class="ico-chip">${ICONS.leaf}</span><div><div class="eyebrow">Tinh thần</div><h3>Cảm giác hôm nay</h3></div></div></div>
     ${checkinFormHtml(d.journalTags || [], d.checkin)}
   </div>`;
 }
@@ -614,7 +660,7 @@ function checkinCard(d) {
 function recentCard(d) {
   const items = d.recent || [];
   return `<div class="card recent-card">
-    <div class="card-head"><div><div class="eyebrow">Vận động</div><h3>Buổi tập gần đây</h3></div><button class="card-link" data-go="activities">Xem tất cả</button></div>
+    <div class="card-head"><div class="card-title"><span class="ico-chip" style="--chip:#ff9f6e">${ICONS.flame}</span><div><div class="eyebrow">Vận động</div><h3>Buổi tập gần đây</h3></div></div><button class="card-link" data-go="activities">Xem tất cả ${ICONS.chev}</button></div>
     ${items.length ? items.map(actRow).join('') : '<div class="empty">Chưa có buổi tập. Bấm Đồng bộ hoặc nhập CSV trong Cài đặt.</div>'}
   </div>`;
 }
@@ -642,8 +688,15 @@ async function renderToday(view) {
   const d = await api('/api/dashboard');
   view.innerHTML = `
     <div class="view-head">
-      <div><h1>${esc(greeting())}, ${esc((state.user.displayName || '').split(' ').slice(-1)[0])}</h1><div class="view-sub">${esc(fmtLong(d.today))} · dữ liệu ${d.data.days} ngày</div></div>
-      <button class="btn ghost small" id="syncTop">${ICONS.sync} Đồng bộ</button>
+      <div class="greet">
+        <div class="greet-date">${esc(fmtLong(d.today))}</div>
+        <h1>${esc(greeting())}, ${esc((state.user.displayName || '').split(' ').slice(-1)[0])}</h1>
+        <div class="view-sub">${esc(subline(d))}</div>
+      </div>
+      <div class="head-actions">
+        <div class="head-pill glass">${ICONS.sun}<span>Sức khỏe tốt hôm nay là nền tảng cho những ngày tuyệt vời phía trước.</span></div>
+        <button class="btn small" id="syncTop">${ICONS.sync} Đồng bộ</button>
+      </div>
     </div>
     <div class="today-grid">
       ${heroCard(d)}
@@ -683,7 +736,19 @@ async function renderToday(view) {
     };
   }
   attachCheckin(view, d.journalTags || []);
-  view.querySelectorAll('[data-go]').forEach((b) => { b.onclick = () => go(b.dataset.go); });
+  view.querySelectorAll('[data-go]').forEach((b) => {
+    b.onclick = () => go(b.dataset.go);
+    if (b.getAttribute('role') === 'button') b.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(b.dataset.go); } };
+  });
+}
+
+function subline(d) {
+  const b = d.recovery?.band;
+  if (b === 'green') return 'Cơ thể sẵn sàng — một ngày tốt để vận động.';
+  if (b === 'yellow') return 'Một ngày mới, một cơ hội để sống khỏe hơn.';
+  if (b === 'red') return 'Hôm nay ưu tiên nghỉ ngơi và hồi phục.';
+  if (b === 'emergency') return 'Hãy ưu tiên hỗ trợ y tế trước.';
+  return `Dữ liệu ${d.data?.days ?? 0} ngày — cần thêm để chấm điểm chính xác.`;
 }
 
 function greeting() {
@@ -715,11 +780,11 @@ async function renderTrends(view) {
   });
 
   const defs = [
-    { title: 'HRV rMSSD', field: 'hrv_rmssd', color: '#3ee08f', unit: 'ms', digits: 1 },
-    { title: 'Nhịp tim nghỉ', field: 'resting_hr', color: '#ff8a7a', unit: 'bpm', digits: 0 },
+    { title: 'HRV rMSSD', field: 'hrv_rmssd', color: '#5fe39a', unit: 'ms', digits: 1 },
+    { title: 'Nhịp tim nghỉ', field: 'resting_hr', color: '#ff8577', unit: 'bpm', digits: 0 },
     { title: 'Giấc ngủ', field: 'sleep_secs', scale: 1 / 3600, color: '#a78bfa', unit: 'giờ', digits: 1 },
-    { title: 'Điểm ngủ', field: 'sleep_score', color: '#f7c45b', unit: '/100', digits: 0 },
-    { title: 'Số bước', field: 'steps', color: '#67b7ff', unit: 'bước', digits: 0 },
+    { title: 'Điểm ngủ', field: 'sleep_score', color: '#f6c445', unit: '/100', digits: 0 },
+    { title: 'Số bước', field: 'steps', color: '#7cc4ff', unit: 'bước', digits: 0 },
     { title: 'Nhịp thở', field: 'respiration', color: '#4fd1c5', unit: '/ph', digits: 1 },
   ];
 
@@ -733,7 +798,7 @@ async function renderTrends(view) {
     <div class="card" style="margin-bottom:14px">
       <div class="chart-head"><div><div class="chart-title">Điểm hồi phục</div><div class="chart-meta">${range} ngày · trung bình và các dải màu</div></div></div>
       ${recoveryBars(dash.history)}
-      <div class="chart-legend"><span><i class="sw" style="background:#3ee08f"></i>Sẵn sàng</span><span><i class="sw" style="background:#f7c45b"></i>Trung bình</span><span><i class="sw" style="background:#ff6b6b"></i>Cần hồi phục</span><span>Đường đứt = trung bình</span></div>
+      <div class="chart-legend"><span><i class="sw" style="background:#5fe39a"></i>Sẵn sàng</span><span><i class="sw" style="background:#f6c445"></i>Trung bình</span><span><i class="sw" style="background:#ff7a6e"></i>Cần hồi phục</span><span>Đường đứt = trung bình</span></div>
     </div>
     <div class="charts-grid">
       ${defs.map((def) => `<div class="card">

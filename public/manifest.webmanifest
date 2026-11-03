@@ -4,8 +4,8 @@
   "description": "Dashboard sức khoẻ cá nhân: hồi phục, giấc ngủ, tải vận động, nhật ký cảm giác.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#070a0d",
-  "theme_color": "#070a0d",
+  "background_color": "#050d09",
+  "theme_color": "#050d09",
   "lang": "vi",
   "icons": [
     { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
