@@ -28,3 +28,6 @@ npm-debug.log*
 # CSV/Screenshot sức khỏe thật (tài liệu hướng dẫn, không chứa dữ liệu)
 *.real.csv
 sample-data/real/
+
+# Dữ liệu giả để xem thử
+demo-data/

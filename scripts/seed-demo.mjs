@@ -1,6 +1,6 @@
 /**
  * Dữ liệu giả để demo. Tạo một admin và một thành viên kèm lịch sử 45 ngày,
- * một vài buổi tập và một cảm giác "tired".
+ * một vài buổi tập, một cảm giác "tired" và một người đeo Mi Band chỉ nhập tay.
  *
  * CHẠY: node scripts/seed-demo.mjs
  * LƯU Ý: xoá toàn bộ database hiện tại. Không dùng khi đã có dữ liệu thật.
@@ -8,7 +8,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { openDb, localDate, localIso } from '../server/db.mjs';
-import { createUser, upsertWellness, upsertActivity, saveIcuKey, addCheckin } from '../server/store.mjs';
+import { createUser, upsertWellness, upsertActivity, saveIcuKey, addCheckin, saveManualDay } from '../server/store.mjs';
 import { dataKey } from '../server/db.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
@@ -60,8 +60,15 @@ const acts = [
 for (const a of acts) upsertActivity(db, adminId, a);
 
 addCheckin(db, adminId, { level: 'ok', note: 'Demo checkin' });
+
+// Người đeo Mi Band: không có key, không có HRV hay nhịp thở, hôm nay chưa nhập.
+const bandId = db.prepare('SELECT id FROM users WHERE username=?').get('miband')?.id || createUser(db, { username: 'miband', displayName: 'Người đeo Mi Band', password: 'demo-1234', role: 'member', mustChangePw: 0 });
+for (let i = 20; i >= 1; i--) {
+  saveManualDay(db, bandId, { date: dayIso(i), values: { resting_hr: 61 + (i % 3), sleep_secs: (410 + i * 3) * 60, sleep_score: 74 + (i % 9), steps: 6800 + i * 90, spo2: 96 + (i % 2) } });
+}
 console.log(`Đã seed dữ liệu giả.
   · admin  / demo-1234   (quản trị, ~45 ngày nền)
   · demo   / demo-1234   (thành viên, chỉ SDNN → không bao giờ tính baseline rMSSD)
+  · miband / demo-1234   (đeo Mi Band, chỉ nhập tay, hôm nay chưa nhập)
   · mở    http://127.0.0.1:8899  (xem README để biết cổng thật)
   · demo  KHÔNG đồng bộ Intervals.icu (chưa cấu hình key).`);
