@@ -33,7 +33,7 @@ const ACTIONS = {
   ease: 'Giảm 20–30% khối lượng hôm nay. Bỏ hiệp cuối nếu nhịp thở chưa về bình thường.',
   recover: 'Chỉ vận động nhẹ 20–30 phút: đi bộ, giãn cơ, thở chậm. Không tập cường độ cao.',
   rest: 'Nghỉ hoàn toàn. Ngủ sớm hơn 45 phút, uống đủ nước, ăn nhẹ.',
-  unknown: 'Chưa đủ dữ liệu. Bấm Đồng bộ, hoặc ghi cảm giác hôm nay.',
+  unknown: 'Chưa đủ dữ liệu. Hãy đồng bộ hoặc nhập tay số hôm nay, hoặc ghi cảm giác.',
   emergency: 'Dừng buổi tập. Gọi 115 hoặc đến khoa cấp cứu gần nhất.',
 };
 
@@ -75,7 +75,7 @@ function factorBase(key, label) {
 function respFactor(resp) {
   const f = { ...factorBase('resp', 'Nhịp thở'), weight: 0, flag: true, supplemental: true, respState: resp.state };
   if (resp.state === 'not_provided') {
-    return { ...f, status: 'info', valueText: 'chưa có số', text: 'Nguồn đồng bộ không gửi nhịp thở. Bạn có thể nhập tay ở thẻ Chỉ số khi đồng bộ thiếu. Không ảnh hưởng điểm và độ tin cậy.' };
+    return { ...f, status: 'info', valueText: 'chưa có số', text: 'Nguồn đồng bộ không gửi nhịp thở. Bạn có thể nhập tay ở thẻ Số của hôm nay. Không ảnh hưởng điểm và độ tin cậy.' };
   }
   if (resp.state === 'insufficient') {
     return { ...f, status: 'info', valueText: `${resp.count}/${resp.minNights} đêm`, text: `Cần ≥${resp.minNights} đêm có nhịp thở trong 30 ngày để bật cờ cảnh báo (hiện có ${resp.count}). Có thể nhập bù các đêm trước.` };

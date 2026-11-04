@@ -270,9 +270,9 @@ input[type="file"] { padding: 9px 10px; font-size: 13px; color: var(--muted); }
   grid-template-columns: repeat(2, minmax(0, 1fr)) minmax(300px, 0.85fr);
   grid-template-areas:
     "hero hero factors"
+    "manual manual factors"
     "mini mini factors"
     "load sleep factors"
-    "manual manual checkin"
     "history history checkin"
     "recent recent checkin";
   align-items: stretch;
@@ -455,7 +455,19 @@ input[type="file"] { padding: 9px 10px; font-size: 13px; color: var(--muted); }
 .stat-row .stat b { display: block; font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.4px; }
 .stat-row .stat span { font-size: 11px; color: var(--muted); }
 
-/* ---------- manual readings ---------- */
+/* ---------- today's numbers: auto / manual ---------- */
+[data-entry-pane][hidden] { display: none; }
+.manual-card > .card-head { flex-wrap: wrap; }
+.manual-card > .card-head .card-title { flex: 1 1 200px; }
+.entry-tabs { flex: 0 0 auto; }
+.auto-rows { display: grid; gap: 6px; }
+.auto-row { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255, 255, 255, 0.035); font-size: 13px; color: var(--ink-2); }
+.auto-row b { margin-left: auto; font-size: 14px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.auto-row .confidence-chip { justify-content: center; min-width: 62px; }
+.auto-message { margin: 12px 0; font-size: 13px; line-height: 1.5; color: var(--ink-2); }
+.auto-error { margin: -4px 0 12px; font-size: 12px; color: var(--amber); }
+.auto-last { margin-top: 10px; }
+
 .manual-body { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 18px; align-items: start; }
 .manual-form { display: flex; flex-direction: column; }
 .manual-form .field { margin: 0 0 10px; }
@@ -645,10 +657,10 @@ tr:last-child td { border-bottom: 0; }
     grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-template-areas:
       "hero hero"
+      "manual manual"
       "mini mini"
       "factors load"
       "factors sleep"
-      "manual manual"
       "checkin recent"
       "history history";
   }
@@ -694,7 +706,7 @@ tr:last-child td { border-bottom: 0; }
   }
   .today-grid {
     grid-template-columns: 1fr;
-    grid-template-areas: "hero" "mini" "manual" "factors" "history" "sleep" "load" "checkin" "recent";
+    grid-template-areas: "hero" "manual" "mini" "factors" "history" "sleep" "load" "checkin" "recent";
     gap: 14px;
   }
   .view-head { margin-bottom: 16px; }

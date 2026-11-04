@@ -279,12 +279,13 @@ async function route(req, res) {
     const history = recoveryHistory({ wellness, today, days: histDays, settings, checkins: recentCheckins, activities });
     const metrics = buildMetrics({ wellness, today, activities, sickDates });
 
-    const userRow = db.prepare('SELECT last_sync_at AS lastSync, display_name AS displayName, created_at AS createdAt FROM users WHERE id = ?').get(req.user.id);
+    const userRow = db.prepare('SELECT last_sync_at AS lastSync, last_sync_error AS syncError, icu_key_cipher IS NOT NULL AS hasKey, display_name AS displayName, created_at AS createdAt FROM users WHERE id = ?').get(req.user.id);
     const first = db.prepare('SELECT MIN(date) AS first, COUNT(*) AS days FROM wellness WHERE user_id = ?').get(req.user.id);
 
     return json(res, 200, {
       today,
       lastSync: userRow?.lastSync || null,
+      sync: { hasKey: !!userRow?.hasKey, error: userRow?.syncError || null },
       user: { displayName: userRow?.displayName || req.user.display_name },
       data: { firstDate: first?.first || null, days: first?.days || 0 },
       recovery,

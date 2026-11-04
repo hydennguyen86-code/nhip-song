@@ -636,9 +636,49 @@ function manualBaselineText(baseline) {
   return Object.keys(names).map((k) => `${names[k]} ${baseline?.[k]?.have ?? 0}/${baseline?.[k]?.need ?? 0}`).join(' · ');
 }
 
-function manualChip(baseline) {
-  const rhr = baseline?.resting_hr;
-  return rhr && rhr.have >= rhr.need ? { cls: 'green', text: 'đủ nền nhịp tim' } : { cls: 'amber', text: `nền nhịp tim ${rhr?.have ?? 0}/${rhr?.need ?? 7}` };
+const ENTRY_MODES = ['auto', 'manual'];
+const ENTRY_RETRY_MS = 15 * 60 * 1000;
+
+function entryModeKey() { return `nhipEntryMode:${state.user.id}`; }
+
+/** The person's choice on this device; without one, follow whether a key is connected. */
+function savedEntryMode(d) {
+  const saved = localStorage.getItem(entryModeKey());
+  return ENTRY_MODES.includes(saved) ? saved : d.sync?.hasKey ? 'auto' : 'manual';
+}
+
+/** The numbers a morning verdict rests on. HRV only counts for people who have it. */
+function morningFields(log) {
+  return MANUAL_FIELDS.filter((f) => f.col === 'resting_hr' || f.col === 'sleep_secs' || (f.col === 'hrv_rmssd' && log.baseline?.hrv_rmssd?.have > 0));
+}
+
+function morningMissing(log) {
+  const today = log.days?.[0];
+  return morningFields(log).filter((f) => today?.values?.[f.col] == null);
+}
+
+function autoPaneHtml(d, log) {
+  const today = log.days?.[0] || { values: {}, manual: {} };
+  const missing = morningMissing(log);
+  const rows = morningFields(log).map((f) => {
+    const v = today.values[f.col];
+    const chip = v == null ? { cls: 'red', text: 'chưa có' } : today.manual[f.col] ? { cls: 'amber', text: 'tự nhập' } : { cls: 'green', text: 'đồng bộ' };
+    return `<div class="auto-row"><span>${esc(f.label)}</span><b>${v == null ? '—' : f.sleep ? sleepText(v) : `${fmtNum(v, f.col === 'hrv_rmssd' ? 1 : 0)} ${esc(f.unit)}`}</b><span class="confidence-chip ${chip.cls}">${chip.text}</span></div>`;
+  }).join('');
+  const names = missing.map((f) => f.label.toLowerCase()).join(', ');
+  const message = !missing.length
+    ? 'Đã đủ số cho sáng nay.'
+    : !d.sync?.hasKey
+      ? 'Chưa kết nối Intervals.icu nên chưa có số tự động. Bạn có thể kết nối, hoặc nhập tay để có kết luận ngay.'
+      : `Intervals.icu chưa có ${names} hôm nay. Nhập tay để có kết luận ngay. Khi có số thật, đồng bộ sẽ thay số tay.`;
+  return `<div class="auto-rows">${rows}</div>
+    <p class="auto-message" data-auto-message>${esc(message)}</p>
+    ${d.sync?.error ? `<p class="auto-error">Lần đồng bộ trước bị lỗi: ${esc(d.sync.error)}</p>` : ''}
+    <div class="manual-actions">
+      ${d.sync?.hasKey ? `<button class="btn small" type="button" data-auto-sync>${ICONS.sync} Đồng bộ ngay</button>` : '<button class="btn small" type="button" data-go="settings">Kết nối Intervals.icu</button>'}
+      ${missing.length ? `<button class="btn primary small" type="button" data-auto-fill>Nhập tay phần thiếu</button>` : ''}
+    </div>
+    <div class="hint auto-last">${d.lastSync ? `Đồng bộ gần nhất ${esc(fmtDateTime(d.lastSync))}` : 'Chưa đồng bộ lần nào'}</div>`;
 }
 
 function manualFieldHtml(f) {
@@ -656,13 +696,18 @@ function manualFieldHtml(f) {
 
 function manualCard(d) {
   const log = d.manualLog || { days: [], baseline: {} };
-  const chip = manualChip(log.baseline);
+  const mode = state.entryView || savedEntryMode(d);
   const isadmin = state.user?.role === 'admin';
   return `<div class="card manual-card" data-manual>
     <div class="card-head">
-      <div class="card-title"><span class="ico-chip">${ICONS.hrv}</span><div><div class="eyebrow">Nhập tay</div><h3>Chỉ số khi đồng bộ thiếu</h3></div></div>
-      <span class="confidence-chip ${chip.cls}" data-manual-chip>${esc(chip.text)}</span>
+      <div class="card-title"><span class="ico-chip">${ICONS.hrv}</span><div><div class="eyebrow">Nguồn dữ liệu</div><h3>Số của hôm nay</h3></div></div>
+      <div class="range-row entry-tabs" role="tablist">
+        <button type="button" role="tab" data-entry-tab="auto" class="${mode === 'auto' ? 'active' : ''}" aria-selected="${mode === 'auto'}">Tự động</button>
+        <button type="button" role="tab" data-entry-tab="manual" class="${mode === 'manual' ? 'active' : ''}" aria-selected="${mode === 'manual'}">Nhập tay</button>
+      </div>
     </div>
+    <div class="auto-pane" data-entry-pane="auto" ${mode === 'auto' ? '' : 'hidden'}>${autoPaneHtml(d, log)}</div>
+    <div data-entry-pane="manual" ${mode === 'manual' ? '' : 'hidden'}>
     <div class="manual-body">
       <form class="manual-form" novalidate>
         <div class="manual-who">
@@ -690,6 +735,7 @@ function manualCard(d) {
       <p>Tên mục có thể khác tuỳ phiên bản Mi Fitness. Mỗi người nên dùng một thiết bị cố định, vì số của hai loại vòng không so được với nhau.</p>
     </details>
     <div class="hint manual-note">Chỉ cần điền ô bạn có. Để trống ô tự nhập rồi lưu là xoá số đó. Khi Intervals.icu có số thật cho đúng ngày, số đồng bộ sẽ thay số tay.</div>
+    </div>
   </div>`;
 }
 
@@ -701,7 +747,6 @@ function attachManualCard(view, d) {
   const saveBtn = form.querySelector('[data-manual-save]');
   const userEl = form.querySelector('[data-manual-user]');
   const logEl = card.querySelector('[data-manual-log]');
-  const chipEl = card.querySelector('[data-manual-chip]');
   const baselineEl = card.querySelector('[data-manual-baseline]');
   const hoursEl = form.querySelector('[data-manual-sleep="h"]');
   const minsEl = form.querySelector('[data-manual-sleep="m"]');
@@ -744,18 +789,13 @@ function attachManualCard(view, d) {
   const paint = (log) => {
     days = log.days || [];
     logEl.innerHTML = manualRows(days);
-    const chip = manualChip(log.baseline);
-    chipEl.className = `confidence-chip ${chip.cls}`;
-    chipEl.textContent = chip.text;
     baselineEl.textContent = manualBaselineText(log.baseline);
     loadDay();
   };
   // Only your own numbers feed this page; for someone else just refresh the card.
   const refresh = async () => {
     if (target() === state.user.id) {
-      const y = window.scrollY;
-      await renderView();
-      window.scrollTo(0, y);
+      await refreshKeepingScroll();
     } else {
       paint(await api(logUrl()));
     }
@@ -808,6 +848,80 @@ function attachManualCard(view, d) {
   };
   dateEl.value = state.manualDate && state.manualDate <= d.today ? state.manualDate : d.today;
   paint(d.manualLog || { days: [], baseline: {} });
+
+  const showPane = (mode) => {
+    state.entryView = mode;
+    for (const pane of card.querySelectorAll('[data-entry-pane]')) pane.hidden = pane.dataset.entryPane !== mode;
+    for (const tab of card.querySelectorAll('[data-entry-tab]')) {
+      tab.classList.toggle('active', tab.dataset.entryTab === mode);
+      tab.setAttribute('aria-selected', String(tab.dataset.entryTab === mode));
+    }
+  };
+  for (const tab of card.querySelectorAll('[data-entry-tab]')) {
+    tab.onclick = () => {
+      localStorage.setItem(entryModeKey(), tab.dataset.entryTab);
+      showPane(tab.dataset.entryTab);
+    };
+  }
+  // Filling a gap is for this visit only; tomorrow still opens on the chosen mode.
+  const fillBtn = card.querySelector('[data-auto-fill]');
+  if (fillBtn) {
+    fillBtn.onclick = () => {
+      showPane('manual');
+      dateEl.value = d.today;
+      loadDay();
+      const first = morningMissing(d.manualLog)[0];
+      form.querySelector(first?.sleep ? '[data-manual-sleep="h"]' : `[data-manual-col="${first?.col}"]`)?.focus();
+    };
+  }
+  const syncBtn = card.querySelector('[data-auto-sync]');
+  if (syncBtn) {
+    syncBtn.onclick = async () => {
+      syncBtn.disabled = true;
+      toastMsg('Đang đồng bộ…');
+      try {
+        const r = await api('/api/sync', { method: 'POST', body: {} });
+        toastMsg(`Xong: ${r.stats.wellness.written} ngày wellness, ${r.stats.activities.written} buổi tập.`);
+      } catch (err) { toastMsg('Đồng bộ lỗi: ' + err.message); }
+      await refreshKeepingScroll();
+    };
+  }
+  autoSyncIfMissing(view, d);
+}
+
+async function refreshKeepingScroll() {
+  const y = window.scrollY;
+  await renderView();
+  window.scrollTo(0, y);
+}
+
+/**
+ * Morning check: in Tự động with numbers still missing, ask Intervals.icu once
+ * without waiting for a button. Never reloads the page under someone typing.
+ */
+async function autoSyncIfMissing(view, d) {
+  const log = d.manualLog;
+  const mode = state.entryView || savedEntryMode(d);
+  if (mode !== 'auto' || !d.sync?.hasKey || !morningMissing(log).length) return;
+  const last = Math.max(state.autoSyncAt || 0, d.lastSync ? Date.parse(`${d.lastSync}+07:00`) : 0);
+  if (Date.now() - last < ENTRY_RETRY_MS) return;
+  state.autoSyncAt = Date.now();
+  const message = view.querySelector('[data-auto-message]');
+  const waitingFor = message?.textContent;
+  if (message) message.textContent = 'Đang hỏi Intervals.icu số mới nhất…';
+  try {
+    await api('/api/sync', { method: 'POST', body: {} });
+  } catch { /* the refreshed card shows the stored sync error */ }
+  if (state.view !== 'today') return;
+  const fresh = await api('/api/wellness/manual');
+  const changed = JSON.stringify(fresh.days?.[0]?.values) !== JSON.stringify(log.days?.[0]?.values);
+  const typing = view.contains(document.activeElement) && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
+  if (typing) {
+    if (message) message.textContent = waitingFor;
+    if (changed) toastMsg('Có số mới từ Intervals.icu. Tải lại trang để xem.');
+    return;
+  }
+  await refreshKeepingScroll();
 }
 
 
@@ -913,8 +1027,8 @@ async function renderToday(view) {
     </div>
     <div class="today-grid">
       ${heroCard(d)}
-      ${miniWrap(d)}
       ${manualCard(d)}
+      ${miniWrap(d)}
       ${factorsCard(d)}
       ${historyCard(d)}
       ${sleepCard(d)}
@@ -1173,7 +1287,7 @@ async function renderSettings(view) {
           ${icu.lastError ? `<div class="notice">Lần sync gần nhất lỗi: ${esc(icu.lastError)}</div>` : ''}
           <div class="actions"><button class="btn primary small" id="sync">${ICONS.sync} Đồng bộ ngay</button><button class="btn danger small" id="clear">Ngắt kết nối</button></div>` : `
           <p class="hint">Mỗi người tự nhập API key riêng. Key chỉ đi từ trình duyệt sang máy chủ trong nhà, được mã hoá, không vào Git hay log.</p>
-          <label class="field"><span>Athlete ID (ví dụ i771592)</span><input id="athleteId" type="text" autocapitalize="none"></label>
+          <label class="field"><span>Athlete ID (ví dụ i123456)</span><input id="athleteId" type="text" autocapitalize="none"></label>
           <label class="field"><span>API key (Intervals.icu → Settings → Developer Settings)</span><input id="apiKey" type="password" autocomplete="off"></label>
           <button class="btn primary small" id="saveKey">Lưu và thử kết nối</button>`}
       </div>
