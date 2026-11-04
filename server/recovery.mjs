@@ -13,7 +13,13 @@
  *   - respiratory rate is a one-sided illness flag, never points. Breathing up
  *     together with RHR up or HRV down caps the index at 50.
  *
- * Missing data lowers confidence; it is never silently filled in. A "sick" or
+ * HRV is REQUIRED. Without a usable ln(rMSSD) signal (no device HRV, baseline
+ * still building, or no recent nights) there is no index and no training
+ * advice: resting HR and sleep alone are not sensitive enough to clear a
+ * person for hard training, so the app says so instead of guessing.
+ * The result then carries `needsHrv: true` and `hrvGate` for the UI.
+ *
+ * Missing RHR/sleep lowers confidence; it is never silently filled in. A "sick" or
  * "tired" check-in caps the index, because self-report outranks the watch.
  * Implausible values (sleep < 3h, RHR outside 30–110, ...) and days reported
  * as sick are kept out of baselines.
@@ -34,6 +40,9 @@ const ACTIONS = {
   recover: 'Chỉ vận động nhẹ 20–30 phút: đi bộ, giãn cơ, thở chậm. Không tập cường độ cao.',
   rest: 'Nghỉ hoàn toàn. Ngủ sớm hơn 45 phút, uống đủ nước, ăn nhẹ.',
   unknown: 'Chưa đủ dữ liệu. Hãy đồng bộ hoặc nhập tay số hôm nay, hoặc ghi cảm giác.',
+  no_device_hrv: 'Không có lời khuyên. App cần HRV rMSSD mỗi đêm; thiết bị không đo HRV thì không dùng được Nhịp Sống.',
+  hrv_building: 'Chưa có lời khuyên. Cứ đeo khi ngủ và đồng bộ mỗi sáng cho đến khi đủ nền HRV.',
+  hrv_no_recent: 'Chưa có lời khuyên hôm nay vì thiếu HRV đêm qua. Hãy đồng bộ lại hoặc nhập tay HRV.',
   emergency: 'Dừng buổi tập. Gọi 115 hoặc đến khoa cấp cứu gần nhất.',
 };
 
@@ -42,6 +51,7 @@ const BAND_LABEL = {
   yellow: 'Trung bình',
   red: 'Cần hồi phục',
   unknown: 'Chưa đủ dữ liệu',
+  no_hrv: 'Cần HRV',
   emergency: 'Dừng tập',
 };
 
@@ -65,6 +75,23 @@ function bandFor(score) {
   if (score >= BANDS.green) return 'green';
   if (score >= BANDS.yellow) return 'yellow';
   return 'red';
+}
+
+/**
+ * Why there is no index when HRV is not usable. `no_device_hrv` = not a
+ * single rMSSD night in the 60-day window, last night included (device or
+ * pipeline sends no HRV). `nights` counts last night too, for the progress UI;
+ * `daysAvailable` is the baseline count (nights before today only).
+ */
+export function hrvGateOf(hrv) {
+  const nights = hrv.daysAvailable + (hrv.todayHasHrv ? 1 : 0);
+  const state = nights === 0 ? 'no_device_hrv' : hrv.state === 'insufficient' ? 'hrv_building' : 'hrv_no_recent';
+  const text = {
+    no_device_hrv: `Chưa có đêm HRV rMSSD nào trong ${hrv.windowDays} ngày. Nhịp Sống chỉ kết luận khi có HRV, vì đây là tín hiệu chính của thuật toán; nhịp tim nghỉ và giấc ngủ một mình không đủ nhạy để cho phép tập nặng. Thiết bị không đo HRV (Mi Band, Xiaomi Smart Band 10 trở về trước) không dùng được app này. Với HUAWEI: đồng bộ qua Health Sync lên Intervals.icu để có HRV rMSSD.`,
+    hrv_building: `Đang dựng nền HRV: đã có ${nights} đêm rMSSD, cần ${hrv.minDays} đêm trước hôm nay. Đủ thì app bắt đầu kết luận.`,
+    hrv_no_recent: 'Đã có nền HRV nhưng thiếu HRV đêm qua và chưa đủ 3 đêm trong 7 ngày gần nhất, nên hôm nay không kết luận.',
+  }[state];
+  return { state, nights, daysAvailable: hrv.daysAvailable, minDays: hrv.minDays, windowDays: hrv.windowDays, text };
 }
 
 function factorBase(key, label) {
@@ -106,7 +133,7 @@ function respFactor(resp) {
  */
 export function computeRecovery({ wellness, today, checkin, settings = DEFAULT_SETTINGS, activities = [], sickDates = null }) {
   const s = { ...DEFAULT_SETTINGS, ...settings };
-  const total = (s.hrv_on ? 1 : 0) + (s.rhr_on ? 1 : 0) + (s.sleep_on ? 1 : 0);
+  const total = 1 + (s.rhr_on ? 1 : 0) + (s.sleep_on ? 1 : 0); // HRV cannot be turned off
   const redFlag = Boolean(checkin && (checkin.red_flag === 1 || checkin.level === 'serious'));
   if (redFlag) {
     return {
@@ -129,7 +156,7 @@ export function computeRecovery({ wellness, today, checkin, settings = DEFAULT_S
   let hrv = null;
   let rhr = null;
 
-  if (s.hrv_on) {
+  {
     hrv = hrvModel(wellness, today, { sickDates });
     if (hrv.ready) {
       const sub = subScore(hrv.z);
@@ -155,13 +182,9 @@ export function computeRecovery({ wellness, today, checkin, settings = DEFAULT_S
       factors.push({
         ...factorBase('hrv', 'HRV'),
         status: 'missing',
-        text: hrv.state === 'insufficient'
-          ? `Cần ≥${hrv.minDays} ngày HRV cùng loại trong ${hrv.windowDays} ngày nền (hiện có ${hrv.daysAvailable} ngày ${hrv.name}).`
-          : `Đã có nền HRV ${hrv.name}, nhưng chưa có số đêm qua và chưa đủ 3 ngày trong 7 ngày gần nhất.`,
+        text: hrvGateOf(hrv).text,
       });
     }
-  } else {
-    factors.push({ ...factorBase('hrv', 'HRV'), status: 'missing', disabled: true, text: 'Bạn đã tắt HRV trong Cài đặt → Ngưỡng gợi ý.' });
   }
 
   if (s.rhr_on) {
@@ -234,26 +257,29 @@ export function computeRecovery({ wellness, today, checkin, settings = DEFAULT_S
     ? { signals: ['nhịp thở tăng', rhrUp && 'nhịp tim nghỉ tăng', hrvDown && 'HRV giảm'].filter(Boolean) }
     : null;
 
-  const used = factors.filter((f) => f.subscore != null);
-  if (!used.length) {
+  // HRV gate: no usable rMSSD → no index, no advice (see header).
+  if (!hrv.ready) {
+    const gate = hrvGateOf(hrv);
     return {
       score: null,
       rawScore: null,
       band: 'unknown',
-      bandLabel: BAND_LABEL.unknown,
-      action: ACTIONS.unknown,
+      bandLabel: BAND_LABEL.no_hrv,
+      action: ACTIONS[gate.state],
       factors,
       used: 0,
       total,
-      confidence: 'thấp',
+      confidence: '—',
       capped: null,
-      illness,
+      illness: null,
       weights: RECOVERY_WEIGHTS,
-      note: total
-        ? 'Chưa đủ dữ liệu để tính chỉ số. Nhịp thở chỉ là cờ cảnh báo, không tự tạo ra điểm. Không có nghĩa là bạn hồi phục kém.'
-        : 'Bạn đã tắt cả HRV, nhịp tim nghỉ và giấc ngủ. Nhịp thở chỉ là cờ bổ sung nên không có điểm.',
+      needsHrv: true,
+      hrvGate: gate,
+      note: gate.text,
     };
   }
+
+  const used = factors.filter((f) => f.subscore != null);
 
   const weightSum = used.reduce((acc, f) => acc + f.weight, 0);
   let rawScore = clamp(used.reduce((acc, f) => acc + f.subscore * (f.weight / weightSum), 0), 0, 100);
@@ -447,8 +473,7 @@ export function buildMetrics({ wellness, today, activities = [], sickDates = nul
 
   const hrv = hrvModel(wellness, today, { sickDates });
   const rollRmssd = rollingMean(wellness, 'hrv_rmssd', today);
-  const rollSdnn = rollingMean(wellness, 'hrv_sdnn', today);
-  const roll = rollRmssd ? { ...rollRmssd, name: 'rMSSD' } : rollSdnn ? { ...rollSdnn, name: 'SDNN' } : null;
+  const roll = rollRmssd ? { ...rollRmssd, name: 'rMSSD' } : null;
   const hrvValue = hrv.ready ? (hrv.acute || hrv.chronic).value : roll ? roll.value : null;
   const hrvBaseline = hrv.ready ? hrv.baselineMs : null;
 
@@ -462,7 +487,7 @@ export function buildMetrics({ wellness, today, activities = [], sickDates = nul
     const w = byDate.get(d);
     spark.push({
       date: d,
-      hrv: w ? (isNum(w.hrv_rmssd) ? w.hrv_rmssd : isNum(w.hrv_sdnn) ? w.hrv_sdnn : null) : null,
+      hrv: w && isNum(w.hrv_rmssd) ? w.hrv_rmssd : null,
       rhr: w && isNum(w.resting_hr) ? w.resting_hr : null,
       sleep: w && isNum(w.sleep_secs) ? w.sleep_secs / 3600 : null,
       resp: w && isNum(w.respiration) ? w.respiration : null,

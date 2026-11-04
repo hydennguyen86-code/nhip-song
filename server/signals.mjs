@@ -115,20 +115,22 @@ export function rhrModel(wellness, today, { windowDays = BASELINE_NEEDS.resting_
 /* ------------------------------------------------------------------ HRV -- */
 
 /**
- * ln(HRV) model. rMSSD and SDNN are separate series and never blended.
+ * ln(rMSSD) model. HRV is the core signal of the app: without it there is no
+ * score and no advice (see recovery.mjs / advice.mjs).
+ * Only rMSSD is used (Intervals.icu `hrv`, e.g. HUAWEI → Health Sync →
+ * Intervals.icu). SDNN is a different quantity (total variability, strongly
+ * dependent on recording length) and cannot be converted to rMSSD, so it is
+ * stored if a source sends it but never scored.
  * Baseline: 60 days before today (≥14 valid days), centre = median of ln,
  * spread = max(MAD-SD of ln, 0.07).
  */
 export function hrvModel(wellness, today, { windowDays = BASELINE_NEEDS.hrv_rmssd.windowDays, minDays = BASELINE_NEEDS.hrv_rmssd.minDays, sickDates = null } = {}) {
-  const lnOf = (field) => priorValues(wellness, field, today, { windowDays, sickDates }).map(Math.log);
-  const lnR = lnOf('hrv_rmssd');
-  const lnS = lnOf('hrv_sdnn');
-  const useRmssd = lnR.length >= minDays || (lnS.length < minDays && lnR.length >= lnS.length);
-  const field = useRmssd ? 'hrv_rmssd' : 'hrv_sdnn';
-  const name = useRmssd ? 'rMSSD' : 'SDNN';
-  const lnVals = useRmssd ? lnR : lnS;
+  const field = 'hrv_rmssd';
+  const name = 'rMSSD';
+  const lnVals = priorValues(wellness, field, today, { windowDays, sickDates }).map(Math.log);
   const tier = lnVals.length < minDays ? 'không đủ' : lnVals.length < 28 ? 'sơ bộ' : 'ổn định';
-  const info = { field, name, daysAvailable: lnVals.length, minDays, windowDays, tier };
+  const todayHasHrv = plausible(field, rowOn(wellness, today)?.[field]);
+  const info = { field, name, daysAvailable: lnVals.length, minDays, windowDays, tier, todayHasHrv };
   if (lnVals.length < minDays) return { ready: false, state: 'insufficient', ...info };
 
   const st = robustStats(lnVals);

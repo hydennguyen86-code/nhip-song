@@ -146,15 +146,14 @@ describe('baseline computation', () => {
     assert.ok(b.windowEnd < target);
     assert.ok(b.rhr.count <= 30);
   });
-  test('HRV baseline needs >=14 valid days, rMSSD and SDNN counted separately', () => {
+  test('HRV baseline needs >=14 valid rMSSD days, SDNN is never used', () => {
     const rows = [];
     for (let i = 1; i <= 10; i++) rows.push({ date: `2026-10-${String(i).padStart(2, '0')}`, hrv_rmssd: 60 + i });
     for (let i = 1; i <= 15; i++) rows.push({ date: `2026-10-${String(i).padStart(2, '0')}`, hrv_sdnn: 30 + i });
     const b = computeBaselines(rows, '2026-10-31');
     assert.equal(b.hrvRmssd.daysAvailable, 10);
     assert.equal(b.hrvRmssd.baseline, null);
-    assert.equal(b.hrvSdnn.daysAvailable, 15);
-    assert.ok(b.hrvSdnn.baseline);
+    assert.equal(b.hrvSdnn, undefined);
   });
   test('stats give mean and sd correct', () => {
     const rows = [];
@@ -235,9 +234,34 @@ describe('advice engine', () => {
     for (let i = 1; i <= 30; i++) wellness.push({ date: `2026-09-${String(i).padStart(2, '0')}`, resting_hr: 52 + (i % 3), hrv_rmssd: 80 + (i % 3), sleep_secs: 28000 });
     wellness.push({ date: '2026-10-01', resting_hr: 70, hrv_rmssd: 50, sleep_secs: 28000 });
     const a = buildAdvice({ today: '2026-10-01', wellness, activities: [], checkin: null, settings: { rhr_on: 0, hrv_on: 0 } });
-    assert.ok(a.reasons.some((r) => r.kind === 'hrv-off'));
     assert.ok(a.reasons.some((r) => r.kind === 'rhr-off'));
-    assert.equal(a.verdict, 'plan');
+    // HRV is required and cannot be switched off: hrv_on: 0 is ignored.
+    assert.ok(!a.reasons.some((r) => r.kind === 'hrv-off'));
+    assert.ok(a.reasons.some((r) => r.kind === 'hrv' && r.ready));
+    assert.notEqual(a.verdict, 'plan');
+  });
+  test('no HRV at all: no advice, only the HRV gate', () => {
+    const wellness = [];
+    for (let i = 1; i <= 30; i++) wellness.push({ date: `2026-09-${String(i).padStart(2, '0')}`, resting_hr: 52 + (i % 3), sleep_secs: 28000 });
+    wellness.push({ date: '2026-10-01', resting_hr: 52, sleep_secs: 28000 });
+    const a = buildAdvice({ today: '2026-10-01', wellness, activities: [], checkin: null });
+    assert.equal(a.verdict, 'unknown');
+    assert.equal(a.needsHrv, true);
+    assert.equal(a.hrvGate.state, 'no_device_hrv');
+    assert.match(a.label, /Cần HRV/);
+    assert.match(a.headline, /Mi Band/);
+  });
+  test('without HRV a "sick" check-in still says rest (self-report outranks the watch)', () => {
+    const wellness = [{ date: '2026-10-01', resting_hr: 52, sleep_secs: 28000 }];
+    const a = buildAdvice({ today: '2026-10-01', wellness, activities: [], checkin: { level: 'sick' } });
+    assert.equal(a.verdict, 'rest');
+  });
+  test('SDNN-only data does not pass the HRV gate', () => {
+    const wellness = [];
+    for (let i = 1; i <= 30; i++) wellness.push({ date: `2026-09-${String(i).padStart(2, '0')}`, resting_hr: 52, hrv_sdnn: 40 + (i % 4), sleep_secs: 28000 });
+    wellness.push({ date: '2026-10-01', resting_hr: 52, hrv_sdnn: 42, sleep_secs: 28000 });
+    const a = buildAdvice({ today: '2026-10-01', wellness, activities: [], checkin: null });
+    assert.equal(a.needsHrv, true);
   });
   test('custom thresholds: high RHR triggers ease only when threshold crossed', () => {
     const wellness = [];
@@ -554,14 +578,22 @@ describe('manual day form', () => {
     assert.equal(row(db, a).weight, 61);
     assert.equal(row(db, a).weight_manual, 0);
   });
-  test('resting HR and sleep typed by hand produce a score without HRV', () => {
+  test('resting HR and sleep typed by hand without HRV give no score', () => {
     const { db, a } = setup();
     for (let i = 1; i <= 10; i++) saveManualDay(db, a, { date: `2026-09-${String(i).padStart(2, '0')}`, values: { resting_hr: 55 + (i % 3), sleep_secs: 26000 } });
     const wellness = effectiveWellness(db, a, '2026-09-01', '2026-09-10');
     const r = computeRecovery({ wellness, today: '2026-09-10' });
+    assert.equal(r.score, null);
+    assert.equal(r.needsHrv, true);
+    assert.equal(r.hrvGate.state, 'no_device_hrv');
+  });
+  test('HRV typed by hand counts towards the HRV gate', () => {
+    const { db, a } = setup();
+    for (let i = 1; i <= 20; i++) saveManualDay(db, a, { date: `2026-09-${String(i).padStart(2, '0')}`, values: { hrv_rmssd: 60 + (i % 4), resting_hr: 55 + (i % 3), sleep_secs: 26000 } });
+    const wellness = effectiveWellness(db, a, '2026-09-01', '2026-09-20');
+    const r = computeRecovery({ wellness, today: '2026-09-20' });
     assert.notEqual(r.score, null);
-    assert.equal(r.used, 2);
-    assert.equal(r.confidence, 'vừa');
+    assert.ok(!r.needsHrv);
   });
 });
 

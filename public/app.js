@@ -457,8 +457,52 @@ function weekStrip(history) {
   </div>`;
 }
 
+function hrvGateBody(d) {
+  const g = d.recovery.hrvGate || d.advice?.hrvGate || {};
+  const text = g.text || d.recovery.note || 'Cần HRV rMSSD để có kết luận.';
+  const syncBtn = d.sync?.hasKey ? `<button class="btn small" type="button" data-auto-sync-hero>${ICONS.sync} Đồng bộ</button>` : '';
+  const manualBtn = '<button class="btn primary small" type="button" data-gate-manual>Nhập HRV bằng tay</button>';
+  if (g.state === 'no_device_hrv') {
+    return `<div class="hero-gate gate-warn">
+      <div class="gate-title">App này cần HRV</div>
+      <p>${esc(text)}</p>
+      <div class="gate-cta">${manualBtn}${syncBtn}</div>
+    </div>`;
+  }
+  if (g.state === 'hrv_building') {
+    const have = Number(g.nights ?? g.daysAvailable) || 0;
+    const need = Number(g.minDays) || 1;
+    const pct = Math.max(0, Math.min(100, Math.round((have / need) * 100)));
+    return `<div class="hero-gate gate-info">
+      <div class="gate-title">Đang xây mức nền HRV</div>
+      <div class="gate-progress" role="progressbar" aria-valuemin="0" aria-valuemax="${need}" aria-valuenow="${have}"><span style="width:${pct}%"></span></div>
+      <div class="gate-count">${have}/${need} đêm</div>
+      <p>${esc(text)}</p>
+    </div>`;
+  }
+  return `<div class="hero-gate gate-warn">
+    <div class="gate-title">Chưa có HRV gần đây</div>
+    <p>${esc(text)}</p>
+    <div class="gate-cta">${syncBtn}${manualBtn}</div>
+  </div>`;
+}
+
 function heroCard(d) {
   const r = d.recovery;
+  if (r.needsHrv) {
+    return `<section class="hero card band-unknown hero-gated">
+    <div class="hero-glow"></div>
+    <div class="hero-head">
+      <div class="card-title"><span class="ico-chip">${ICONS.recovery}</span><div><h3>Điểm phục hồi</h3><div class="small">${esc(fmtLong(d.today))}</div></div></div>
+      <button class="icon-btn" id="syncBtn" title="Đồng bộ Intervals.icu" aria-label="Đồng bộ">${ICONS.sync}</button>
+    </div>
+    ${hrvGateBody(d)}
+    <div class="hero-foot">
+      <span>${d.data.days} ngày dữ liệu</span>
+      <span>${d.lastSync ? 'đồng bộ ' + esc(fmtDateTime(d.lastSync)) : 'chưa đồng bộ'}</span>
+    </div>
+  </section>`;
+  }
   const R = 92;
   const circ = 2 * Math.PI * R;
   const dash = r.score == null ? 0 : (r.score / 100) * circ;
@@ -527,7 +571,7 @@ function factorsCard(d) {
     ${d.recovery.factors.map(factorRow).join('')}
     ${d.recovery.capped && d.recovery.rawScore != null ? `<div class="cap-line">Điểm thô ${d.recovery.rawScore} bị giới hạn còn ${d.recovery.score} vì ${esc(d.recovery.capped)}.</div>` : ''}
     ${d.recovery.score == null && d.recovery.factors.length ? `<div class="cap-line note-line">${esc(d.recovery.note)}</div>` : ''}
-    <div class="formula hint">Điểm = trung bình có trọng số: HRV 45%, nhịp tim nghỉ 25%, ngủ so với nhu cầu 30%. Nhịp thở chỉ là cờ cảnh báo, không cộng điểm. Thiếu yếu tố nào thì chia lại trọng số. Không phải thuật toán WHOOP.</div>
+    <div class="formula hint">Điểm = trung bình có trọng số: HRV 45%, nhịp tim nghỉ 25%, ngủ so với nhu cầu 30%. Nhịp thở chỉ là cờ cảnh báo, không cộng điểm. Không có HRV thì không có điểm; thiếu nhịp tim nghỉ hoặc giấc ngủ thì chia lại trọng số. Không phải thuật toán WHOOP.</div>
   </div>`;
 }
 
@@ -602,7 +646,7 @@ function loadCard(d) {
 const MANUAL_FIELDS = [
   { col: 'resting_hr', label: 'Nhịp tim nghỉ', unit: 'bpm', min: 30, max: 110, example: '55' },
   { col: 'sleep_secs', label: 'Giờ ngủ', sleep: true },
-  { col: 'hrv_rmssd', label: 'HRV rMSSD', unit: 'ms', min: 1, max: 300, example: '65' },
+  { col: 'hrv_rmssd', label: 'HRV rMSSD đêm qua', unit: 'ms', min: 1, max: 300, example: '65', required: true },
   { col: 'respiration', label: 'Nhịp thở khi ngủ', unit: 'lần/phút', min: 6, max: 30, example: '15' },
   { col: 'sleep_score', label: 'Điểm ngủ', unit: '/100', min: 0, max: 100, example: '80' },
   { col: 'steps', label: 'Số bước', unit: 'bước', min: 0, max: 200000, example: '8000' },
@@ -647,9 +691,9 @@ function savedEntryMode(d) {
   return ENTRY_MODES.includes(saved) ? saved : d.sync?.hasKey ? 'auto' : 'manual';
 }
 
-/** The numbers a morning verdict rests on. HRV only counts for people who have it. */
+/** The numbers a morning verdict rests on. HRV rMSSD is required. */
 function morningFields(log) {
-  return MANUAL_FIELDS.filter((f) => f.col === 'resting_hr' || f.col === 'sleep_secs' || (f.col === 'hrv_rmssd' && log.baseline?.hrv_rmssd?.have > 0));
+  return MANUAL_FIELDS.filter((f) => f.col === 'resting_hr' || f.col === 'sleep_secs' || f.col === 'hrv_rmssd');
 }
 
 function morningMissing(log) {
@@ -689,7 +733,7 @@ function manualFieldHtml(f) {
       </div>`
     : `<input data-manual-col="${f.col}" type="number" min="${f.min}" max="${f.max}" step="any" inputmode="decimal" placeholder="ví dụ ${esc(f.example)}">`;
   return `<label class="field manual-field">
-    <span>${esc(f.label)}${f.unit ? ` <small>(${esc(f.unit)})</small>` : ''} <em data-manual-state="${f.col}"></em></span>
+    <span>${esc(f.label)}${f.unit ? ` <small>(${esc(f.unit)})</small>` : ''}${f.required ? ' <small class="req">· bắt buộc để có kết luận</small>' : ''} <em data-manual-state="${f.col}"></em></span>
     ${inputs}
   </label>`;
 }
@@ -723,18 +767,8 @@ function manualCard(d) {
         <div class="hint manual-baseline">Số ngày đã có để tính nền: <span data-manual-baseline></span></div>
       </div>
     </div>
-    <details class="manual-guide">
-      <summary>Mi Band: lấy số ở đâu trong Mi Fitness?</summary>
-      <ul>
-        <li><b>Giờ ngủ, điểm ngủ:</b> mục Giấc ngủ, lấy đêm kết thúc vào buổi sáng của ngày đang nhập.</li>
-        <li><b>Nhịp tim nghỉ:</b> mục Nhịp tim, số nhịp tim lúc nghỉ.</li>
-        <li><b>SpO2:</b> mục SpO2, nếu vòng có đo trong đêm.</li>
-        <li><b>Số bước:</b> nhập khi ngày đã kết thúc, chọn đúng ngày đó.</li>
-        <li><b>HRV, nhịp thở:</b> Mi Band thường không có số này thì để trống. Điểm hồi phục vẫn tính từ nhịp tim nghỉ và giấc ngủ, độ tin cậy tối đa là "vừa".</li>
-      </ul>
-      <p>Tên mục có thể khác tuỳ phiên bản Mi Fitness. Mỗi người nên dùng một thiết bị cố định, vì số của hai loại vòng không so được với nhau.</p>
-    </details>
-    <div class="hint manual-note">Chỉ cần điền ô bạn có. Để trống ô tự nhập rồi lưu là xoá số đó. Khi Intervals.icu có số thật cho đúng ngày, số đồng bộ sẽ thay số tay.</div>
+    <div class="hint manual-note">HRV rMSSD đêm qua là bắt buộc để có kết luận. Vòng không đo HRV (Mi Band, Xiaomi Smart Band 10 trở về trước) không dùng được app này.</div>
+    <div class="hint manual-note">Các ô khác điền nếu có. Để trống ô tự nhập rồi lưu là xoá số đó. Khi Intervals.icu có số thật cho đúng ngày, số đồng bộ sẽ thay số tay.</div>
     </div>
   </div>`;
 }
@@ -872,6 +906,16 @@ function attachManualCard(view, d) {
       loadDay();
       const first = morningMissing(d.manualLog)[0];
       form.querySelector(first?.sleep ? '[data-manual-sleep="h"]' : `[data-manual-col="${first?.col}"]`)?.focus();
+    };
+  }
+  const gateBtn = view.querySelector('[data-gate-manual]');
+  if (gateBtn) {
+    gateBtn.onclick = () => {
+      showPane('manual');
+      dateEl.value = d.today;
+      loadDay();
+      card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      form.querySelector('[data-manual-col="hrv_rmssd"]')?.focus({ preventScroll: true });
     };
   }
   const syncBtn = card.querySelector('[data-auto-sync]');
@@ -1029,10 +1073,10 @@ async function renderToday(view) {
       ${heroCard(d)}
       ${manualCard(d)}
       ${miniWrap(d)}
-      ${factorsCard(d)}
+      ${d.recovery.needsHrv ? '' : factorsCard(d)}
       ${historyCard(d)}
-      ${sleepCard(d)}
-      ${loadCard(d)}
+      ${d.recovery.needsHrv ? '' : sleepCard(d)}
+      ${d.recovery.needsHrv ? '' : loadCard(d)}
       ${checkinCard(d)}
       ${recentCard(d)}
     </div>`;
@@ -1047,6 +1091,8 @@ async function renderToday(view) {
   };
   const syncBtn = view.querySelector('#syncBtn');
   if (syncBtn) syncBtn.onclick = () => sync(syncBtn);
+  const gateSync = view.querySelector('[data-auto-sync-hero]');
+  if (gateSync) gateSync.onclick = () => sync(gateSync);
   const syncTop = view.querySelector('#syncTop');
   if (syncTop) syncTop.onclick = () => sync(syncTop.querySelector('svg'));
   const wake = view.querySelector('#wakeTime');
@@ -1077,6 +1123,9 @@ function subline(d) {
   if (b === 'yellow') return 'Một ngày mới, một cơ hội để sống khỏe hơn.';
   if (b === 'red') return 'Hôm nay ưu tiên nghỉ ngơi và hồi phục.';
   if (b === 'emergency') return 'Hãy ưu tiên hỗ trợ y tế trước.';
+  if (d.recovery?.needsHrv) return d.recovery.hrvGate?.state === 'hrv_building'
+    ? `Đang dựng nền HRV: ${d.recovery.hrvGate.nights ?? d.recovery.hrvGate.daysAvailable}/${d.recovery.hrvGate.minDays} đêm.`
+    : 'Chưa có HRV nên hôm nay chưa có kết luận.';
   return `Dữ liệu ${d.data?.days ?? 0} ngày — cần thêm để chấm điểm chính xác.`;
 }
 
@@ -1155,12 +1204,11 @@ function baselineCard(b) {
     <div class="card-head"><div><div class="eyebrow">Đường cơ sở</div><h3>Mức nền cá nhân</h3></div><span class="confidence-chip">${esc(b.windowStart)} → ${esc(b.windowEnd)}</span></div>
     <div class="baseline-row"><span class="k">RHR trung bình 30 ngày</span><span class="v">${b.rhr.count >= 7 ? `${fmtNum(b.rhr.mean, 1)} bpm · ${b.rhr.count} ngày` : `chưa đủ (${b.rhr.count}/7)`}</span></div>
     ${hrvRow('HRV rMSSD', b.hrvRmssd)}
-    ${hrvRow('HRV SDNN', b.hrvSdnn)}
     <div class="baseline-row"><span class="k">Ngủ</span><span class="v">${b.sleepMinutes.count >= 7 ? `${fmtNum(b.sleepMinutes.mean / 60, 2)} giờ/đêm · ${b.sleepMinutes.count} đêm` : `chưa đủ (${b.sleepMinutes.count}/7)`}</span></div>
     <div class="baseline-row"><span class="k">Điểm ngủ</span><span class="v">${b.sleepScore.count >= 7 ? `${fmtNum(b.sleepScore.mean)}/100` : `chưa đủ (${b.sleepScore.count}/7)`}</span></div>
     <div class="baseline-row"><span class="k">Bước / ngày</span><span class="v">${b.steps.count >= 7 ? `${fmtNum(b.steps.mean)} bước` : `chưa đủ (${b.steps.count}/7)`}</span></div>
     <div class="baseline-row"><span class="k">Nhịp thở</span><span class="v">${b.respiration.count >= 7 ? `${fmtNum(b.respiration.mean, 1)} /ph` : `chưa đủ (${b.respiration.count}/7)`}</span></div>
-    <div class="hint" style="margin-top:12px">Ngày ${esc(b.targetDate)} không tự tính vào mức nền của chính nó. rMSSD và SDNN luôn tách biệt. sleepSecs có thể gồm cả ngủ trưa nếu nguồn gộp chung.</div>
+    <div class="hint" style="margin-top:12px">Ngày ${esc(b.targetDate)} không tự tính vào mức nền của chính nó. HRV chỉ dùng rMSSD. sleepSecs có thể gồm cả ngủ trưa nếu nguồn gộp chung.</div>
   </div>`;
 }
 
@@ -1305,7 +1353,7 @@ async function renderSettings(view) {
           <div><b>2. Nhịp tim nghỉ (25%)</b>: đêm qua so với trung vị 30 ngày; dấu đảo vì cao hơn là xấu.</div>
           <div><b>3. Giấc ngủ (30%)</b>: so với <i>nhu cầu</i>, không so với trung bình của bạn. Nhu cầu = nền 7,5–8,5h + 20% nợ ngủ 7 đêm (tối đa 60 phút) + tối đa 45 phút nếu hôm qua tập nhiều. Đủ 85% nhu cầu = 50 điểm.</div>
           <div><b>4. Nhịp thở</b>: không cộng điểm. Chỉ là cờ cảnh báo một chiều khi tăng ≥ 1,5 lần/phút so với trung vị. Tăng cùng lúc với nhịp tim nghỉ tăng hoặc HRV giảm → điểm bị chặn ở 50.</div>
-          <div><b>5.</b> Mỗi phần đổi thành điểm con 50 + z × 22, chặn 2–99, rồi lấy trung bình có trọng số. Thiếu phần nào thì chia lại trọng số và hạ độ tin cậy. Giá trị vô lý (ngủ &lt; 3h, RHR ngoài 30–110) và ngày bạn báo ốm bị loại khỏi mức nền.</div>
+          <div><b>5.</b> Mỗi phần đổi thành điểm con 50 + z × 22, chặn 2–99, rồi lấy trung bình có trọng số. HRV là bắt buộc: không có HRV thì không có điểm và không có lời khuyên. Thiếu nhịp tim nghỉ hoặc giấc ngủ thì chia lại trọng số và hạ độ tin cậy. Giá trị vô lý (ngủ &lt; 3h, RHR ngoài 30–110) và ngày bạn báo ốm bị loại khỏi mức nền.</div>
           <div><b>6.</b> Dải màu: 67–100 xanh, 34–66 vàng, 0–33 đỏ. Đây là mốc hiển thị, không phải ngưỡng y khoa.</div>
           <div><b>Giới hạn:</b> WHOOP không công bố trọng số thật; chỉ số này không sao chép WHOOP. Đồng hồ quang học ở cổ tay có sai số; mọi so sánh chỉ có ý nghĩa với chính bạn. Cảm giác chủ quan luôn thắng.</div>
         </div>
@@ -1384,7 +1432,7 @@ async function loadAdviceSettings(view) {
     const row = (key, label, zKey) => `<div class="threshold-row">
       <span class="k">${esc(label)}</span>
       <span class="threshold-controls">
-        <label class="check-label"><input type="checkbox" id="on-${key}" ${s[key + '_on'] ? 'checked' : ''}> bật</label>
+        ${key === 'hrv' ? '' : `<label class="check-label"><input type="checkbox" id="on-${key}" ${s[key + '_on'] ? 'checked' : ''}> bật</label>`}
         <input type="${zKey === 'sleep_z' ? 'hidden' : 'number'}" step="0.1" min="0.2" max="5" id="z-${key}" value="${s[zKey]}">
       </span>
     </div>`;
@@ -1395,7 +1443,7 @@ async function loadAdviceSettings(view) {
       <div class="actions"><button class="btn primary small" id="saveAdvice">Lưu ngưỡng</button><button class="btn ghost small" id="resetAdvice">Về mặc định</button></div>`;
     box.querySelector('#saveAdvice').onclick = async () => {
       const body = {
-        rhr_on: box.querySelector('#on-rhr').checked, hrv_on: box.querySelector('#on-hrv').checked, sleep_on: box.querySelector('#on-sleep').checked,
+        rhr_on: box.querySelector('#on-rhr').checked, sleep_on: box.querySelector('#on-sleep').checked,
         rhr_z: Number(box.querySelector('#z-rhr').value), hrv_z: Number(box.querySelector('#z-hrv').value),
         sleep_z: Number(box.querySelector('#z-sleep').value), strong_z: Number(box.querySelector('#z-strong').value),
       };

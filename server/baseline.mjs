@@ -6,7 +6,7 @@
  *   - RHR baseline: mean of the 30 valid days BEFORE the assessed day
  *     (the assessed day itself is never part of its own baseline).
  *   - HRV baseline: only when >= 14 valid days of the SAME metric exist.
- *     rMSSD and SDNN are counted as separate series, never merged.
+ *     HRV baseline uses rMSSD only (SDNN is stored but never scored).
  *   - Sleep: minutes per night; we report both mean and how many nights
  *     actually have data. Nap vs night is not decided here — that would need
  *     start-time evidence we do not always get.
@@ -57,7 +57,6 @@ export function computeBaselines(rows, targetDate, { windowDays = 30, hrvMinDays
 
   const rhrValues = pick('resting_hr');
   const rmssdValues = pickFrom(beforeHrv, 'hrv_rmssd');
-  const sdnnValues = pickFrom(beforeHrv, 'hrv_sdnn');
   const sleepValues = pick('sleep_secs').map((s) => s / 60);
   const sleepScoreValues = pick('sleep_score');
   const stepsValues = pick('steps');
@@ -66,7 +65,6 @@ export function computeBaselines(rows, targetDate, { windowDays = 30, hrvMinDays
   const respValues = pick('respiration');
 
   const rmssdBaseline = rmssdValues.length >= hrvMinDays ? stats(rmssdValues) : null;
-  const sdnnBaseline = sdnnValues.length >= hrvMinDays ? stats(sdnnValues) : null;
 
   /** HRV confidence: 14–27 days is a preliminary reference, 28+ is considered
    * stable in the literature (Plews 2013 et al. use ≥4 weeks of daily measures). */
@@ -79,7 +77,6 @@ export function computeBaselines(rows, targetDate, { windowDays = 30, hrvMinDays
     windowEnd: addLocalDays(targetDate, -1),
     rhr: { metric: 'resting_hr', unit: 'bpm', ...(stats(rhrValues) || { count: 0 }), needs: 7 },
     hrvRmssd: { metric: 'hrv_rmssd', unit: 'ms', windowDays: hrvWindowDays, daysAvailable: rmssdValues.length, minDays: hrvMinDays, tier: tier(rmssdValues.length, hrvMinDays), baseline: rmssdBaseline },
-    hrvSdnn: { metric: 'hrv_sdnn', unit: 'ms', windowDays: hrvWindowDays, daysAvailable: sdnnValues.length, minDays: hrvMinDays, tier: tier(sdnnValues.length, hrvMinDays), baseline: sdnnBaseline },
     sleepMinutes: { metric: 'sleep_secs', unit: 'phút', ...(stats(sleepValues) || { count: 0 }), note: 'Có thể gồm cả ngủ trưa; Intervals.icu chỉ báo tổng sleepSecs.' },
     sleepScore: { metric: 'sleep_score', unit: '/100', ...(stats(sleepScoreValues) || { count: 0 }) },
     steps: { metric: 'steps', unit: 'bước', ...(stats(stepsValues) || { count: 0 }) },

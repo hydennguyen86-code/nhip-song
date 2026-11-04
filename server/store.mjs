@@ -452,14 +452,14 @@ export const DEFAULT_ADVICE_SETTINGS = Object.freeze({
 
 export function getAdviceSettings(db, userId) {
   const row = db.prepare('SELECT * FROM advice_settings WHERE user_id = ?').get(userId);
-  return { ...DEFAULT_ADVICE_SETTINGS, ...(row || {}) };
+  return { ...DEFAULT_ADVICE_SETTINGS, ...(row || {}), hrv_on: 1 }; // HRV is required, never off
 }
 
 export function setAdviceSettings(db, userId, patch) {
   const cur = getAdviceSettings(db, userId);
   const next = { ...cur };
   for (const k of Object.keys(DEFAULT_ADVICE_SETTINGS)) {
-    if (patch[k] === undefined) continue;
+    if (patch[k] === undefined || k === 'hrv_on') continue;
     if (k.endsWith('_on')) next[k] = patch[k] ? 1 : 0;
     else {
       const n = Number(patch[k]);

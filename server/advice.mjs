@@ -8,8 +8,9 @@
  * Priority order (never overridden):
  *   1. Red-flag symptoms → stop exercise, seek emergency care.
  *   2. User checkin "tired / sick" → recovery, ignore HRV/RHR counter-evidence.
- *   3. Serious data gap → "Chưa đủ dữ liệu".
- *   4. Baseline comparisons → "Ưu tiên hồi phục" / "Theo kế hoạch vừa sức".
+ *   3. No usable HRV rMSSD → "Cần HRV", no advice at all (HRV is required).
+ *   4. Serious data gap → "Chưa đủ dữ liệu".
+ *   5. Baseline comparisons → "Ưu tiên hồi phục" / "Theo kế hoạch vừa sức".
  *
  * Signal handling (models in signals.mjs):
  *   - HRV: ln(rMSSD), 60% last night + 40% 7-day mean, robust z vs a 60-day
@@ -25,6 +26,7 @@
  */
 import { computeBaselines, recentLoad } from './baseline.mjs';
 import { hrvModel, rhrModel, sleepPerformance, respiratorySignal, SLEEP_PERF } from './signals.mjs';
+import { hrvGateOf } from './recovery.mjs';
 
 const VERDICT = {
   EMERGENCY: 'emergency',
@@ -42,6 +44,7 @@ const LABEL = {
   [VERDICT.EASE]: 'Nên giảm nhẹ giáo án',
   [VERDICT.PLAN]: 'Có thể theo kế hoạch vừa sức',
   [VERDICT.UNKNOWN]: 'Chưa đủ dữ liệu để kết luận',
+  noHrv: 'Cần HRV để kết luận',
 };
 
 const RED_FLAG_KEYWORDS = ['đau ngực', 'dut nguc', 'kho tho', 'khó thở', 'nga?t', 'ngất', 'gần ngất', 'gan nga?t', 'chóng mặt dữ dội'];
@@ -111,9 +114,9 @@ export function buildAdvice({ user, today, wellness, activities = [], checkin, s
     reasons.push({ kind: 'rhr-off', text: 'Bạn đã tắt nhận xét RHR trong cài đặt ngưỡng.' });
   }
 
-  // ---- HRV (ln, last night + 7-day mean, SWC, CV; rMSSD and SDNN never merged) ----
-  if (s.hrv_on) {
-    const hrv = hrvModel(wellness, today, { sickDates });
+  // ---- HRV (ln rMSSD, last night + 7-day mean, SWC, CV). Required, cannot be turned off. ----
+  const hrv = hrvModel(wellness, today, { sickDates });
+  {
     if (hrv.ready) {
       const parts = [];
       if (hrv.acute) parts.push(`đêm qua ${fmtMs(hrv.acute.value)} ms`);
@@ -127,10 +130,8 @@ export function buildAdvice({ user, today, wellness, activities = [], checkin, s
         acuteZ: hrv.acute?.z ?? null, chronicZ: hrv.chronic?.z ?? null, cvHigh: Boolean(hrv.cv7?.high),
       });
     } else {
-      gaps.push({ kind: 'hrv', text: `HRV cần tối thiểu ${hrv.minDays} ngày cùng loại (rMSSD hoặc SDNN) trong ${hrv.windowDays} ngày và số đêm qua hoặc ≥3 ngày trong 7 ngày gần nhất. Hiện có ${hrv.name}=${hrv.daysAvailable} ngày (${hrv.tier}).` });
+      gaps.push({ kind: 'hrv', text: hrvGateOf(hrv).text });
     }
-  } else {
-    reasons.push({ kind: 'hrv-off', text: 'Bạn đã tắt nhận xét HRV trong cài đặt ngưỡng.' });
   }
 
   // ---- Sleep (obtained / need, not vs own average) ----
@@ -185,6 +186,12 @@ export function buildAdvice({ user, today, wellness, activities = [], checkin, s
   }
   if (checkin && checkin.level === 'tired') {
     return finalize(VERDICT.RECOVER, LABEL[VERDICT.RECOVER], 'Bạn báo mệt / ngủ kém — ưu tiên hồi phục dù số đồng hồ có thể cho thấy khác.', reasons, gaps, { checkin, today, baselines, load });
+  }
+
+  // ---- HRV gate: without rMSSD there is no advice ----
+  if (!hrv.ready) {
+    const gate = hrvGateOf(hrv);
+    return finalize(VERDICT.UNKNOWN, LABEL.noHrv, gate.text, reasons, gaps, { checkin, today, baselines, load, needsHrv: true, hrvGate: gate });
   }
 
   // ---- Insufficient data ----

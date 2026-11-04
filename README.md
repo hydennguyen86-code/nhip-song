@@ -2,7 +2,7 @@
 
 Ứng dụng web cho cả nhà xem mỗi sáng: **hôm nay cơ thể hồi phục tới đâu và nên làm gì**. App chạy trên một máy Mac trong nhà, mọi người mở bằng trình duyệt trên điện thoại. Dữ liệu nằm trên máy của bạn.
 
-Có hai cách đưa số vào app: **tự động** từ Intervals.icu (ví dụ HUAWEI Watch), hoặc **nhập tay** từ app của vòng đeo (ví dụ Mi Band). Không có số từ Intervals.icu thì vẫn nhập tay được và có kết luận ngay.
+App **cần HRV rMSSD mỗi đêm**. Không có HRV thì không có điểm và không có lời khuyên, vì HRV là tín hiệu chính của thuật toán (xem [Thiết bị dùng được](#thiết-bị-dùng-được)). Số đi vào tự động theo đường **đồng hồ HUAWEI → Health Sync → Intervals.icu → Nhịp Sống**. Nhập tay chỉ để bù một số còn thiếu trong ngày.
 
 > Đây **không phải WHOOP** và **không phải thiết bị y tế**. Điểm 0–100 là chỉ số tham khảo có công thức công khai, tính theo mức nền của chính bạn. Cảm giác của bạn luôn được ưu tiên hơn số đồng hồ.
 
@@ -14,12 +14,13 @@ Có hai cách đưa số vào app: **tự động** từ Intervals.icu (ví dụ
 
 | Nhóm | App làm được gì |
 | --- | --- |
-| **Buổi sáng** | Điểm hồi phục 0–100 và một hành động cụ thể cho hôm nay: giữ kế hoạch, giảm tải, ưu tiên hồi phục hoặc nghỉ |
+| **Buổi sáng** | Khi có HRV: điểm hồi phục 0–100 và một hành động cụ thể cho hôm nay: giữ kế hoạch, giảm tải, ưu tiên hồi phục hoặc nghỉ |
 | **Minh bạch** | Thẻ *Vì sao điểm này?* nêu từng yếu tố, số điểm đóng góp, phần còn thiếu và mức tin cậy |
 | **Nguồn dữ liệu** | Hai mục *Tự động* và *Nhập tay*. Số đồng bộ thật sẽ thay số tay khi về sau |
 | **Nhập tay** | Nhịp tim nghỉ, giờ ngủ, HRV, nhịp thở, điểm ngủ, số bước, SpO2, cân nặng. Quản trị ghi được cho người nhà |
 | **Giấc ngủ** | So với nhu cầu của bạn, có kế hoạch tối nay cần ngủ bao nhiêu |
 | **Vận động** | Danh sách buổi tập và mục tiêu tải tuần theo mức hồi phục |
+| **Cần HRV** | Không có HRV rMSSD thì app không chấm điểm, không gợi ý tập, và nói rõ lý do: thiết bị không đo HRV, đang dựng nền, hay thiếu đêm qua |
 | **Cảnh báo** | Nhịp thở tăng cùng nhịp tim nghỉ tăng hoặc HRV giảm thì chặn điểm ở 50. Báo triệu chứng nặng thì ẩn điểm và nhắc gọi 115 |
 | **Xu hướng** | Biểu đồ 7, 30, 90 ngày và mức nền cá nhân. Đánh dấu được số sai để loại khỏi nền |
 | **Nhật ký** | Ghi cảm giác và thói quen hằng ngày |
@@ -56,49 +57,30 @@ NHIP_DATA_DIR=./demo-data node scripts/seed-demo.mjs
 PORT=8901 NHIP_DATA_DIR=./demo-data node server/index.mjs
 ```
 
-Mở `http://127.0.0.1:8901`, đăng nhập bằng `admin`, `demo` hoặc `miband`, mật khẩu `demo-1234`. Xong thì xoá thư mục `demo-data`.
+Mở `http://127.0.0.1:8901`, đăng nhập bằng `admin`, `demo` hoặc `khonghrv` (người không có HRV, để xem màn hình *Cần HRV*), mật khẩu `demo-1234`. Xong thì xoá thư mục `demo-data`.
 
-## Người đeo Mi Band: làm từng bước
+## Thiết bị dùng được
 
-Mi Band không đồng bộ được sang Intervals.icu, nên bạn chép số từ app **Mi Fitness** sang Nhịp Sống. Mỗi sáng mất khoảng một phút.
+**Luật: thiết bị phải đo được HRV rMSSD trong lúc ngủ, và số đó phải về được Intervals.icu.** HRV là tín hiệu chính của thuật toán. Nhịp tim nghỉ và giấc ngủ một mình không đủ nhạy để cho phép tập nặng, nên app không đoán khi thiếu HRV.
 
-**Chuẩn bị (làm một lần):**
+| Thiết bị | Dùng được? |
+| --- | --- |
+| Đồng hồ HUAWEI (ví dụ Watch Fit 4 Pro) qua **Health Sync → Intervals.icu** | **Có.** Intervals.icu nhận HRV dạng rMSSD |
+| Mi Band 1–7, Xiaomi Smart Band 7 Pro, 8, 8 Pro, 9, 9 Pro, 10 (bản thường) | **Không.** Các đời này không đo HRV |
+| Xiaomi Smart Band 10 Pro, Smart Band 11 bản Trung Quốc | **Chưa hỗ trợ.** Có HRV khi ngủ, nhưng Xiaomi không nói là rMSSD hay SDNN, nên không so được với mức nền |
+| Xiaomi Smart Band 11 bản quốc tế | **Chưa hỗ trợ.** Trang sản phẩm quốc tế không ghi HRV |
 
-1. Nhờ người quản trị tạo tài khoản cho bạn trong app.
-2. Mở địa chỉ app trên điện thoại, đăng nhập và đổi mật khẩu.
-3. Trong Safari, chọn *Chia sẻ → Thêm vào MH chính* để mở nhanh như một ứng dụng.
-4. Trong Mi Fitness, bật theo dõi giấc ngủ và nhịp tim liên tục.
+Apple Health **không** nằm trong đường dữ liệu: Apple Health lưu HRV dạng SDNN, là một đại lượng khác rMSSD và không đổi qua lại được. App chỉ dùng rMSSD; nếu nguồn có gửi SDNN thì chỉ lưu, không tính.
 
-**Mỗi sáng:**
+Khi chưa có HRV, trang Hôm nay hiện thẻ **Cần HRV** với một trong ba lý do:
 
-| 1. Sáng ra, chưa có số | 2. Mở mục Nhập tay | 3. Chép số từ Mi Fitness | 4. Xem kết luận |
-| --- | --- | --- | --- |
-| <img src="docs/images/chua-du-du-lieu.jpg" width="180" alt="Điểm hồi phục báo chưa đủ dữ liệu"> | <img src="docs/images/nhap-tay-trong.jpg" width="180" alt="Form nhập tay còn trống"> | <img src="docs/images/nhap-tay-dien-so.jpg" width="180" alt="Form đã điền nhịp tim nghỉ, giờ ngủ, điểm ngủ và SpO2"> | <img src="docs/images/ket-qua.jpg" width="180" alt="Điểm 47 và gợi ý giữ kế hoạch vừa sức"> |
+- **Thiết bị không gửi HRV**: không có đêm rMSSD nào trong 60 ngày.
+- **Đang dựng nền**: có HRV nhưng chưa đủ 14 đêm, app hiện tiến độ `x/14 đêm`.
+- **Thiếu HRV gần đây**: có nền nhưng thiếu đêm qua và chưa đủ 3 đêm trong 7 ngày.
 
-Bấm **Lưu ngày này** là điểm tính lại ngay. Chỉ điền ô bạn có:
-
-| Ô trong app | Lấy ở đâu trong Mi Fitness | Bắt buộc? |
+| Màn hình Cần HRV | Người quản trị nhập hộ | Mục Tự động khi còn thiếu số |
 | --- | --- | --- |
-| Nhịp tim nghỉ | Mục Nhịp tim, số lúc nghỉ | **Nên có**, tính 25% điểm |
-| Giờ ngủ | Mục Giấc ngủ, đêm kết thúc vào sáng hôm đó | **Nên có**, tính 30% điểm |
-| Điểm ngủ | Mục Giấc ngủ | Không |
-| SpO2 | Mục SpO2, nếu vòng có đo trong đêm | Không |
-| Số bước | Mục Bước chân, nhập khi ngày đã kết thúc và chọn đúng ngày đó | Không |
-| Cân nặng | Cân của bạn | Không |
-| HRV, nhịp thở | Thường không có trên Mi Band, để trống | Không |
-
-Tên mục có thể khác tuỳ phiên bản Mi Fitness. Trong app, mục *Mi Band: lấy số ở đâu trong Mi Fitness?* nhắc lại bảng này.
-
-**Nên biết:**
-
-- **Lần đầu, nhập bù ít nhất 7 ngày trước.** App cần 7 ngày để biết nhịp tim nghỉ bình thường của bạn. Chạm vào từng dòng ngày để nhập, tối đa 30 ngày.
-- **Điểm kém chắc hơn khi không có HRV.** Các bài đánh giá ghi Band 9 và 9 Pro không có HRV, nên điểm tính từ nhịp tim nghỉ và giấc ngủ, độ tin cậy tối đa là "vừa".
-- **Nên dùng một thiết bị cố định.** Số của hai loại vòng không so được với nhau, đeo lẫn sẽ làm sai mức nền.
-- **Quên nhập cũng không sao.** Điểm hôm đó chưa có, các ngày khác không bị ảnh hưởng.
-
-| Người quản trị nhập hộ | Hướng dẫn ngay trong app | Mục Tự động khi còn thiếu số |
-| --- | --- | --- |
-| <img src="docs/images/quan-tri-ghi-cho.jpg" width="220" alt="Ô Ghi cho để quản trị chọn người cần nhập"> | <img src="docs/images/huong-dan-mi-band.jpg" width="220" alt="Hướng dẫn lấy số từ Mi Fitness trong thẻ nhập tay"> | <img src="docs/images/tu-dong.jpg" width="220" alt="Mục Tự động báo số còn thiếu và nút nhập tay phần thiếu"> |
+| <img src="docs/images/can-hrv.jpg" width="220" alt="Thẻ Cần HRV khi thiết bị không gửi HRV"> | <img src="docs/images/quan-tri-ghi-cho.jpg" width="220" alt="Ô Ghi cho để quản trị chọn người cần nhập"> | <img src="docs/images/tu-dong.jpg" width="220" alt="Mục Tự động báo số còn thiếu và nút nhập tay phần thiếu"> |
 
 ---
 
@@ -166,18 +148,18 @@ App sẽ gọi `GET /api/v1/athlete/{id}` để xác minh key. Key lưu trong SQ
 
 Buổi sáng không phải chờ Intervals.icu. Trang **Hôm nay** có thẻ **Số của hôm nay** với hai mục, người dùng tự chọn. Mỗi máy nhớ lựa chọn riêng; chưa chọn thì có kết nối Intervals.icu sẽ mở **Tự động**, chưa có sẽ mở **Nhập tay**.
 
-- **Tự động**: hiện số hôm nay đã có và số còn thiếu (nhịp tim nghỉ, giấc ngủ, thêm HRV nếu người đó có HRV). Còn thiếu thì app tự hỏi Intervals.icu khi mở trang, tối đa 15 phút một lần, và có nút *Nhập tay phần thiếu*.
+- **Tự động**: hiện số hôm nay đã có và số còn thiếu (HRV rMSSD, nhịp tim nghỉ, giấc ngủ). Còn thiếu thì app tự hỏi Intervals.icu khi mở trang, tối đa 15 phút một lần, và có nút *Nhập tay phần thiếu*.
 - **Nhập tay**: điền cả ngày trên một form. Kết luận buổi sáng tính lại ngay sau khi lưu.
 
 Dù chọn mục nào, khi Intervals.icu có số thật cho đúng ngày, **số thật thay số tay**.
 
-HUAWEI Health không xuất HRV và nhịp thở, còn Mi Band không đồng bộ được sang Intervals.icu. Form nhập tay gồm:
+HRV đi vào tự động qua Health Sync → Intervals.icu. Form nhập tay để bù một ngày còn thiếu số, gồm:
 
 | Chỉ số | Đơn vị, khoảng nhận | App dùng vào |
 | --- | --- | --- |
 | Nhịp tim nghỉ | 30–110 bpm | Điểm hồi phục (25%), cần ≥ 7 ngày nền |
 | Giờ ngủ | giờ + phút, tối đa 16 giờ | Điểm hồi phục (30%) |
-| HRV rMSSD | 1–300 ms | Điểm hồi phục (45%), cần ≥ 14 ngày nền. Không nhập SDNN |
+| HRV rMSSD | 1–300 ms | **Bắt buộc để có kết luận.** Điểm hồi phục (45%), cần ≥ 14 ngày nền. Không nhập SDNN |
 | Nhịp thở khi ngủ | 6–30 lần/phút | Chỉ là cờ cảnh báo, cần ≥ 7 đêm nền |
 | Điểm ngủ | 0–100 | Hiển thị, xu hướng |
 | Số bước | số nguyên | Hiển thị, xu hướng |
@@ -186,12 +168,10 @@ HUAWEI Health không xuất HRV và nhịp thở, còn Mi Band không đồng b�
 
 Quy tắc:
 
-- Chọn **ngày thức dậy** rồi chỉ điền ô bạn có. Một ô sai thì cả form không lưu.
+- Chọn **ngày thức dậy**. HRV rMSSD là bắt buộc để ngày đó có kết luận; các ô khác điền nếu có. Một ô sai thì cả form không lưu.
 - Tài khoản **quản trị** chọn người ở ô **Ghi cho**. Thành viên thường chỉ ghi cho chính mình. Có thể nhập bù tối đa 30 ngày.
 - Số tay vào ngay điểm hồi phục và mức nền. Để trống ô `tự nhập` rồi lưu là xoá số đó; số đồng bộ không bị đụng tới.
 - Sync trả `null` thì số tay được giữ. Sync hoặc CSV có số thật cho đúng ngày thì **số thật thay số tay**.
-
-Người đeo Mi Band xem [hướng dẫn từng bước](#người-đeo-mi-band-làm-từng-bước) ở đầu trang.
 
 ## 6. Nhập CSV (nếu chưa muốn đồng bộ API)
 
@@ -220,12 +200,12 @@ Vòng lớn ở giữa là **chỉ số hồi phục tham khảo**, không phả
 
 | Thành phần | Trọng số | Cách tính |
 | --- | --- | --- |
-| HRV rMSSD (hoặc SDNN nếu chưa đủ rMSSD) | 45% | **ln(rMSSD)**. 60% đêm qua + 40% trung bình 7 ngày, z so với **trung vị 60 ngày** (độ lệch = 1,4826 × MAD, sàn 0,07 ≈ 7%). Báo vùng **SWC** = nền ± 0,5 độ lệch và **CV 7 ngày** (cảnh báo khi ≥ 1,5 × CV thường lệ). |
+| HRV rMSSD (**bắt buộc**) | 45% | **ln(rMSSD)**. 60% đêm qua + 40% trung bình 7 ngày, z so với **trung vị 60 ngày** (độ lệch = 1,4826 × MAD, sàn 0,07 ≈ 7%). Báo vùng **SWC** = nền ± 0,5 độ lệch và **CV 7 ngày** (cảnh báo khi ≥ 1,5 × CV thường lệ). |
 | Nhịp tim nghỉ | 25% | đêm qua so với **trung vị 30 ngày**, độ lệch MAD (sàn 1 bpm); **đảo dấu** vì cao hơn là xấu |
 | Giấc ngủ | 30% | **so với nhu cầu, không so với trung bình của bạn**: % = ngủ / nhu cầu. Nhu cầu = nền (TB 30 đêm, kẹp 7h30–8h30; < 7 đêm thì 8h) + 20% nợ ngủ 7 đêm trước (tối đa 60 phút) + tối đa 45 phút nếu hôm qua tập nhiều hơn TB 28 ngày. 85% nhu cầu = 50 điểm; mỗi 10% ≈ 22 điểm. |
 | Nhịp thở | **0%** | **Cờ cảnh báo một chiều**, không cộng điểm. Bật khi đêm qua cao hơn trung vị 30 đêm ≥ max(1,5; 2 × độ lệch) lần/phút. Thở chậm hơn **không** được cộng điểm. Chưa có số → hiện "chưa có số", **không** hạ độ tin cậy. Có thể nhập tay từ HUAWEI Health ở thẻ *Số của hôm nay*, mục *Nhập tay*. |
 
-Mỗi phần đổi thành điểm con `50 + z × 22`, kẹp 2–99 (giấc ngủ: `50 + (% − 0,85) × 220`). Điểm cuối là trung bình có trọng số; thiếu phần nào thì **chia lại trọng số** và hạ độ tin cậy (3/3 = cao, 2 = vừa, 1 = thấp; HRV còn "sơ bộ" < 28 ngày thì tối đa "vừa"). Dải màu: **67–100 sẵn sàng**, **34–66 trung bình**, **0–33 cần hồi phục**.
+Mỗi phần đổi thành điểm con `50 + z × 22`, kẹp 2–99 (giấc ngủ: `50 + (% − 0,85) × 220`). Điểm cuối là trung bình có trọng số. **Không có HRV thì không có điểm** và không có lời khuyên. Thiếu nhịp tim nghỉ hoặc giấc ngủ thì **chia lại trọng số** và hạ độ tin cậy (3/3 = cao, 2 = vừa, 1 = thấp; HRV còn "sơ bộ" < 28 ngày thì tối đa "vừa"). Dải màu: **67–100 sẵn sàng**, **34–66 trung bình**, **0–33 cần hồi phục**.
 
 **Mẫu hình ốm**: nhịp thở tăng **cùng lúc** với nhịp tim nghỉ tăng (z ≥ 1) hoặc HRV giảm (z ≤ −1) → điểm bị chặn ở 50 và kết luận buổi sáng ít nhất là "ưu tiên hồi phục".
 
@@ -304,8 +284,7 @@ Sau khi một thói quen có **≥ 3 ngày** và có **≥ 3 ngày không có** 
 | Chỉ số | Cách tính trong app | Ghi chú |
 | --- | --- | --- |
 | **RHR** | **Trung vị** + độ lệch MAD của 30 ngày hợp lệ **trước** ngày đang đánh giá (loại ngày báo ốm, giá trị ngoài 30–110) | Ngày đang đánh giá không tự tính vào mức nền của chính nó. |
-| **HRV rMSSD** | ln(rMSSD); nền **60 ngày**, cần ≥ 14 ngày cùng loại (14–27 = "sơ bộ", ≥ 28 = "ổn định"); trung vị + MAD. So sánh: 60% đêm qua + 40% TB 7 ngày (≥ 3 ngày); kèm SWC và CV 7 ngày. | Không bao giờ trộn rMSSD và SDNN. Sàn độ lệch 7% để một đêm nhiễu không gây báo động giả. |
-| **HRV SDNN** | Tương tự, tách biệt với rMSSD | Ghi rõ số ngày đang có. |
+| **HRV rMSSD** | ln(rMSSD); nền **60 ngày**, cần ≥ 14 ngày (14–27 = "sơ bộ", ≥ 28 = "ổn định"); trung vị + MAD. So sánh: 60% đêm qua + 40% TB 7 ngày (≥ 3 ngày); kèm SWC và CV 7 ngày. | Chỉ dùng rMSSD; SDNN không được tính. Sàn độ lệch 7% để một đêm nhiễu không gây báo động giả. |
 | **Ngủ** | Trung bình phút/đêm 30 ngày (loại đêm < 3h) — chỉ dùng để đặt **nền nhu cầu** 7h30–8h30, không dùng làm chuẩn so sánh | `sleepSecs` có thể gồm ngủ trưa; app nêu rõ giới hạn này. |
 | **Nhịp thở** | Trung vị 30 đêm, cần ≥ 7 đêm | Cờ cảnh báo một chiều khi **tăng**; không cộng điểm. |
 | **Bước** | Trung bình ngày | Không coi 10.000 là mốc. Ngày hôm nay **chưa kết thúc** → không dùng làm số bước hôm nay. |
@@ -387,7 +366,7 @@ server/
   index.mjs       HTTP server, routing, session cookie, static
   db.mjs          SQLite, schema, khoá mã hoá, giờ Asia/Ho_Chi_Minh
   auth.mjs        scrypt + session token + cookie
-  store.mjs       user, wellness (rMSSD tách SDNN), activities, checkins, exclusions
+  store.mjs       user, wellness (HRV rMSSD; SDNN nếu có chỉ lưu), activities, checkins, exclusions
   icu.mjs         Intervals.icu client (GET only) — HTTP Basic API_KEY
   sync.mjs        syncUser (kéo wellness + activities, giữ dữ liệu cũ khi lỗi)
   scheduler.mjs   lịch đồng bộ hằng ngày (múi giờ VN)
@@ -425,8 +404,9 @@ Bao phủ (đặc tả mục 11):
 - Không đếm trùng ngày, không trùng activity ID.
 - Thiếu dữ liệu → NULL, không thành 0.
 - Baseline đúng khoảng, **loại ngày đang đánh giá**.
-- Không tính baseline HRV khi < 14 ngày hợp lệ, tách rMSSD/SDNN.
-- Chỉ số hồi phục: đảo dấu RHR/nhịp thở, chia lại trọng số khi thiếu, chặn bởi mệt/bệnh, ẩn khi có red-flag, rMSSD ưu tiên hơn SDNN, yếu tố bị tắt hiện là "đã tắt" chứ không phải "thiếu".
+- Không tính baseline HRV khi < 14 ngày rMSSD hợp lệ; SDNN không qua được cổng HRV.
+- Cổng HRV: không có rMSSD thì không điểm, không lời khuyên, nêu đúng lý do (không có thiết bị HRV / đang dựng nền / thiếu đêm qua).
+- Chỉ số hồi phục: đảo dấu RHR/nhịp thở, chia lại trọng số khi thiếu nhịp tim nghỉ/giấc ngủ, chặn bởi mệt/bệnh, ẩn khi có red-flag, HRV không tắt được, yếu tố bị tắt hiện là "đã tắt" chứ không phải "thiếu".
 - Kế hoạch ngủ: nền kẹp 7h30–8h30, nợ ngủ 7 đêm, tăng mức khi hôm qua tập nặng.
 - Mục tiêu tải tuần: loại ngày hôm nay, đúng dải theo màu hồi phục.
 - Nhật ký: chỉ hiện tương quan khi ≥ 3 ngày có thói quen và ≥ 3 ngày không có; thẻ lạ bị loại.
@@ -454,8 +434,8 @@ App **không** sao chép thuật toán WHOOP (bí mật độc quyền, không a
 | Nhịp thở | Có, một trong các yếu tố | Có khi dữ liệu có, chỉ là **gợi ý bổ sung**, không quyết định một mình | Nhịp thở tăng là dấu hiệu bệnh nhưng độ ồn cao từ cảm biến đeo tay; chỉ nên là tín hiệu phụ. |
 | Cảm giác chủ quan | Không | **Luôn thắng** dữ liệu đồng hồ (mệt/bệnh → hồi phục) | RPE/cảm giác là dữ liệu hợp lệ; "cảm giác khỏe" không phủ nhận số, nhưng "cảm giác bệnh" thì không nên tập. |
 | Đau ngực / khó thở / ngất | Không thay bác sĩ | Màn hình đỏ + gọi 115, không bao giờ gợi ý tập | Tuyệt đối không để thuật toán "cho phép" tập khi có triệu chứng báo động. |
-| Ngưỡng | Cố định, kín | **Người dùng chỉnh được** từng hệ số z (0.2–5) hoặc tắt từng chỉ số | Không có ngưỡng z nào là chuẩn y khoa; cho người dùng kiểm soát là minh bạch hơn. |
-| Trộn HRV | Không công bố | **Không bao giờ** trộn rMSSD với SDNN | Hai chuỗi khác nhau, trộn làm sai nền. |
+| Ngưỡng | Cố định, kín | **Người dùng chỉnh được** từng hệ số z (0.2–5) hoặc tắt nhịp tim nghỉ / giấc ngủ (HRV không tắt được) | Không có ngưỡng z nào là chuẩn y khoa; cho người dùng kiểm soát là minh bạch hơn. |
+| Loại HRV | Không công bố | **Chỉ rMSSD**, không dùng SDNN | Hai đại lượng khác nhau, không đổi qua lại được; trộn làm sai nền. |
 
 Những gì app **biết là chưa làm được** (giới hạn trung thực):
 

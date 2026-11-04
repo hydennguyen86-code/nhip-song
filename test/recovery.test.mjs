@@ -121,23 +121,60 @@ describe('recovery index', () => {
     assert.equal(r.capped, null);
   });
 
-  test('factors switched off in settings are shown as disabled, not as missing data', () => {
+  test('RHR and sleep can be switched off, HRV cannot', () => {
     const settings = { hrv_on: 0, rhr_on: 0, sleep_on: 0 };
     const r = computeRecovery({ wellness: rows(), today: TODAY, checkin: null, settings });
-    assert.equal(r.used, 0);
-    assert.equal(r.score, null);
-    assert.equal(r.band, 'unknown');
-    assert.equal(r.factors.filter((f) => f.disabled).length, 3);
-    for (const key of ['hrv', 'rhr', 'sleep']) {
+    assert.equal(r.used, 1);
+    assert.equal(r.total, 1);
+    assert.notEqual(r.score, null);
+    assert.equal(r.confidence, 'thấp');
+    assert.equal(r.factors.filter((f) => f.disabled).length, 2);
+    for (const key of ['rhr', 'sleep']) {
       const f = r.factors.find((x) => x.key === key);
       assert.equal(f.subscore, null);
       assert.equal(f.disabled, true);
       assert.match(f.text, /đã tắt/);
     }
+    const hrv = r.factors.find((f) => f.key === 'hrv');
+    assert.ok(hrv.subscore != null && !hrv.disabled);
     const resp = r.factors.find((f) => f.key === 'resp');
     assert.ok(resp && resp.flag && resp.subscore == null && !resp.disabled);
-    assert.equal(r.total, 0);
-    assert.match(r.note, /bổ sung/);
+  });
+
+  test('HRV gate: no rMSSD at all hides the score and the advice', () => {
+    const wellness = rows().map((w) => ({ ...w, hrv_rmssd: null }));
+    const r = computeRecovery({ wellness, today: TODAY, checkin: null });
+    assert.equal(r.score, null);
+    assert.equal(r.band, 'unknown');
+    assert.equal(r.bandLabel, 'Cần HRV');
+    assert.equal(r.needsHrv, true);
+    assert.equal(r.hrvGate.state, 'no_device_hrv');
+    assert.match(r.note, /Mi Band/);
+    assert.doesNotMatch(r.action, /tập/i);
+  });
+
+  test('HRV gate: baseline still building, then no recent night', () => {
+    const building = computeRecovery({ wellness: rows({ n: 6 }), today: TODAY, checkin: null });
+    assert.equal(building.hrvGate.state, 'hrv_building');
+    assert.equal(building.hrvGate.daysAvailable, 6);
+    assert.equal(building.hrvGate.nights, 7); // last night counts towards progress
+    // First night ever entered: building, not "device sends no HRV".
+    const first = rows({ n: 10 }).map((w) => (w.date === TODAY ? w : { ...w, hrv_rmssd: null }));
+    const g = computeRecovery({ wellness: first, today: TODAY, checkin: null }).hrvGate;
+    assert.equal(g.state, 'hrv_building');
+    assert.equal(g.nights, 1);
+    assert.equal(building.score, null);
+    const stale = rows({ n: 30 }).map((w) => (w.date >= addDays(TODAY, -6) ? { ...w, hrv_rmssd: null } : w));
+    const r = computeRecovery({ wellness: stale, today: TODAY, checkin: null });
+    assert.equal(r.hrvGate.state, 'hrv_no_recent');
+    assert.equal(r.score, null);
+  });
+
+  test('HRV gate holds even with an illness pattern in RHR and breathing', () => {
+    const wellness = rows({ todayRhr: 60, todayResp: 18 }).map((w) => ({ ...w, hrv_rmssd: null }));
+    const r = computeRecovery({ wellness, today: TODAY, checkin: null });
+    assert.equal(r.score, null);
+    assert.equal(r.illness, null);
   });
 
   test('one disabled factor lowers used but still yields a score', () => {
@@ -159,9 +196,11 @@ describe('recovery index', () => {
     }
   });
 
-  test('rMSSD and SDNN are used separately, rMSSD wins when both are ready', () => {
+  test('SDNN alone does not pass the HRV gate; rMSSD is used when present', () => {
     const sdnn = computeRecovery({ wellness: rows({ n: 20, rmssd: false }), today: TODAY, checkin: null });
-    assert.equal(sdnn.factors.find((f) => f.key === 'hrv').label, 'HRV SDNN');
+    assert.equal(sdnn.score, null);
+    assert.equal(sdnn.needsHrv, true);
+    assert.equal(sdnn.hrvGate.state, 'no_device_hrv');
     const both = rows({ n: 20 });
     for (const row of both) row.hrv_sdnn = 40 + (row.date.charCodeAt(9) % 4);
     const r = computeRecovery({ wellness: both, today: TODAY, checkin: null });
