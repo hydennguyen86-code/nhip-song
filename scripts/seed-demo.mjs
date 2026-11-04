@@ -1,6 +1,6 @@
 /**
  * Dữ liệu giả để demo. Tạo một admin và một thành viên kèm lịch sử 45 ngày,
- * một vài buổi tập, một cảm giác "tired" và một người đeo Mi Band chỉ nhập tay.
+ * một vài buổi tập, một cảm giác "tired" và một người không có HRV (app hiện "Cần HRV").
  *
  * CHẠY: node scripts/seed-demo.mjs
  * LƯU Ý: xoá toàn bộ database hiện tại. Không dùng khi đã có dữ liệu thật.
@@ -44,11 +44,11 @@ adminRows.push(mk(0, 52, 80, 425, 0, 85)); // hôm nay (chưa hoàn tất → st
 for (const r of adminRows) upsertWellness(db, adminId, r);
 
 for (let i = 45; i >= 15; i--) {
-  const r = { date: dayIso(i), restingHR: 58 + (i % 3), hrv: null, hrvSDNN: 30 + (i % 5), sleepSecs: (7 * 60 + i) * 60, sleepScore: 75 + (i % 10), steps: 7000 + i * 50, respiration: 15 + (i % 3) * 0.5 };
+  const r = { date: dayIso(i), restingHR: 58 + (i % 3), hrv: 46 + (i % 6), hrvSDNN: null, sleepSecs: (7 * 60 + i) * 60, sleepScore: 75 + (i % 10), steps: 7000 + i * 50, respiration: 15 + (i % 3) * 0.5 };
   upsertWellness(db, memberId, r);
 }
 const memberRows = [];
-for (let i = 14; i >= 0; i--) memberRows.push({ date: dayIso(i), restingHR: 58 + (i % 3), hrv: null, hrvSDNN: 30 + (i % 5), sleepSecs: (7 * 60 + i) * 60, sleepScore: 75 + (i % 10), steps: 7000 + i * 50, respiration: 15 + (i % 3) * 0.5 });
+for (let i = 14; i >= 0; i--) memberRows.push({ date: dayIso(i), restingHR: 58 + (i % 3), hrv: 46 + (i % 6), hrvSDNN: null, sleepSecs: (7 * 60 + i) * 60, sleepScore: 75 + (i % 10), steps: 7000 + i * 50, respiration: 15 + (i % 3) * 0.5 });
 for (const r of memberRows) upsertWellness(db, memberId, r);
 
 const acts = [
@@ -61,14 +61,14 @@ for (const a of acts) upsertActivity(db, adminId, a);
 
 addCheckin(db, adminId, { level: 'ok', note: 'Demo checkin' });
 
-// Người đeo Mi Band: không có key, không có HRV hay nhịp thở, hôm nay chưa nhập.
-const bandId = db.prepare('SELECT id FROM users WHERE username=?').get('miband')?.id || createUser(db, { username: 'miband', displayName: 'Người đeo Mi Band', password: 'demo-1234', role: 'member', mustChangePw: 0 });
+// Người dùng thiết bị không đo HRV: chỉ có nhịp tim nghỉ và giấc ngủ → app hiện "Cần HRV", không chấm điểm.
+const bandId = db.prepare('SELECT id FROM users WHERE username=?').get('khonghrv')?.id || createUser(db, { username: 'khonghrv', displayName: 'Trần Văn Khang', password: 'demo-1234', role: 'member', mustChangePw: 0 });
 for (let i = 20; i >= 1; i--) {
   saveManualDay(db, bandId, { date: dayIso(i), values: { resting_hr: 61 + (i % 3), sleep_secs: (410 + i * 3) * 60, sleep_score: 74 + (i % 9), steps: 6800 + i * 90, spo2: 96 + (i % 2) } });
 }
 console.log(`Đã seed dữ liệu giả.
-  · admin  / demo-1234   (quản trị, ~45 ngày nền)
-  · demo   / demo-1234   (thành viên, chỉ SDNN → không bao giờ tính baseline rMSSD)
-  · miband / demo-1234   (đeo Mi Band, chỉ nhập tay, hôm nay chưa nhập)
+  · admin    / demo-1234   (quản trị, ~45 ngày nền)
+  · demo     / demo-1234   (thành viên, HRV rMSSD ~45 ngày)
+  · khonghrv / demo-1234   (thiết bị không đo HRV → app hiện "Cần HRV")
   · mở    http://127.0.0.1:8899  (xem README để biết cổng thật)
   · demo  KHÔNG đồng bộ Intervals.icu (chưa cấu hình key).`);

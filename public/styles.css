@@ -477,10 +477,6 @@ input[type="file"] { padding: 9px 10px; font-size: 13px; color: var(--muted); }
 .manual-field em.is-manual { color: #f6c445; }
 .manual-sleep { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .manual-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.manual-guide { margin-top: 12px; font-size: 12.5px; color: var(--ink-2); }
-.manual-guide summary { cursor: pointer; font-weight: 600; color: var(--ink); }
-.manual-guide ul { margin: 8px 0; padding-left: 18px; display: grid; gap: 4px; }
-.manual-guide p { margin: 0; color: var(--muted); }
 .manual-baseline { margin-top: 8px; padding: 0 4px; }
 [data-manual-log] { display: flex; flex-direction: column; gap: 6px; }
 .manual-log { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
@@ -773,3 +769,16 @@ tr:last-child td { border-bottom: 0; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+/* HRV gate (hero when HRV rMSSD is missing) */
+.hero-gate { position: relative; margin-top: 14px; padding: 14px 16px; border-radius: 14px; border: 1px solid var(--line-2); background: rgba(255, 255, 255, 0.04); }
+.hero-gate .gate-title { font-size: 20px; font-weight: 750; letter-spacing: -0.3px; }
+.hero-gate p { margin-top: 8px; font-size: 14px; line-height: 1.5; color: var(--ink-2); }
+.hero-gate.gate-warn { background: var(--amber-faint); border-color: rgba(246, 196, 69, .35); }
+.hero-gate.gate-warn .gate-title { color: var(--amber-2); }
+.hero-gate .gate-cta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.hero-gate .gate-progress { height: 8px; margin-top: 12px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.hero-gate .gate-progress span { display: block; height: 100%; border-radius: 999px; background: var(--amber); }
+.hero-gate .gate-count { margin-top: 6px; font-size: 12.5px; font-weight: 650; color: var(--muted); }
+.hero-gated .hero-foot { margin-top: 12px; }
+.manual-field .req { color: var(--amber); font-weight: 600; }
