@@ -56,8 +56,16 @@ describe('respiration is a one-sided flag', () => {
     assert.equal(r.illness, null);
     assert.equal(r.factors.find((x) => x.key === 'resp').status, 'bad');
   });
+  test('a +1 /min rise stays inside wearable noise; the flag starts at +1.5', () => {
+    const flat = Array.from({ length: 14 }, (_, i) => ({ date: `2026-09-${String(i + 1).padStart(2, '0')}`, respiration: 15 }));
+    const on = (value) => respiratorySignal([...flat, { date: '2026-09-20', respiration: value }], '2026-09-20');
+    assert.equal(on(16).state, 'normal');
+    assert.equal(on(16.5).state, 'elevated');
+    assert.equal(on(16.5).strong, false);
+    assert.equal(on(18).strong, true);
+  });
   test('rise + elevated resting HR = illness pattern: index capped at 50, advice = recover', () => {
-    const w = series({ resp: 15, sleepMin: 480, today: { respiration: 17.5, resting_hr: 58, hrv_rmssd: 75 } });
+    const w = series({ resp: 15, sleepMin: 480, today: { respiration: 18.5, resting_hr: 58, hrv_rmssd: 75 } });
     const r = computeRecovery({ wellness: w, today: TODAY });
     assert.ok(r.illness);
     assert.ok(r.score <= 50, `score ${r.score}`);
@@ -66,7 +74,7 @@ describe('respiration is a one-sided flag', () => {
     // strong rises on both → REST (more conservative); a milder rise → RECOVER with the illness headline
     assert.equal(a.verdict, 'rest');
     assert.ok(a.flags.resp && a.flags.rhr);
-    const mild = series({ resp: 15, sleepMin: 480, today: { respiration: 16.3, resting_hr: 54, hrv_rmssd: 67 } });
+    const mild = series({ resp: 15, sleepMin: 480, today: { respiration: 16.8, resting_hr: 54, hrv_rmssd: 67 } });
     const m = buildAdvice({ today: TODAY, wellness: mild, activities: [], checkin: null, settings: { rhr_z: 0.5 } });
     assert.equal(m.verdict, 'recover', m.headline);
     assert.match(m.headline, /chống bệnh/);

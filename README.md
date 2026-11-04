@@ -75,6 +75,39 @@ App sẽ gọi `GET /api/v1/athlete/{id}` để xác minh key. Key lưu trong SQ
 - **Tự động**: admin đặt giờ (mặc định **06:30 Asia/Ho_Chi_Minh**) trong tab Cài đặt. Máy Mac phải bật và app phải chạy thì lịch mới kích hoạt.
 - Sync lỗi (key sai, timeout, rate limit) → hiển thị thông báo nhưng **giữ nguyên dữ liệu cũ**.
 
+### Nhập tay khi đồng bộ thiếu
+
+HUAWEI Health không xuất HRV và nhịp thở, còn Mi Band không đồng bộ được sang Intervals.icu. Trang **Hôm nay** có thẻ **Chỉ số khi đồng bộ thiếu** để điền cả ngày trên một form:
+
+| Chỉ số | Đơn vị, khoảng nhận | App dùng vào |
+| --- | --- | --- |
+| Nhịp tim nghỉ | 30–110 bpm | Điểm hồi phục (25%), cần ≥ 7 ngày nền |
+| Giờ ngủ | giờ + phút, tối đa 16 giờ | Điểm hồi phục (30%) |
+| HRV rMSSD | 1–300 ms | Điểm hồi phục (45%), cần ≥ 14 ngày nền. Không nhập SDNN |
+| Nhịp thở khi ngủ | 6–30 lần/phút | Chỉ là cờ cảnh báo, cần ≥ 7 đêm nền |
+| Điểm ngủ | 0–100 | Hiển thị, xu hướng |
+| Số bước | số nguyên | Hiển thị, xu hướng |
+| SpO2 | 70–100% | Xu hướng |
+| Cân nặng | 20–300 kg | Xu hướng |
+
+Quy tắc:
+
+- Chọn **ngày thức dậy** rồi chỉ điền ô bạn có. Một ô sai thì cả form không lưu.
+- Tài khoản **quản trị** chọn người ở ô **Ghi cho**. Thành viên thường chỉ ghi cho chính mình. Có thể nhập bù tối đa 30 ngày.
+- Số tay vào ngay điểm hồi phục và mức nền. Để trống ô `tự nhập` rồi lưu là xoá số đó; số đồng bộ không bị đụng tới.
+- Sync trả `null` thì số tay được giữ. Sync hoặc CSV có số thật cho đúng ngày thì **số thật thay số tay**.
+
+### Dùng với Mi Band
+
+Mở Mi Fitness, xem từng mục rồi chép sang form (tên mục có thể khác tuỳ phiên bản):
+
+1. **Giấc ngủ:** giờ ngủ và điểm ngủ của đêm kết thúc vào buổi sáng ngày đang nhập.
+2. **Nhịp tim:** nhịp tim lúc nghỉ.
+3. **SpO2:** nếu vòng có đo trong đêm.
+4. **Số bước:** nhập khi ngày đã kết thúc, chọn đúng ngày đó.
+
+Mi Band 9 và 9 Pro không có HRV theo các bài đánh giá, nên ô HRV để trống. Điểm hồi phục khi đó tính từ nhịp tim nghỉ và giấc ngủ, độ tin cậy tối đa là "vừa". Lần đầu nên nhập bù ít nhất 7 ngày để có nền nhịp tim. Mỗi người nên dùng một thiết bị cố định, vì số của hai loại vòng không so được với nhau.
+
 ## 6. Nhập CSV (nếu chưa muốn đồng bộ API)
 
 Intervals.icu cho phép xuất CSV:
@@ -105,7 +138,7 @@ Vòng lớn ở giữa là **chỉ số hồi phục tham khảo**, không phả
 | HRV rMSSD (hoặc SDNN nếu chưa đủ rMSSD) | 45% | **ln(rMSSD)**. 60% đêm qua + 40% trung bình 7 ngày, z so với **trung vị 60 ngày** (độ lệch = 1,4826 × MAD, sàn 0,07 ≈ 7%). Báo vùng **SWC** = nền ± 0,5 độ lệch và **CV 7 ngày** (cảnh báo khi ≥ 1,5 × CV thường lệ). |
 | Nhịp tim nghỉ | 25% | đêm qua so với **trung vị 30 ngày**, độ lệch MAD (sàn 1 bpm); **đảo dấu** vì cao hơn là xấu |
 | Giấc ngủ | 30% | **so với nhu cầu, không so với trung bình của bạn**: % = ngủ / nhu cầu. Nhu cầu = nền (TB 30 đêm, kẹp 7h30–8h30; < 7 đêm thì 8h) + 20% nợ ngủ 7 đêm trước (tối đa 60 phút) + tối đa 45 phút nếu hôm qua tập nhiều hơn TB 28 ngày. 85% nhu cầu = 50 điểm; mỗi 10% ≈ 22 điểm. |
-| Nhịp thở | **0%** | **Cờ cảnh báo một chiều**, không cộng điểm. Bật khi đêm qua cao hơn trung vị 30 đêm ≥ max(1,0; 2 × độ lệch) lần/phút. Thở chậm hơn **không** được cộng điểm. Nguồn không gửi nhịp thở → hiện "nguồn không có", **không** hạ độ tin cậy. |
+| Nhịp thở | **0%** | **Cờ cảnh báo một chiều**, không cộng điểm. Bật khi đêm qua cao hơn trung vị 30 đêm ≥ max(1,5; 2 × độ lệch) lần/phút. Thở chậm hơn **không** được cộng điểm. Chưa có số → hiện "chưa có số", **không** hạ độ tin cậy. Có thể nhập tay từ HUAWEI Health ở thẻ *Chỉ số khi đồng bộ thiếu*. |
 
 Mỗi phần đổi thành điểm con `50 + z × 22`, kẹp 2–99 (giấc ngủ: `50 + (% − 0,85) × 220`). Điểm cuối là trung bình có trọng số; thiếu phần nào thì **chia lại trọng số** và hạ độ tin cậy (3/3 = cao, 2 = vừa, 1 = thấp; HRV còn "sơ bộ" < 28 ngày thì tối đa "vừa"). Dải màu: **67–100 sẵn sàng**, **34–66 trung bình**, **0–33 cần hồi phục**.
 
@@ -117,6 +150,12 @@ Vì sao đổi (v1 → v2):
 - v1 so giấc ngủ với trung bình của chính bạn, nên thiếu ngủ kéo dài trông "bình thường". v2 so với nhu cầu nên thấy được khoản thiếu này.
 - v1 tính nhịp thở 10% kể cả khi không có dữ liệu, nên độ tin cậy có thể kẹt ở 3/4.
 - v1 dùng trung bình 7 ngày HRV làm "hôm nay", nên một đêm rất thấp gần như không đổi điểm.
+
+Vì sao nhịp thở không cộng điểm (tra PubMed, 4/11/2026):
+- Bằng chứng mạnh nhất là **phát hiện bệnh**, chủ yếu nghiên cứu COVID-19, không phải đo mức hồi phục. Nhịp thở ban đêm tăng được ghi nhận trước và trong khi có triệu chứng ([Miller 2020](https://doi.org/10.1371/journal.pone.0243693), [Risch 2022](https://doi.org/10.1136/bmjopen-2021-058274)). Tổng quan hệ thống cho thấy độ chính xác dao động lớn, AUC 0,52–0,92, và nhịp tim là dấu hiệu được báo nhiều nhất ([Mitratza 2022](https://doi.org/10.1016/S2589-7500(22)00019-X)).
+- Chưa tìm thấy nghiên cứu cho thấy thêm nhịp thở vào điểm hồi phục giúp dự đoán tốt hơn. Nghiên cứu vận động viên gần nhất chỉ là phân cụm mô tả 17 người ([Foucaud 2025](https://doi.org/10.3389/fspor.2025.1629924)).
+- Sai số số trung bình cả đêm từ cổ tay khoảng 0,65–1,1 lần/phút ([Natarajan 2021](https://doi.org/10.1038/s41746-021-00493-6), [Jung 2023](https://doi.org/10.3390/s23187976)), nên ngưỡng cờ là +1,5 thay vì +1,0. Mức "tăng mạnh" bắt đầu từ +3, đúng mức Natarajan dùng. Đây là lựa chọn thiết kế, chưa kiểm trên dữ liệu thật của gia đình.
+- Dễ báo nhầm: nhịp thở còn đổi theo căng thẳng, nóng, lạnh, gắng sức ([Nicolò 2020](https://doi.org/10.3390/s20216396)) và theo chu kỳ kinh nguyệt ([Goodale 2019](https://doi.org/10.2196/13404)). Vì vậy một mình nhịp thở chỉ tính là 1 cảnh báo; phải đi cùng nhịp tim nghỉ tăng hoặc HRV giảm mới chặn điểm.
 
 Cảm giác chủ quan luôn thắng: báo **đang bệnh** → điểm tối đa 30; **mệt / ngủ kém** → tối đa 50; báo triệu chứng nặng → **ẩn điểm** và hiện cảnh báo gọi 115. Khi mức chặn thực sự làm giảm điểm, app hiện cả **điểm thô** và **điểm sau chặn** (ví dụ 63 → 50) để không che mất dữ liệu.
 
@@ -137,7 +176,7 @@ Năm mức kết luận, cộng cấp cứu:
 
 Mỗi kết luận đi kèm **một hành động cụ thể cho hôm nay** (giữ kế hoạch, giảm 20–30%, chỉ vận động nhẹ, hoặc nghỉ hoàn toàn), không chỉ là nhãn màu.
 
-Ngưỡng z (mặc định 1.0 cho RHR/HRV, 2.0 cho mức "rõ rệt") chỉnh được trong Cài đặt → **Ngưỡng gợi ý buổi sáng**; có thể tắt từng chỉ số. Giấc ngủ dùng ngưỡng cố định: < 85% nhu cầu = cảnh báo, < 70% = rõ rệt. Chỉ **hướng xấu** của một chỉ số mới được tính là cảnh báo (HRV cao bất thường không còn bị đếm là "lệch rõ rệt"). Nhịp thở tăng = 1 cảnh báo; tăng kèm RHR tăng hoặc HRV giảm = "ưu tiên hồi phục".
+Ngưỡng z (mặc định 1.0 cho RHR/HRV, 2.0 cho mức "rõ rệt") chỉnh được trong Cài đặt → **Ngưỡng gợi ý buổi sáng**; có thể tắt từng chỉ số. Giấc ngủ dùng ngưỡng cố định: < 85% nhu cầu = cảnh báo, < 70% = rõ rệt. Chỉ **hướng xấu** của một chỉ số mới được tính là cảnh báo (HRV cao bất thường không còn bị đếm là "lệch rõ rệt"). Nhịp thở tăng ≥ 1,5 lần/phút = 1 cảnh báo; tăng kèm RHR tăng hoặc HRV giảm = "ưu tiên hồi phục".
 
 Thẻ hôm nay luôn hiển thị:
 
@@ -236,7 +275,7 @@ bash scripts/nhip start
 ```bash
 bash scripts/nhip stop
 # thay/sửa code, rồi:
-bash scripts/nhip test    # 54 test unit
+bash scripts/nhip test    # 81 test unit
 bash scripts/nhip start   # dữ liệu vẫn nguyên trong data/
 ```
 
@@ -275,7 +314,7 @@ server/
 public/
   index.html, styles.css, app.js  — vanilla JS, responsive (sidebar + bottom nav), SVG chart
 test/
-  all.test.mjs, recovery.test.mjs  — 54 unit test (node:test)
+  all.test.mjs, recovery.test.mjs  — 81 unit test (node:test)
 scripts/nhip, backup.sh, seed-demo.mjs
 ```
 
@@ -283,7 +322,9 @@ Không có `node_modules`. Không build. Không Docker (nếu bạn muốn Docke
 
 **API chính** (mọi endpoint đều cần session cookie và lọc theo `user_id`):
 
-- `GET /api/dashboard?history=30` — một payload cho trang Hôm nay: `recovery`, `advice`, `sleepPlan`, `load`, `history`, `metrics`, `recent`, `checkin`.
+- `GET /api/dashboard?history=30` — một payload cho trang Hôm nay: `recovery`, `advice`, `sleepPlan`, `load`, `history`, `metrics`, `recent`, `checkin`, `hrvLog`.
+- `GET /api/wellness/hrv?user=<id>` — 14 ngày HRV kèm nhãn tự nhập; `user` chỉ dành cho quản trị (ghi hộ), thành viên gọi cho người khác sẽ nhận 403.
+- `POST /api/wellness/hrv` — nhập/xoá HRV rMSSD thủ công cho một ngày (`{ date, value }`, `value: null` để xoá, thêm `user` khi ghi hộ).
 - `GET|POST /api/checkin` — nhật ký, tags thói quen và insights.
 - `GET /api/wellness`, `GET /api/activities`, `GET /api/baseline`, `GET /api/config/icu`, `POST /api/sync`.
 
@@ -320,7 +361,7 @@ App **không** sao chép thuật toán WHOOP (bí mật độc quyền, không a
 
 | Vấn đề | WHOOP | App này | Khoa học nói gì |
 | --- | --- | --- | --- |
-| Điểm phục hồi 0–100 | Có, thuật toán kín, trọng số riêng | **Có, công thức công khai**: 40% HRV / 25% RHR / 25% ngủ / 10% nhịp thở, hiện từng đóng góp và hạ độ tin cậy khi thiếu | Một chỉ số tổng hợp tiện theo dõi, nhưng trọng số là lựa chọn thiết kế, không phải chân lý sinh lý. Minh bạch quan trọng hơn một con số kín. |
+| Điểm phục hồi 0–100 | Có, thuật toán kín, trọng số riêng | **Có, công thức công khai**: 45% HRV / 25% RHR / 30% ngủ so với nhu cầu, nhịp thở chỉ là cờ, hiện từng đóng góp và hạ độ tin cậy khi thiếu | Một chỉ số tổng hợp tiện theo dõi, nhưng trọng số là lựa chọn thiết kế, không phải chân lý sinh lý. Minh bạch quan trọng hơn một con số kín. |
 | Mức nền | 30 ngày cuộn, cập nhật liên tục | 30 ngày **trước** ngày đánh giá, cá nhân hoá | Nền ngắn hạn bắt kịp thay đổi tập luyện; nền phải loại chính ngày đánh giá. |
 | HRV | 1 đêm (giấc ngủ sóng chậm), so nền | **Trung bình cuộn 7 ngày**, so nền 30 ngày | Plews et al.: trung bình 7 ngày (hoặc log 7 ngày) đáng tin hơn 1 đêm — một đêm thấp thường là nhiễu. |
 | Số ngày tối thiểu cho HRV | Không công bố | 14 ngày → mức "sơ bộ"; ≥ 28 ngày → mức "ổn định" | Plews et al.: cần ≥ 4 tuần để nền HRV dùng được cho quyết định. |
@@ -349,14 +390,14 @@ Mặc định app chỉ chạy trong LAN, **không mở cổng router, không l�
 **Trên Mac (chủ máy chạy app):**
 
 - Đã cài Tailscale 1.104.2 vào `/Applications`, bật "Start on login" trong menu Tailscale để tự chạy sau khi khởi động lại.
-- Địa chỉ mạng riêng của Mac: `100.74.243.57`, tên MagicDNS: `mac-nhip-song.tail33a335.ts.net`.
+- Địa chỉ mạng riêng của Mac: `100.74.243.57` (cố định, không đổi khi đổi tên máy hay đổi Wi-Fi), tên MagicDNS: `m1-max.tail33a335.ts.net` (trước 11/2026 là `mac-nhip-song`, tên cũ không còn mở được).
 - Trang quản lý thành viên: https://login.tailscale.com/admin/users → *Invite external users* → nhập email của 5 người còn lại (mỗi người một tài khoản riêng).
 
 **Trên iPhone từng người:**
 
 1. App Store → cài **Tailscale** (miễn phí).
 2. Mở app → *Log in* bằng đúng email được mời → bật VPN (có thể bật on-demand để tự kết nối).
-3. Safari → mở `http://mac-nhip-song.tail33a335.ts.net:8899` (hoặc `http://100.74.243.57:8899`).
+3. Safari → mở `http://100.74.243.57:8899` → Chia sẻ → *Thêm vào MH chính*. Địa chỉ này không bao giờ đổi, kể cả ở nhà. Đừng lưu địa chỉ `192.168.x.x`: router cấp lại số khác sau mỗi lần khởi động.
 4. Đăng nhập tài khoản Nhịp Sống của riêng mình (admin tạo trong app, mục Cài đặt).
 
 **Lưu ý:**

@@ -33,6 +33,12 @@ const PLAUSIBLE = Object.freeze({
 
 /** Sleep shorter than this is treated as a likely sync error for baselines. */
 export const SLEEP_SUSPECT_SECS = PLAUSIBLE.sleep_secs[0];
+/** Valid days each baseline needs before the metric can be judged. */
+export const BASELINE_NEEDS = Object.freeze({
+  resting_hr: { windowDays: 30, minDays: 7 },
+  hrv_rmssd: { windowDays: 60, minDays: 14 },
+  respiration: { windowDays: 30, minDays: 7 },
+});
 /** Minimum spread in ln(HRV): day-to-day noise of wrist rMSSD is ≥ ~7%. */
 export const HRV_LN_SPREAD_FLOOR = 0.07;
 /** Last night vs 7-day mean in the HRV signal. */
@@ -94,7 +100,7 @@ function rowOn(wellness, date) { return wellness.find((w) => w.date === date) ||
 /* ------------------------------------------------------------------ RHR -- */
 
 /** Last night's resting HR vs robust 30-day baseline (median, MAD, floor 1 bpm). */
-export function rhrModel(wellness, today, { windowDays = 30, minDays = 7, sickDates = null } = {}) {
+export function rhrModel(wellness, today, { windowDays = BASELINE_NEEDS.resting_hr.windowDays, minDays = BASELINE_NEEDS.resting_hr.minDays, sickDates = null } = {}) {
   const vals = priorValues(wellness, 'resting_hr', today, { windowDays, sickDates });
   const info = { count: vals.length, minDays, windowDays };
   if (vals.length < minDays) return { ready: false, state: 'insufficient', ...info };
@@ -113,7 +119,7 @@ export function rhrModel(wellness, today, { windowDays = 30, minDays = 7, sickDa
  * Baseline: 60 days before today (≥14 valid days), centre = median of ln,
  * spread = max(MAD-SD of ln, 0.07).
  */
-export function hrvModel(wellness, today, { windowDays = 60, minDays = 14, sickDates = null } = {}) {
+export function hrvModel(wellness, today, { windowDays = BASELINE_NEEDS.hrv_rmssd.windowDays, minDays = BASELINE_NEEDS.hrv_rmssd.minDays, sickDates = null } = {}) {
   const lnOf = (field) => priorValues(wellness, field, today, { windowDays, sickDates }).map(Math.log);
   const lnR = lnOf('hrv_rmssd');
   const lnS = lnOf('hrv_sdnn');
@@ -257,21 +263,29 @@ export function sleepPerformance(wellness, activities = [], today) {
 /* ---------------------------------------------------------- Respiration -- */
 
 /**
+ * minRise is 1.5 /min, not 1.0: overnight wrist estimates carry an error of
+ * about 0.65–1.1 /min (Natarajan 2021, Jung 2023) and hand-copied values may be
+ * rounded, so +1 is within noise. A "strong" rise (2 × threshold) then starts at
+ * +3 /min, the rise Natarajan 2021 reported for COVID-19.
+ */
+export const RESP_FLAG = Object.freeze({ minRise: 1.5, windowDays: BASELINE_NEEDS.respiration.windowDays, minNights: BASELINE_NEEDS.respiration.minDays, spreadFloor: 0.3 });
+
+/**
  * One-sided illness flag. Never contributes points. A LOWER breathing rate
  * is never read as "better recovery".
- * elevated: rise ≥ max(1.0 /min, 2 × robust spread) above the 30-night median.
+ * elevated: rise ≥ max(1.5 /min, 2 × robust spread) above the 30-night median.
  */
-export function respiratorySignal(wellness, today, { windowDays = 30, minNights = 7, sickDates = null } = {}) {
+export function respiratorySignal(wellness, today, { windowDays = RESP_FLAG.windowDays, minNights = RESP_FLAG.minNights, sickDates = null } = {}) {
   const ever = wellness.some((r) => plausible('respiration', r.respiration));
   if (!ever) return { state: 'not_provided', count: 0 };
   const vals = priorValues(wellness, 'respiration', today, { windowDays, sickDates });
   if (vals.length < minNights) return { state: 'insufficient', count: vals.length, minNights };
   const st = robustStats(vals);
-  const spread = Math.max(st.spread, 0.3);
+  const spread = Math.max(st.spread, RESP_FLAG.spreadFloor);
   const row = rowOn(wellness, today);
   if (!row || !plausible('respiration', row.respiration)) return { state: 'missing_today', count: vals.length, median: st.median };
   const delta = row.respiration - st.median;
-  const threshold = Math.max(1.0, 2 * spread);
+  const threshold = Math.max(RESP_FLAG.minRise, 2 * spread);
   return {
     state: delta >= threshold ? 'elevated' : 'normal',
     strong: delta >= 2 * threshold,

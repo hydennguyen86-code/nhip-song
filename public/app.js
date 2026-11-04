@@ -527,7 +527,7 @@ function factorsCard(d) {
     ${d.recovery.factors.map(factorRow).join('')}
     ${d.recovery.capped && d.recovery.rawScore != null ? `<div class="cap-line">Điểm thô ${d.recovery.rawScore} bị giới hạn còn ${d.recovery.score} vì ${esc(d.recovery.capped)}.</div>` : ''}
     ${d.recovery.score == null && d.recovery.factors.length ? `<div class="cap-line note-line">${esc(d.recovery.note)}</div>` : ''}
-    <div class="formula hint">Điểm = trung bình có trọng số của z-score cá nhân: HRV 40%, nhịp tim nghỉ 25%, ngủ 25%, nhịp thở 10%. Thiếu yếu tố nào thì chia lại trọng số. Không phải thuật toán WHOOP.</div>
+    <div class="formula hint">Điểm = trung bình có trọng số: HRV 45%, nhịp tim nghỉ 25%, ngủ so với nhu cầu 30%. Nhịp thở chỉ là cờ cảnh báo, không cộng điểm. Thiếu yếu tố nào thì chia lại trọng số. Không phải thuật toán WHOOP.</div>
   </div>`;
 }
 
@@ -597,6 +597,219 @@ function loadCard(d) {
     <div class="hint" style="margin-top:10px">${esc(l.note)}</div>
   </div>`;
 }
+
+/* Hand-entered readings for what the sync cannot deliver, one form per day. */
+const MANUAL_FIELDS = [
+  { col: 'resting_hr', label: 'Nhịp tim nghỉ', unit: 'bpm', min: 30, max: 110, example: '55' },
+  { col: 'sleep_secs', label: 'Giờ ngủ', sleep: true },
+  { col: 'hrv_rmssd', label: 'HRV rMSSD', unit: 'ms', min: 1, max: 300, example: '65' },
+  { col: 'respiration', label: 'Nhịp thở khi ngủ', unit: 'lần/phút', min: 6, max: 30, example: '15' },
+  { col: 'sleep_score', label: 'Điểm ngủ', unit: '/100', min: 0, max: 100, example: '80' },
+  { col: 'steps', label: 'Số bước', unit: 'bước', min: 0, max: 200000, example: '8000' },
+  { col: 'spo2', label: 'SpO2', unit: '%', min: 70, max: 100, example: '97' },
+  { col: 'weight', label: 'Cân nặng', unit: 'kg', min: 20, max: 300, example: '60' },
+];
+
+function sleepText(secs) {
+  const mins = Math.round(secs / 60);
+  return `${Math.floor(mins / 60)}h${String(mins % 60).padStart(2, '0')}`;
+}
+
+function manualRows(days) {
+  return days.slice(0, 7).map((x) => {
+    const filled = MANUAL_FIELDS.filter((f) => x.values[f.col] != null);
+    const b = !filled.length ? { cls: 'red', text: 'thiếu' }
+      : filled.some((f) => x.manual[f.col]) ? { cls: 'amber', text: 'tự nhập' }
+        : { cls: 'green', text: 'đồng bộ' };
+    const rhr = x.values.resting_hr;
+    const sleep = x.values.sleep_secs;
+    return `<button type="button" class="manual-row" data-manual-day="${esc(x.date)}">
+      <span class="manual-date">${esc(fmtShort(x.date))}</span>
+      <span class="manual-num">${rhr == null ? '—' : fmtNum(rhr)}<small>bpm</small> ${sleep == null ? '—' : sleepText(sleep)}</span>
+      <span class="confidence-chip ${b.cls}">${b.text}</span>
+    </button>`;
+  }).join('');
+}
+
+function manualBaselineText(baseline) {
+  const names = { resting_hr: 'Nhịp tim nghỉ', hrv_rmssd: 'HRV', respiration: 'Nhịp thở' };
+  return Object.keys(names).map((k) => `${names[k]} ${baseline?.[k]?.have ?? 0}/${baseline?.[k]?.need ?? 0}`).join(' · ');
+}
+
+function manualChip(baseline) {
+  const rhr = baseline?.resting_hr;
+  return rhr && rhr.have >= rhr.need ? { cls: 'green', text: 'đủ nền nhịp tim' } : { cls: 'amber', text: `nền nhịp tim ${rhr?.have ?? 0}/${rhr?.need ?? 7}` };
+}
+
+function manualFieldHtml(f) {
+  const inputs = f.sleep
+    ? `<div class="manual-sleep">
+        <input data-manual-sleep="h" type="number" min="0" max="16" step="1" inputmode="numeric" placeholder="giờ" aria-label="Giờ">
+        <input data-manual-sleep="m" type="number" min="0" max="59" step="1" inputmode="numeric" placeholder="phút" aria-label="Phút">
+      </div>`
+    : `<input data-manual-col="${f.col}" type="number" min="${f.min}" max="${f.max}" step="any" inputmode="decimal" placeholder="ví dụ ${esc(f.example)}">`;
+  return `<label class="field manual-field">
+    <span>${esc(f.label)}${f.unit ? ` <small>(${esc(f.unit)})</small>` : ''} <em data-manual-state="${f.col}"></em></span>
+    ${inputs}
+  </label>`;
+}
+
+function manualCard(d) {
+  const log = d.manualLog || { days: [], baseline: {} };
+  const chip = manualChip(log.baseline);
+  const isadmin = state.user?.role === 'admin';
+  return `<div class="card manual-card" data-manual>
+    <div class="card-head">
+      <div class="card-title"><span class="ico-chip">${ICONS.hrv}</span><div><div class="eyebrow">Nhập tay</div><h3>Chỉ số khi đồng bộ thiếu</h3></div></div>
+      <span class="confidence-chip ${chip.cls}" data-manual-chip>${esc(chip.text)}</span>
+    </div>
+    <div class="manual-body">
+      <form class="manual-form" novalidate>
+        <div class="manual-who">
+          ${isadmin ? `<label class="field manual-user"><span>Ghi cho</span><select data-manual-user><option value="${esc(state.user.id)}">${esc(state.user.displayName || state.user.username)}</option></select></label>` : ''}
+          <label class="field"><span>Ngày thức dậy</span><input data-manual-date type="date" min="${esc(log.days[log.days.length - 1]?.date || '')}" max="${esc(d.today)}" required></label>
+        </div>
+        <div class="manual-fields">${MANUAL_FIELDS.map(manualFieldHtml).join('')}</div>
+        <div class="manual-actions"><button class="btn primary small" type="submit" data-manual-save>Lưu ngày này</button></div>
+      </form>
+      <div class="manual-log">
+        <div class="manual-log-head"><span>7 ngày gần nhất</span><span>chạm để sửa</span></div>
+        <div data-manual-log></div>
+        <div class="hint manual-baseline">Số ngày đã có để tính nền: <span data-manual-baseline></span></div>
+      </div>
+    </div>
+    <details class="manual-guide">
+      <summary>Mi Band: lấy số ở đâu trong Mi Fitness?</summary>
+      <ul>
+        <li><b>Giờ ngủ, điểm ngủ:</b> mục Giấc ngủ, lấy đêm kết thúc vào buổi sáng của ngày đang nhập.</li>
+        <li><b>Nhịp tim nghỉ:</b> mục Nhịp tim, số nhịp tim lúc nghỉ.</li>
+        <li><b>SpO2:</b> mục SpO2, nếu vòng có đo trong đêm.</li>
+        <li><b>Số bước:</b> nhập khi ngày đã kết thúc, chọn đúng ngày đó.</li>
+        <li><b>HRV, nhịp thở:</b> Mi Band thường không có số này thì để trống. Điểm hồi phục vẫn tính từ nhịp tim nghỉ và giấc ngủ, độ tin cậy tối đa là "vừa".</li>
+      </ul>
+      <p>Tên mục có thể khác tuỳ phiên bản Mi Fitness. Mỗi người nên dùng một thiết bị cố định, vì số của hai loại vòng không so được với nhau.</p>
+    </details>
+    <div class="hint manual-note">Chỉ cần điền ô bạn có. Để trống ô tự nhập rồi lưu là xoá số đó. Khi Intervals.icu có số thật cho đúng ngày, số đồng bộ sẽ thay số tay.</div>
+  </div>`;
+}
+
+function attachManualCard(view, d) {
+  const card = view.querySelector('[data-manual]');
+  if (!card) return;
+  const form = card.querySelector('form');
+  const dateEl = form.querySelector('[data-manual-date]');
+  const saveBtn = form.querySelector('[data-manual-save]');
+  const userEl = form.querySelector('[data-manual-user]');
+  const logEl = card.querySelector('[data-manual-log]');
+  const chipEl = card.querySelector('[data-manual-chip]');
+  const baselineEl = card.querySelector('[data-manual-baseline]');
+  const hoursEl = form.querySelector('[data-manual-sleep="h"]');
+  const minsEl = form.querySelector('[data-manual-sleep="m"]');
+  let days = [];
+  const target = () => (userEl ? Number(userEl.value) : state.user.id);
+  const who = () => (userEl ? userEl.options[userEl.selectedIndex]?.text : state.user.displayName) || '';
+  const logUrl = () => `/api/wellness/manual?user=${encodeURIComponent(target())}`;
+
+  // Only what the person changed is sent, so a rounded display never rewrites a synced number.
+  const readValues = () => {
+    const values = {};
+    for (const el of form.querySelectorAll('[data-manual-col]')) {
+      if (el.value !== el.dataset.initial) values[el.dataset.manualCol] = el.value;
+    }
+    const sleepKey = `${hoursEl.value}:${minsEl.value}`;
+    if (sleepKey !== hoursEl.dataset.initial) {
+      values.sleep_secs = hoursEl.value === '' && minsEl.value === '' ? '' : Number(hoursEl.value || 0) * 3600 + Number(minsEl.value || 0) * 60;
+    }
+    return values;
+  };
+  const loadDay = () => {
+    state.manualDate = dateEl.value;
+    const entry = days.find((x) => x.date === dateEl.value) || { values: {}, manual: {} };
+    for (const el of form.querySelectorAll('[data-manual-col]')) {
+      const v = entry.values[el.dataset.manualCol];
+      el.value = v == null ? '' : String(Math.round(v * 10) / 10);
+      el.dataset.initial = el.value;
+    }
+    const secs = entry.values.sleep_secs;
+    const mins = secs == null ? null : Math.round(secs / 60);
+    hoursEl.value = mins == null ? '' : String(Math.floor(mins / 60));
+    minsEl.value = mins == null ? '' : String(mins % 60);
+    hoursEl.dataset.initial = `${hoursEl.value}:${minsEl.value}`;
+    for (const el of form.querySelectorAll('[data-manual-state]')) {
+      const col = el.dataset.manualState;
+      el.textContent = entry.values[col] == null ? '' : entry.manual[col] ? 'tự nhập' : 'đồng bộ';
+      el.className = entry.manual[col] ? 'is-manual' : '';
+    }
+  };
+  const paint = (log) => {
+    days = log.days || [];
+    logEl.innerHTML = manualRows(days);
+    const chip = manualChip(log.baseline);
+    chipEl.className = `confidence-chip ${chip.cls}`;
+    chipEl.textContent = chip.text;
+    baselineEl.textContent = manualBaselineText(log.baseline);
+    loadDay();
+  };
+  // Only your own numbers feed this page; for someone else just refresh the card.
+  const refresh = async () => {
+    if (target() === state.user.id) {
+      const y = window.scrollY;
+      await renderView();
+      window.scrollTo(0, y);
+    } else {
+      paint(await api(logUrl()));
+    }
+  };
+  if (userEl) {
+    api('/api/users')
+      .then(async (r) => {
+        for (const u of r.users || []) {
+          if (String(u.id) === userEl.value) continue;
+          const opt = document.createElement('option');
+          opt.value = u.id;
+          opt.textContent = u.display_name || u.username;
+          userEl.appendChild(opt);
+        }
+        const saved = state.manualUser;
+        if (saved && saved !== state.user.id && [...userEl.options].some((o) => Number(o.value) === saved)) {
+          userEl.value = String(saved);
+          paint(await api(logUrl()));
+        }
+      })
+      .catch(() => {});
+    userEl.onchange = async () => {
+      state.manualUser = target();
+      try {
+        paint(await api(logUrl()));
+      } catch (err) {
+        toastMsg(err.message);
+      }
+    };
+  }
+  logEl.onclick = (e) => {
+    const row = e.target.closest('.manual-row');
+    if (!row) return;
+    dateEl.value = row.dataset.manualDay;
+    loadDay();
+    form.querySelector('[data-manual-col]').focus();
+  };
+  dateEl.onchange = loadDay;
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    const values = readValues();
+    if (!Object.keys(values).length) { toastMsg('Chưa có gì thay đổi.'); return; }
+    saveBtn.disabled = true;
+    try {
+      const r = await api('/api/wellness/manual', { method: 'POST', body: { user: target(), date: dateEl.value, values } });
+      toastMsg(r.changed.length ? `Đã lưu ${r.changed.length} chỉ số cho ${who()}, ngày ${fmtShort(dateEl.value)}.` : 'Chưa có gì thay đổi.');
+      await refresh();
+    } catch (err) { toastMsg(err.message); }
+    saveBtn.disabled = false;
+  };
+  dateEl.value = state.manualDate && state.manualDate <= d.today ? state.manualDate : d.today;
+  paint(d.manualLog || { days: [], baseline: {} });
+}
+
 
 function checkinFormHtml(tags, current) {
   const level = current?.level || 'ok';
@@ -701,6 +914,7 @@ async function renderToday(view) {
     <div class="today-grid">
       ${heroCard(d)}
       ${miniWrap(d)}
+      ${manualCard(d)}
       ${factorsCard(d)}
       ${historyCard(d)}
       ${sleepCard(d)}
@@ -736,6 +950,7 @@ async function renderToday(view) {
     };
   }
   attachCheckin(view, d.journalTags || []);
+  attachManualCard(view, d);
   view.querySelectorAll('[data-go]').forEach((b) => {
     b.onclick = () => go(b.dataset.go);
     if (b.getAttribute('role') === 'button') b.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(b.dataset.go); } };
@@ -786,6 +1001,8 @@ async function renderTrends(view) {
     { title: 'Điểm ngủ', field: 'sleep_score', color: '#f6c445', unit: '/100', digits: 0 },
     { title: 'Số bước', field: 'steps', color: '#7cc4ff', unit: 'bước', digits: 0 },
     { title: 'Nhịp thở', field: 'respiration', color: '#4fd1c5', unit: '/ph', digits: 1 },
+    { title: 'SpO2', field: 'spo2', color: '#7cc4ff', unit: '%', digits: 0 },
+    { title: 'Cân nặng', field: 'weight', color: '#a99bff', unit: 'kg', digits: 1 },
   ];
 
   view.innerHTML = `
@@ -973,7 +1190,7 @@ async function renderSettings(view) {
           <div><b>1. HRV (45%)</b>: dùng ln(rMSSD). 60% đêm qua + 40% trung bình 7 ngày, so với trung vị 60 ngày (độ lệch tính bằng MAD, sàn 7%). Hiện vùng SWC = nền ± 0,5 độ lệch và cảnh báo khi dao động 7 ngày (CV) cao gấp 1,5 lần thường lệ.</div>
           <div><b>2. Nhịp tim nghỉ (25%)</b>: đêm qua so với trung vị 30 ngày; dấu đảo vì cao hơn là xấu.</div>
           <div><b>3. Giấc ngủ (30%)</b>: so với <i>nhu cầu</i>, không so với trung bình của bạn. Nhu cầu = nền 7,5–8,5h + 20% nợ ngủ 7 đêm (tối đa 60 phút) + tối đa 45 phút nếu hôm qua tập nhiều. Đủ 85% nhu cầu = 50 điểm.</div>
-          <div><b>4. Nhịp thở</b>: không cộng điểm. Chỉ là cờ cảnh báo một chiều khi tăng ≥ 1 lần/phút so với trung vị. Tăng cùng lúc với nhịp tim nghỉ tăng hoặc HRV giảm → điểm bị chặn ở 50.</div>
+          <div><b>4. Nhịp thở</b>: không cộng điểm. Chỉ là cờ cảnh báo một chiều khi tăng ≥ 1,5 lần/phút so với trung vị. Tăng cùng lúc với nhịp tim nghỉ tăng hoặc HRV giảm → điểm bị chặn ở 50.</div>
           <div><b>5.</b> Mỗi phần đổi thành điểm con 50 + z × 22, chặn 2–99, rồi lấy trung bình có trọng số. Thiếu phần nào thì chia lại trọng số và hạ độ tin cậy. Giá trị vô lý (ngủ &lt; 3h, RHR ngoài 30–110) và ngày bạn báo ốm bị loại khỏi mức nền.</div>
           <div><b>6.</b> Dải màu: 67–100 xanh, 34–66 vàng, 0–33 đỏ. Đây là mốc hiển thị, không phải ngưỡng y khoa.</div>
           <div><b>Giới hạn:</b> WHOOP không công bố trọng số thật; chỉ số này không sao chép WHOOP. Đồng hồ quang học ở cổ tay có sai số; mọi so sánh chỉ có ý nghĩa với chính bạn. Cảm giác chủ quan luôn thắng.</div>

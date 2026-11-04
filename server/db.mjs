@@ -5,6 +5,10 @@ import crypto from 'node:crypto';
 
 export const APP_TZ = 'Asia/Ho_Chi_Minh';
 
+/** Wellness columns that can also be hand-entered, on top of HRV and respiration.
+ * Each gets <column>_manual and <column>_manual_at, added by openDb. */
+export const MANUAL_COLUMNS = Object.freeze(['resting_hr', 'sleep_secs', 'sleep_score', 'steps', 'spo2', 'weight']);
+
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY,
@@ -42,6 +46,10 @@ CREATE TABLE IF NOT EXISTS wellness (
   readiness REAL,
   spo2 REAL,
   respiration REAL,
+  hrv_manual INTEGER NOT NULL DEFAULT 0,
+  hrv_manual_at TEXT,
+  respiration_manual INTEGER NOT NULL DEFAULT 0,
+  respiration_manual_at TEXT,
   source TEXT,
   raw_json TEXT,
   updated_at TEXT NOT NULL,
@@ -119,6 +127,14 @@ export function openDb(dir) {
   db.exec(SCHEMA);
   // Migrations for databases created before these columns existed.
   try { db.exec('ALTER TABLE wellness ADD COLUMN respiration REAL'); } catch { /* already there */ }
+  try { db.exec('ALTER TABLE wellness ADD COLUMN hrv_manual INTEGER NOT NULL DEFAULT 0'); } catch { /* already there */ }
+  try { db.exec('ALTER TABLE wellness ADD COLUMN hrv_manual_at TEXT'); } catch { /* already there */ }
+  try { db.exec('ALTER TABLE wellness ADD COLUMN respiration_manual INTEGER NOT NULL DEFAULT 0'); } catch { /* already there */ }
+  try { db.exec('ALTER TABLE wellness ADD COLUMN respiration_manual_at TEXT'); } catch { /* already there */ }
+  for (const c of MANUAL_COLUMNS) {
+    try { db.exec(`ALTER TABLE wellness ADD COLUMN ${c}_manual INTEGER NOT NULL DEFAULT 0`); } catch { /* already there */ }
+    try { db.exec(`ALTER TABLE wellness ADD COLUMN ${c}_manual_at TEXT`); } catch { /* already there */ }
+  }
   try { db.exec('ALTER TABLE checkins ADD COLUMN tags TEXT'); } catch { /* already there */ }
   return db;
 }

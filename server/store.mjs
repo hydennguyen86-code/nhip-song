@@ -3,8 +3,9 @@
  * accepts a caller-supplied user id from a request; the caller must pass the
  * authenticated account.
  */
-import { localDate, localIso, encrypt, decrypt } from './db.mjs';
+import { localDate, localIso, encrypt, decrypt, MANUAL_COLUMNS } from './db.mjs';
 import { hashPassword } from './auth.mjs';
+import { plausible } from './signals.mjs';
 
 const NULLIF = (v) => (v === undefined || v === null || v === '' ? null : v);
 
@@ -78,32 +79,72 @@ export function markSync(db, userId, { ok, error }) {
   }
 }
 
+const MANUAL_FLAG_COLUMNS = MANUAL_COLUMNS.flatMap((c) => [`${c}_manual`, `${c}_manual_at`]).join(',');
+// How each hand-enterable column is named on incoming sync and CSV records.
+const REC_KEY = Object.freeze({ resting_hr: 'restingHR', sleep_secs: 'sleepSecs', sleep_score: 'sleepScore', steps: 'steps', spo2: 'spO2', weight: 'weight' });
+
+/** Upstream wins when it has a value. Without one, only a manual reading survives. */
+function keepManual(c) {
+  return `${c}=CASE WHEN excluded.${c} IS NOT NULL OR wellness.${c}_manual = 0 THEN excluded.${c} ELSE wellness.${c} END,
+       ${c}_manual=CASE
+         WHEN excluded.${c} IS NOT NULL THEN excluded.${c}_manual
+         WHEN excluded.${c}_manual = 1 THEN 1
+         ELSE wellness.${c}_manual END,
+       ${c}_manual_at=CASE
+         WHEN excluded.${c} IS NOT NULL THEN excluded.${c}_manual_at
+         WHEN excluded.${c}_manual = 1 THEN excluded.${c}_manual_at
+         ELSE wellness.${c}_manual_at END`;
+}
+
 /**
  * Upsert a wellness record from Intervals.icu. The API sometimes sends both
  * `hrv` (rMSSD) and `hrvSDNN` — they are stored in separate columns and never
  * coalesced into one field.
+ *
+ * Manual readings are a fallback for days the upstream source cannot provide them: a NULL upstream value must not erase them, while a real upstream
+ * value always takes over and clears the manual flag.
  */
 export function upsertWellness(db, userId, rec) {
   // Intervals.icu returns the wellness day as `id` (a date string); CSV rows use `date`.
   const date = String(rec.date || rec.id || '').slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
+  const manual = rec.hrvManual ? 1 : 0;
+  const manualAt = manual ? rec.hrvManualAt || localIso() : null;
+  const respManual = rec.respirationManual ? 1 : 0;
+  const respManualAt = respManual ? rec.respirationManualAt || localIso() : null;
   const stmt = db.prepare(
     `INSERT INTO wellness(user_id,date,resting_hr,hrv_rmssd,hrv_sdnn,sleep_secs,sleep_score,steps,
-       weight,avg_sleeping_hr,kcal_consumed,readiness,spo2,respiration,source,raw_json,updated_at)
-     VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+       weight,avg_sleeping_hr,kcal_consumed,readiness,spo2,respiration,hrv_manual,hrv_manual_at,respiration_manual,respiration_manual_at,${MANUAL_FLAG_COLUMNS},source,raw_json,updated_at)
+     VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,${'?,'.repeat(MANUAL_COLUMNS.length * 2)}?,?,?,?)
      ON CONFLICT(user_id,date) DO UPDATE SET
-       resting_hr=excluded.resting_hr,
-       hrv_rmssd=excluded.hrv_rmssd,
+       ${keepManual('resting_hr')},
+       hrv_rmssd=CASE WHEN excluded.hrv_rmssd IS NOT NULL THEN excluded.hrv_rmssd ELSE wellness.hrv_rmssd END,
+       hrv_manual=CASE
+         WHEN excluded.hrv_rmssd IS NOT NULL THEN excluded.hrv_manual
+         WHEN excluded.hrv_manual = 1 THEN 1
+         ELSE wellness.hrv_manual END,
+       hrv_manual_at=CASE
+         WHEN excluded.hrv_rmssd IS NOT NULL THEN excluded.hrv_manual_at
+         WHEN excluded.hrv_manual = 1 THEN excluded.hrv_manual_at
+         ELSE wellness.hrv_manual_at END,
        hrv_sdnn=excluded.hrv_sdnn,
-       sleep_secs=excluded.sleep_secs,
-       sleep_score=excluded.sleep_score,
-       steps=excluded.steps,
-       weight=excluded.weight,
+       ${keepManual('sleep_secs')},
+       ${keepManual('sleep_score')},
+       ${keepManual('steps')},
+       ${keepManual('weight')},
        avg_sleeping_hr=excluded.avg_sleeping_hr,
        kcal_consumed=excluded.kcal_consumed,
        readiness=excluded.readiness,
-       spo2=excluded.spo2,
-       respiration=excluded.respiration,
+       ${keepManual('spo2')},
+       respiration=CASE WHEN excluded.respiration IS NOT NULL THEN excluded.respiration ELSE wellness.respiration END,
+       respiration_manual=CASE
+         WHEN excluded.respiration IS NOT NULL THEN excluded.respiration_manual
+         WHEN excluded.respiration_manual = 1 THEN 1
+         ELSE wellness.respiration_manual END,
+       respiration_manual_at=CASE
+         WHEN excluded.respiration IS NOT NULL THEN excluded.respiration_manual_at
+         WHEN excluded.respiration_manual = 1 THEN excluded.respiration_manual_at
+         ELSE wellness.respiration_manual_at END,
        source=excluded.source,
        raw_json=excluded.raw_json,
        updated_at=excluded.updated_at`,
@@ -123,6 +164,14 @@ export function upsertWellness(db, userId, rec) {
     num(rec.readiness),
     num(rec.spO2),
     num(rec.respiration),
+    manual,
+    manualAt,
+    respManual,
+    respManualAt,
+    ...MANUAL_COLUMNS.flatMap((c) => {
+      const on = rec.manualFields?.[c]?.manual ? 1 : 0;
+      return [on, on ? rec.manualFields[c].at || localIso() : null];
+    }),
     NULLIF(rec.source) || 'intervals.icu',
     JSON.stringify(rec),
     localIso(),
@@ -131,15 +180,25 @@ export function upsertWellness(db, userId, rec) {
 }
 
 /** CSV import: never silently overwrite — merge non-null fields so a partial
- * CSV export does not erase API-synced columns. */
+ * CSV export does not erase API-synced columns. A CSV value is upstream data,
+ * so it clears a manual fallback just like API sync does. */
 export function mergeWellness(db, userId, rec, source) {
   const date = String(rec.date || '').slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
   const existing = db.prepare('SELECT * FROM wellness WHERE user_id = ? AND date = ?').get(userId, date);
   const pick = (a, b) => (a === null || a === undefined ? b : a);
+  const incomingHrv = num(rec.hrv);
+  const hrvManual = incomingHrv != null ? 0 : (existing?.hrv_manual || 0);
+  const hrvManualAt = incomingHrv != null ? null : (existing?.hrv_manual_at || null);
+  const incomingResp = num(rec.respiration);
+  const respManual = incomingResp != null ? 0 : (existing?.respiration_manual || 0);
+  const respManualAt = incomingResp != null ? null : (existing?.respiration_manual_at || null);
+  const extraFlags = MANUAL_COLUMNS.flatMap((c) => (
+    num(rec[REC_KEY[c]]) != null ? [0, null] : [existing?.[`${c}_manual`] || 0, existing?.[`${c}_manual_at`] || null]
+  ));
   const merged = {
     resting_hr: pick(num(rec.restingHR), existing?.resting_hr),
-    hrv_rmssd: pick(num(rec.hrv), existing?.hrv_rmssd),
+    hrv_rmssd: pick(incomingHrv, existing?.hrv_rmssd),
     hrv_sdnn: pick(num(rec.hrvSDNN), existing?.hrv_sdnn),
     sleep_secs: pick(num(rec.sleepSecs), existing?.sleep_secs),
     sleep_score: pick(num(rec.sleepScore), existing?.sleep_score),
@@ -149,28 +208,32 @@ export function mergeWellness(db, userId, rec, source) {
     kcal_consumed: pick(num(rec.kcalConsumed), existing?.kcal_consumed),
     readiness: pick(num(rec.readiness), existing?.readiness),
     spo2: pick(num(rec.spO2), existing?.spo2),
-    respiration: pick(num(rec.respiration), existing?.respiration),
+    respiration: pick(incomingResp, existing?.respiration),
   };
   if (!existing) {
     db.prepare(
       `INSERT INTO wellness(user_id,date,resting_hr,hrv_rmssd,hrv_sdnn,sleep_secs,sleep_score,steps,
-         weight,avg_sleeping_hr,kcal_consumed,readiness,spo2,respiration,source,raw_json,updated_at)
-       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         weight,avg_sleeping_hr,kcal_consumed,readiness,spo2,respiration,hrv_manual,hrv_manual_at,respiration_manual,respiration_manual_at,${MANUAL_FLAG_COLUMNS},source,raw_json,updated_at)
+       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,${'?,'.repeat(MANUAL_COLUMNS.length * 2)}?,?,?,?)`,
     ).run(
       userId, date,
       merged.resting_hr, merged.hrv_rmssd, merged.hrv_sdnn, merged.sleep_secs, merged.sleep_score, merged.steps,
       merged.weight, merged.avg_sleeping_hr, merged.kcal_consumed, merged.readiness, merged.spo2, merged.respiration,
+      hrvManual, hrvManualAt, respManual, respManualAt, ...extraFlags,
       NULLIF(source) || 'csv', JSON.stringify(rec), localIso(),
     );
     return true;
   }
   db.prepare(
     `UPDATE wellness SET resting_hr=?, hrv_rmssd=?, hrv_sdnn=?, sleep_secs=?, sleep_score=?, steps=?,
-       weight=?, avg_sleeping_hr=?, kcal_consumed=?, readiness=?, spo2=?, respiration=?, updated_at=?
+       weight=?, avg_sleeping_hr=?, kcal_consumed=?, readiness=?, spo2=?, respiration=?,
+       hrv_manual=?, hrv_manual_at=?, respiration_manual=?, respiration_manual_at=?,
+       ${MANUAL_COLUMNS.map((c) => `${c}_manual=?, ${c}_manual_at=?`).join(', ')}, updated_at=?
      WHERE user_id=? AND date=?`,
   ).run(
     merged.resting_hr, merged.hrv_rmssd, merged.hrv_sdnn, merged.sleep_secs, merged.sleep_score, merged.steps,
-    merged.weight, merged.avg_sleeping_hr, merged.kcal_consumed, merged.readiness, merged.spo2, merged.respiration, localIso(),
+    merged.weight, merged.avg_sleeping_hr, merged.kcal_consumed, merged.readiness, merged.spo2, merged.respiration,
+    hrvManual, hrvManualAt, respManual, respManualAt, ...extraFlags, localIso(),
     userId, date,
   );
   return true;
@@ -207,6 +270,113 @@ export function upsertActivity(db, userId, act, source = 'intervals.icu') {
     source, JSON.stringify(act), localIso(),
   );
   return true;
+}
+
+function isIsoDate(s) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const d = new Date(`${s}T12:00:00Z`);
+  return !Number.isNaN(+d) && d.toISOString().slice(0, 10) === s;
+}
+
+/**
+ * Store (or clear) one manually entered reading. Manual values are only a
+ * fallback: a later upstream sync with a real value overwrites them and clears
+ * the flag. Columns come from the constant specs below, never from input.
+ */
+function setManualField(db, userId, { date, value }, spec) {
+  const day = String(date || '').slice(0, 10);
+  if (!isIsoDate(day)) throw new Error('Ngày không hợp lệ.');
+  if (day > localDate()) throw new Error(`Không nhập ${spec.label} cho ngày trong tương lai.`);
+
+  const { column, manualColumn, manualAtColumn, key } = spec;
+  const row = db.prepare(`SELECT ${manualColumn} AS manual FROM wellness WHERE user_id = ? AND date = ?`).get(userId, day);
+  const empty = value === null || value === undefined || String(value).trim() === '';
+
+  if (empty) {
+    if (row?.manual !== 1) throw new Error(`Ngày này không có số ${spec.label} nhập tay để xoá.`);
+    db.prepare(
+      `UPDATE wellness SET ${column} = NULL, ${manualColumn} = 0, ${manualAtColumn} = NULL, updated_at = ? WHERE user_id = ? AND date = ?`,
+    ).run(localIso(), userId, day);
+    return { date: day, [key]: null, manual: false, manualAt: null };
+  }
+
+  const n = Number(value);
+  if (!spec.valid(n)) throw new Error(spec.rangeError);
+
+  const now = localIso();
+  if (!row) {
+    db.prepare(
+      `INSERT INTO wellness(user_id,date,${column},${manualColumn},${manualAtColumn},source,updated_at)
+       VALUES(?,?,?,1,?,?,?)`,
+    ).run(userId, day, n, now, 'manual', now);
+  } else {
+    db.prepare(
+      `UPDATE wellness SET ${column} = ?, ${manualColumn} = 1, ${manualAtColumn} = ?, updated_at = ? WHERE user_id = ? AND date = ?`,
+    ).run(n, now, now, userId, day);
+  }
+  return { date: day, [key]: n, manual: true, manualAt: now };
+}
+
+const MANUAL_HRV = {
+  key: 'hrv', label: 'HRV', column: 'hrv_rmssd', manualColumn: 'hrv_manual', manualAtColumn: 'hrv_manual_at',
+  valid: (n) => Number.isFinite(n) && n >= 1 && n <= 300,
+  rangeError: 'HRV phải trong khoảng 1–300 ms.',
+};
+
+// Same range the baseline accepts, so a saved value is never silently ignored.
+const MANUAL_RESPIRATION = {
+  key: 'respiration', label: 'nhịp thở', column: 'respiration', manualColumn: 'respiration_manual', manualAtColumn: 'respiration_manual_at',
+  valid: (n) => plausible('respiration', n),
+  rangeError: 'Nhịp thở phải trong khoảng 6–30 lần/phút. Nếu đo lại vẫn ngoài khoảng này lúc nghỉ, hãy hỏi bác sĩ.',
+};
+
+export const setManualHrv = (db, userId, entry) => setManualField(db, userId, entry, MANUAL_HRV);
+export const setManualRespiration = (db, userId, entry) => setManualField(db, userId, entry, MANUAL_RESPIRATION);
+
+function manualSpec(column, label, valid, rangeError) {
+  return { key: column, label, column, manualColumn: `${column}_manual`, manualAtColumn: `${column}_manual_at`, valid, rangeError };
+}
+const between = (lo, hi) => (n) => Number.isFinite(n) && n >= lo && n <= hi;
+
+/** Every metric the "nhập tay" card can write. Keys are wellness columns. */
+const MANUAL_SPECS = Object.freeze({
+  hrv_rmssd: MANUAL_HRV,
+  respiration: MANUAL_RESPIRATION,
+  resting_hr: manualSpec('resting_hr', 'nhịp tim nghỉ', (n) => plausible('resting_hr', n), 'Nhịp tim nghỉ phải trong khoảng 30–110 bpm.'),
+  sleep_secs: manualSpec('sleep_secs', 'giờ ngủ', (n) => Number.isFinite(n) && n > 0 && n <= 16 * 3600, 'Giờ ngủ phải lớn hơn 0 và không quá 16 giờ.'),
+  sleep_score: manualSpec('sleep_score', 'điểm ngủ', between(0, 100), 'Điểm ngủ phải trong khoảng 0–100.'),
+  steps: manualSpec('steps', 'số bước', (n) => Number.isInteger(n) && n >= 0 && n <= 200000, 'Số bước phải là số nguyên từ 0 đến 200.000.'),
+  spo2: manualSpec('spo2', 'SpO2', between(70, 100), 'SpO2 phải trong khoảng 70–100%.'),
+  weight: manualSpec('weight', 'cân nặng', between(20, 300), 'Cân nặng phải trong khoảng 20–300 kg.'),
+});
+
+/**
+ * Save one day of hand-entered readings. All values are checked before anything
+ * is written. A value equal to the stored one changes nothing, so re-saving a
+ * synced number never marks it manual. A blank clears a manual value and leaves
+ * a synced one alone. Returns the columns that changed.
+ */
+export function saveManualDay(db, userId, { date, values }) {
+  const day = String(date || '').slice(0, 10);
+  if (!isIsoDate(day)) throw new Error('Ngày không hợp lệ.');
+  if (day > localDate()) throw new Error('Không nhập cho ngày trong tương lai.');
+  const row = db.prepare('SELECT * FROM wellness WHERE user_id = ? AND date = ?').get(userId, day);
+  const isBlank = (v) => v === null || v === undefined || String(v).trim() === '';
+
+  const writes = [];
+  for (const [column, value] of Object.entries(values || {})) {
+    if (!Object.hasOwn(MANUAL_SPECS, column)) throw new Error('Chỉ số không hợp lệ.');
+    const spec = MANUAL_SPECS[column];
+    if (isBlank(value)) {
+      if (row?.[spec.manualColumn] === 1) writes.push({ spec, value: null });
+      continue;
+    }
+    const n = Number(value);
+    if (!spec.valid(n)) throw new Error(spec.rangeError);
+    if (row?.[column] !== n) writes.push({ spec, value: n });
+  }
+  for (const { spec, value } of writes) setManualField(db, userId, { date: day, value }, spec);
+  return { date: day, changed: writes.map((w) => w.spec.column) };
 }
 
 export function listWellnessRange(db, userId, oldest, newest) {

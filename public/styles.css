@@ -137,7 +137,7 @@ h3 { font-size: 17px; letter-spacing: -0.25px; line-height: 1.3; }
 .icon-btn.spin svg, .btn svg.spin { animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-input[type="text"], input[type="password"], input[type="number"], input[type="time"],
+input[type="text"], input[type="password"], input[type="number"], input[type="time"], input[type="date"],
 input[type="datetime-local"], input[type="file"], select, textarea {
   width: 100%; padding: 11px 13px; border-radius: 14px;
   border: 1px solid var(--line-2); background: rgba(4, 14, 9, 0.5); color: var(--ink);
@@ -272,12 +272,14 @@ input[type="file"] { padding: 9px 10px; font-size: 13px; color: var(--muted); }
     "hero hero factors"
     "mini mini factors"
     "load sleep factors"
+    "manual manual checkin"
     "history history checkin"
     "recent recent checkin";
   align-items: stretch;
 }
 .hero { grid-area: hero; }
 .mini-wrap { grid-area: mini; }
+.manual-card { grid-area: manual; }
 .factors-card { grid-area: factors; display: flex; flex-direction: column; }
 .factors-card .formula { margin-top: auto; padding-top: 14px; }
 .history-card { grid-area: history; }
@@ -453,6 +455,36 @@ input[type="file"] { padding: 9px 10px; font-size: 13px; color: var(--muted); }
 .stat-row .stat b { display: block; font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.4px; }
 .stat-row .stat span { font-size: 11px; color: var(--muted); }
 
+/* ---------- manual readings ---------- */
+.manual-body { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 18px; align-items: start; }
+.manual-form { display: flex; flex-direction: column; }
+.manual-form .field { margin: 0 0 10px; }
+.manual-who, .manual-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 10px; }
+.manual-field span small { font-size: 10.5px; color: var(--muted); }
+.manual-field em { font-size: 10.5px; font-style: normal; color: var(--muted); }
+.manual-field em.is-manual { color: #f6c445; }
+.manual-sleep { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.manual-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.manual-guide { margin-top: 12px; font-size: 12.5px; color: var(--ink-2); }
+.manual-guide summary { cursor: pointer; font-weight: 600; color: var(--ink); }
+.manual-guide ul { margin: 8px 0; padding-left: 18px; display: grid; gap: 4px; }
+.manual-guide p { margin: 0; color: var(--muted); }
+.manual-baseline { margin-top: 8px; padding: 0 4px; }
+[data-manual-log] { display: flex; flex-direction: column; gap: 6px; }
+.manual-log { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.manual-log-head { display: flex; justify-content: space-between; gap: 10px; padding: 0 4px 2px; font-size: 11px; color: var(--muted); }
+.manual-row {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 10px;
+  border: 1px solid var(--line); border-radius: 14px; background: rgba(255, 255, 255, 0.035);
+  color: var(--ink); text-align: left; cursor: pointer; transition: background .15s, border-color .15s;
+}
+.manual-row:hover { background: rgba(255, 255, 255, 0.07); border-color: var(--line-2); }
+.manual-date { min-width: 46px; font-size: 12px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.manual-num { flex: 1; min-width: 0; white-space: nowrap; font-size: 14px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.manual-num small { margin: 0 6px 0 3px; font-size: 10.5px; font-weight: 500; color: var(--muted); }
+.manual-row .confidence-chip { justify-content: center; min-width: 66px; }
+.manual-note { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+
 /* ---------- check-in ---------- */
 .level-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .level-btn {
@@ -616,6 +648,7 @@ tr:last-child td { border-bottom: 0; }
       "mini mini"
       "factors load"
       "factors sleep"
+      "manual manual"
       "checkin recent"
       "history history";
   }
@@ -661,7 +694,7 @@ tr:last-child td { border-bottom: 0; }
   }
   .today-grid {
     grid-template-columns: 1fr;
-    grid-template-areas: "hero" "mini" "factors" "history" "sleep" "load" "checkin" "recent";
+    grid-template-areas: "hero" "mini" "manual" "factors" "history" "sleep" "load" "checkin" "recent";
     gap: 14px;
   }
   .view-head { margin-bottom: 16px; }
@@ -690,6 +723,7 @@ tr:last-child td { border-bottom: 0; }
   .mini-label { font-size: 14px; }
   .mini-value { font-size: 28px; margin-top: 10px; }
   .spark { height: 36px; }
+  .manual-body { grid-template-columns: 1fr; gap: 12px; }
   .charts-grid { grid-template-columns: 1fr; }
   .tiers { gap: 6px; }
   .tier { padding: 11px 8px; }
