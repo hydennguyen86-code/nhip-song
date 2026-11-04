@@ -1,37 +1,124 @@
 # Nhịp Sống
 
-Ứng dụng web cá nhân theo dõi sức khoẻ và vận động cho gia đình, chạy trên Mac M1 Max và mở bằng trình duyệt trên iPhone cùng mạng Wi-Fi.
+Ứng dụng web cho cả nhà xem mỗi sáng: **hôm nay cơ thể hồi phục tới đâu và nên làm gì**. App chạy trên một máy Mac trong nhà, mọi người mở bằng trình duyệt trên điện thoại. Dữ liệu nằm trên máy của bạn.
 
-Dữ liệu lấy từ tài khoản **Intervals.icu** riêng của từng người (HUAWEI Watch → HUAWEI Health → Intervals.icu, và HRV qua Health Sync). App **chỉ đọc**, không bao giờ sửa hoặc xoá dữ liệu trên Intervals.icu.
+Có hai cách đưa số vào app: **tự động** từ Intervals.icu (ví dụ HUAWEI Watch), hoặc **nhập tay** từ app của vòng đeo (ví dụ Mi Band). Không có số từ Intervals.icu thì vẫn nhập tay được và có kết luận ngay.
 
-> Đây **không phải WHOOP**. App không tuyên bố tương đương điểm Recovery hay độ chính xác của WHOOP. Điểm hồi phục 0–100 trong app là **chỉ số tham khảo có công thức công khai**, tính từ mức nền của chính bạn; mọi đóng góp, phần thiếu và mức tin cậy đều hiển thị. Kết luận buổi sáng vẫn ưu tiên cảm giác của bạn hơn số đồng hồ.
+> Đây **không phải WHOOP** và **không phải thiết bị y tế**. Điểm 0–100 là chỉ số tham khảo có công thức công khai, tính theo mức nền của chính bạn. Cảm giác của bạn luôn được ưu tiên hơn số đồng hồ.
+
+<img src="docs/images/tong-quan.jpg" alt="Trang Hôm nay trên máy tính với điểm hồi phục, kết luận, số của hôm nay và phần giải thích điểm" width="760">
+
+*Mọi ảnh trong README đều chụp từ dữ liệu giả, không phải dữ liệu sức khoẻ thật.*
+
+## Tính năng
+
+| Nhóm | App làm được gì |
+| --- | --- |
+| **Buổi sáng** | Điểm hồi phục 0–100 và một hành động cụ thể cho hôm nay: giữ kế hoạch, giảm tải, ưu tiên hồi phục hoặc nghỉ |
+| **Minh bạch** | Thẻ *Vì sao điểm này?* nêu từng yếu tố, số điểm đóng góp, phần còn thiếu và mức tin cậy |
+| **Nguồn dữ liệu** | Hai mục *Tự động* và *Nhập tay*. Số đồng bộ thật sẽ thay số tay khi về sau |
+| **Nhập tay** | Nhịp tim nghỉ, giờ ngủ, HRV, nhịp thở, điểm ngủ, số bước, SpO2, cân nặng. Quản trị ghi được cho người nhà |
+| **Giấc ngủ** | So với nhu cầu của bạn, có kế hoạch tối nay cần ngủ bao nhiêu |
+| **Vận động** | Danh sách buổi tập và mục tiêu tải tuần theo mức hồi phục |
+| **Cảnh báo** | Nhịp thở tăng cùng nhịp tim nghỉ tăng hoặc HRV giảm thì chặn điểm ở 50. Báo triệu chứng nặng thì ẩn điểm và nhắc gọi 115 |
+| **Xu hướng** | Biểu đồ 7, 30, 90 ngày và mức nền cá nhân. Đánh dấu được số sai để loại khỏi nền |
+| **Nhật ký** | Ghi cảm giác và thói quen hằng ngày |
+| **Gia đình** | Mỗi người một tài khoản, dữ liệu tách riêng. Quản trị thấy các số trong form nhập tay của thành viên để nhập hộ, nhưng không xem được điểm, nhật ký hay buổi tập của họ |
+| **Riêng tư** | Không cần dịch vụ đám mây của app. API key được mã hoá, có sao lưu, nhập CSV, không cần cài thư viện npm |
+
+<img src="docs/images/xu-huong.jpg" alt="Trang Xu hướng với biểu đồ điểm hồi phục, HRV, nhịp tim nghỉ và giấc ngủ" width="760">
+
+## Bắt đầu nhanh
+
+Cần **Node.js 22.5 trở lên**. Người trong nhà chỉ cần trình duyệt, không phải cài gì.
+
+```bash
+git clone https://github.com/hydennguyen86-code/nhip-song.git
+```
+
+```bash
+cd nhip-song
+```
+
+```bash
+bash scripts/nhip start
+```
+
+Lệnh sẽ in địa chỉ để mở trên Mac và trên điện thoại. Lần đầu mở, app yêu cầu **tạo tài khoản quản trị**. Sau đó vào **Cài đặt → Quản lý gia đình** để tạo tài khoản cho từng người.
+
+**Muốn xem thử bằng dữ liệu giả, không đụng dữ liệu thật:**
+
+```bash
+NHIP_DATA_DIR=./demo-data node scripts/seed-demo.mjs
+```
+
+```bash
+PORT=8901 NHIP_DATA_DIR=./demo-data node server/index.mjs
+```
+
+Mở `http://127.0.0.1:8901`, đăng nhập bằng `admin`, `demo` hoặc `miband`, mật khẩu `demo-1234`. Xong thì xoá thư mục `demo-data`.
+
+## Người đeo Mi Band: làm từng bước
+
+Mi Band không đồng bộ được sang Intervals.icu, nên bạn chép số từ app **Mi Fitness** sang Nhịp Sống. Mỗi sáng mất khoảng một phút.
+
+**Chuẩn bị (làm một lần):**
+
+1. Nhờ người quản trị tạo tài khoản cho bạn trong app.
+2. Mở địa chỉ app trên điện thoại, đăng nhập và đổi mật khẩu.
+3. Trong Safari, chọn *Chia sẻ → Thêm vào MH chính* để mở nhanh như một ứng dụng.
+4. Trong Mi Fitness, bật theo dõi giấc ngủ và nhịp tim liên tục.
+
+**Mỗi sáng:**
+
+| 1. Sáng ra, chưa có số | 2. Mở mục Nhập tay | 3. Chép số từ Mi Fitness | 4. Xem kết luận |
+| --- | --- | --- | --- |
+| <img src="docs/images/chua-du-du-lieu.jpg" width="180" alt="Điểm hồi phục báo chưa đủ dữ liệu"> | <img src="docs/images/nhap-tay-trong.jpg" width="180" alt="Form nhập tay còn trống"> | <img src="docs/images/nhap-tay-dien-so.jpg" width="180" alt="Form đã điền nhịp tim nghỉ, giờ ngủ, điểm ngủ và SpO2"> | <img src="docs/images/ket-qua.jpg" width="180" alt="Điểm 47 và gợi ý giữ kế hoạch vừa sức"> |
+
+Bấm **Lưu ngày này** là điểm tính lại ngay. Chỉ điền ô bạn có:
+
+| Ô trong app | Lấy ở đâu trong Mi Fitness | Bắt buộc? |
+| --- | --- | --- |
+| Nhịp tim nghỉ | Mục Nhịp tim, số lúc nghỉ | **Nên có**, tính 25% điểm |
+| Giờ ngủ | Mục Giấc ngủ, đêm kết thúc vào sáng hôm đó | **Nên có**, tính 30% điểm |
+| Điểm ngủ | Mục Giấc ngủ | Không |
+| SpO2 | Mục SpO2, nếu vòng có đo trong đêm | Không |
+| Số bước | Mục Bước chân, nhập khi ngày đã kết thúc và chọn đúng ngày đó | Không |
+| Cân nặng | Cân của bạn | Không |
+| HRV, nhịp thở | Thường không có trên Mi Band, để trống | Không |
+
+Tên mục có thể khác tuỳ phiên bản Mi Fitness. Trong app, mục *Mi Band: lấy số ở đâu trong Mi Fitness?* nhắc lại bảng này.
+
+**Nên biết:**
+
+- **Lần đầu, nhập bù ít nhất 7 ngày trước.** App cần 7 ngày để biết nhịp tim nghỉ bình thường của bạn. Chạm vào từng dòng ngày để nhập, tối đa 30 ngày.
+- **Điểm kém chắc hơn khi không có HRV.** Các bài đánh giá ghi Band 9 và 9 Pro không có HRV, nên điểm tính từ nhịp tim nghỉ và giấc ngủ, độ tin cậy tối đa là "vừa".
+- **Nên dùng một thiết bị cố định.** Số của hai loại vòng không so được với nhau, đeo lẫn sẽ làm sai mức nền.
+- **Quên nhập cũng không sao.** Điểm hôm đó chưa có, các ngày khác không bị ảnh hưởng.
+
+| Người quản trị nhập hộ | Hướng dẫn ngay trong app | Mục Tự động khi còn thiếu số |
+| --- | --- | --- |
+| <img src="docs/images/quan-tri-ghi-cho.jpg" width="220" alt="Ô Ghi cho để quản trị chọn người cần nhập"> | <img src="docs/images/huong-dan-mi-band.jpg" width="220" alt="Hướng dẫn lấy số từ Mi Fitness trong thẻ nhập tay"> | <img src="docs/images/tu-dong.jpg" width="220" alt="Mục Tự động báo số còn thiếu và nút nhập tay phần thiếu"> |
 
 ---
 
 ## 1. Chạy lần đầu trên Mac
 
-Cần **Node.js 22.5 trở lên** (app dùng `node:sqlite`, không cần cài thư viện). Mac của bạn đã có Node 24 tại `/Users/admin/.local/opt/node-v24.22.1-darwin-arm64/bin/node`.
-
-```bash
-cd /Users/admin/Documents/nhip-song
-export NHIP_NODE=/Users/admin/.local/opt/node-v24.22.1-darwin-arm64/bin/node
-bash scripts/nhip start
-```
-
-Lệnh sẽ in ra:
+Xem [Bắt đầu nhanh](#bắt-đầu-nhanh) ở trên. Lệnh start in ra:
 
 - URL trên chính Mac: `http://127.0.0.1:8899`
 - URL cho iPhone cùng Wi-Fi: `http://192.168.x.x:8899` (đọc từ `ipconfig getifaddr en0`)
-
-Mở Safari trên Mac → màn hình đầu tiên yêu cầu **tạo tài khoản quản trị**.
+- URL qua Tailscale nếu máy có cài ([mục 18](#18-truy-cập-từ-xa-bằng-tailscale-tuỳ-chọn))
 
 Nếu Node không có sẵn:
 
 ```bash
-# Homebrew
 brew install node
-node --version  # cần >= 22.5
 ```
+
+Node nằm ngoài `PATH` thì đặt `NHIP_NODE` trỏ tới file chạy `node`.
+
+Với HUAWEI Watch, dữ liệu đi theo đường HUAWEI Health → Intervals.icu, và HRV qua Health Sync. App **chỉ đọc**, không bao giờ sửa hoặc xoá dữ liệu trên Intervals.icu.
 
 ## 2. Lệnh vận hành
 
@@ -46,7 +133,7 @@ node --version  # cần >= 22.5
 | `bash scripts/nhip seed` | Nạp dữ liệu giả để xem UI |
 | `bash scripts/nhip backup` | Sao lưu database + secret.key sang `backups/` |
 
-Bật lại sau khi Mac khởi động: thêm `bash /Users/admin/Documents/nhip-song/scripts/nhip start` vào *System Settings → General → Login Items* (dạng script, dùng Shortcut app hoặc launchagent tuỳ bạn). Không cần cài lại gì, dữ liệu nằm trong `data/`.
+Bật lại sau khi Mac khởi động: thêm `bash <thư-mục-app>/scripts/nhip start` vào *System Settings → General → Login Items* (dạng script, dùng Shortcut app hoặc launchagent tuỳ bạn). Không cần cài lại gì, dữ liệu nằm trong `data/`.
 
 ## 3. Tạo tài khoản
 
@@ -54,7 +141,7 @@ Bật lại sau khi Mac khởi động: thêm `bash /Users/admin/Documents/nhip-
 
 **Thêm người nhà**: admin đăng nhập → tab **Cài đặt** → phần *Quản lý gia đình* → nhập tên đăng nhập, tên hiển thị và mật khẩu tạm. Người nhà mở app bằng URL LAN, đăng nhập bằng mật khẩu tạm, **app bắt buộc đổi mật khẩu lần đầu**.
 
-Admin **không** mặc định xem được dữ liệu của thành viên. Mọi endpoint trả dữ liệu đều lọc theo user_id của phiên đăng nhập. Tính năng chia sẻ chủ động (người sở hữu cho phép rồi thu hồi) để ở giai đoạn sau.
+Admin **không** mặc định xem được điểm, nhật ký hay buổi tập của thành viên. Mọi endpoint trả dữ liệu đều lọc theo user_id của phiên đăng nhập. Ngoại lệ duy nhất là thẻ nhập tay: admin chọn được người ở ô *Ghi cho* để nhập hộ, nên thấy 30 ngày gần nhất của 8 chỉ số trong form đó. Tính năng chia sẻ chủ động (người sở hữu cho phép rồi thu hồi) để ở giai đoạn sau.
 
 ## 4. Kết nối Intervals.icu cho từng người
 
@@ -62,7 +149,7 @@ Mỗi người tự làm 4 bước này, **không gửi key cho ai** (kể cả 
 
 1. Mở `https://intervals.icu/settings` bằng tài khoản Intervals.icu của chính mình.
 2. Kéo xuống cuối trang, mục **Developer Settings** — ở đó có **API Key** (chuỗi ~25 ký tự) và **Athlete ID**. Copy cả hai.
-3. Ghi nhớ **Athlete ID** (dạng `i771592`, thấy ở cùng trang).
+3. Ghi nhớ **Athlete ID** (dạng `i123456`, thấy ở cùng trang).
 4. Trong app Nhịp Sống, tab **Cài đặt → Kết nối Intervals.icu**, dán Athlete ID và API key → bấm **Lưu và thử kết nối**.
 
 App sẽ gọi `GET /api/v1/athlete/{id}` để xác minh key. Key lưu trong SQLite đã mã hoá **AES-256-GCM**, với khoá nằm ở `data/secret.key` (quyền 0600, `.gitignore`). Key không bao giờ ghi ra log, không nằm trong frontend, không nằm trong backup JSON.
@@ -71,13 +158,20 @@ App sẽ gọi `GET /api/v1/athlete/{id}` để xác minh key. Key lưu trong SQ
 
 ## 5. Đồng bộ
 
-- **Thủ công**: nút *Đồng bộ ngay* trên trang Hôm nay.
+- **Thủ công**: nút *Đồng bộ ngay* trong thẻ *Số của hôm nay*, mục *Tự động*.
 - **Tự động**: admin đặt giờ (mặc định **06:30 Asia/Ho_Chi_Minh**) trong tab Cài đặt. Máy Mac phải bật và app phải chạy thì lịch mới kích hoạt.
 - Sync lỗi (key sai, timeout, rate limit) → hiển thị thông báo nhưng **giữ nguyên dữ liệu cũ**.
 
-### Nhập tay khi đồng bộ thiếu
+### Tự động hay nhập tay
 
-HUAWEI Health không xuất HRV và nhịp thở, còn Mi Band không đồng bộ được sang Intervals.icu. Trang **Hôm nay** có thẻ **Chỉ số khi đồng bộ thiếu** để điền cả ngày trên một form:
+Buổi sáng không phải chờ Intervals.icu. Trang **Hôm nay** có thẻ **Số của hôm nay** với hai mục, người dùng tự chọn. Mỗi máy nhớ lựa chọn riêng; chưa chọn thì có kết nối Intervals.icu sẽ mở **Tự động**, chưa có sẽ mở **Nhập tay**.
+
+- **Tự động**: hiện số hôm nay đã có và số còn thiếu (nhịp tim nghỉ, giấc ngủ, thêm HRV nếu người đó có HRV). Còn thiếu thì app tự hỏi Intervals.icu khi mở trang, tối đa 15 phút một lần, và có nút *Nhập tay phần thiếu*.
+- **Nhập tay**: điền cả ngày trên một form. Kết luận buổi sáng tính lại ngay sau khi lưu.
+
+Dù chọn mục nào, khi Intervals.icu có số thật cho đúng ngày, **số thật thay số tay**.
+
+HUAWEI Health không xuất HRV và nhịp thở, còn Mi Band không đồng bộ được sang Intervals.icu. Form nhập tay gồm:
 
 | Chỉ số | Đơn vị, khoảng nhận | App dùng vào |
 | --- | --- | --- |
@@ -97,16 +191,7 @@ Quy tắc:
 - Số tay vào ngay điểm hồi phục và mức nền. Để trống ô `tự nhập` rồi lưu là xoá số đó; số đồng bộ không bị đụng tới.
 - Sync trả `null` thì số tay được giữ. Sync hoặc CSV có số thật cho đúng ngày thì **số thật thay số tay**.
 
-### Dùng với Mi Band
-
-Mở Mi Fitness, xem từng mục rồi chép sang form (tên mục có thể khác tuỳ phiên bản):
-
-1. **Giấc ngủ:** giờ ngủ và điểm ngủ của đêm kết thúc vào buổi sáng ngày đang nhập.
-2. **Nhịp tim:** nhịp tim lúc nghỉ.
-3. **SpO2:** nếu vòng có đo trong đêm.
-4. **Số bước:** nhập khi ngày đã kết thúc, chọn đúng ngày đó.
-
-Mi Band 9 và 9 Pro không có HRV theo các bài đánh giá, nên ô HRV để trống. Điểm hồi phục khi đó tính từ nhịp tim nghỉ và giấc ngủ, độ tin cậy tối đa là "vừa". Lần đầu nên nhập bù ít nhất 7 ngày để có nền nhịp tim. Mỗi người nên dùng một thiết bị cố định, vì số của hai loại vòng không so được với nhau.
+Người đeo Mi Band xem [hướng dẫn từng bước](#người-đeo-mi-band-làm-từng-bước) ở đầu trang.
 
 ## 6. Nhập CSV (nếu chưa muốn đồng bộ API)
 
@@ -138,7 +223,7 @@ Vòng lớn ở giữa là **chỉ số hồi phục tham khảo**, không phả
 | HRV rMSSD (hoặc SDNN nếu chưa đủ rMSSD) | 45% | **ln(rMSSD)**. 60% đêm qua + 40% trung bình 7 ngày, z so với **trung vị 60 ngày** (độ lệch = 1,4826 × MAD, sàn 0,07 ≈ 7%). Báo vùng **SWC** = nền ± 0,5 độ lệch và **CV 7 ngày** (cảnh báo khi ≥ 1,5 × CV thường lệ). |
 | Nhịp tim nghỉ | 25% | đêm qua so với **trung vị 30 ngày**, độ lệch MAD (sàn 1 bpm); **đảo dấu** vì cao hơn là xấu |
 | Giấc ngủ | 30% | **so với nhu cầu, không so với trung bình của bạn**: % = ngủ / nhu cầu. Nhu cầu = nền (TB 30 đêm, kẹp 7h30–8h30; < 7 đêm thì 8h) + 20% nợ ngủ 7 đêm trước (tối đa 60 phút) + tối đa 45 phút nếu hôm qua tập nhiều hơn TB 28 ngày. 85% nhu cầu = 50 điểm; mỗi 10% ≈ 22 điểm. |
-| Nhịp thở | **0%** | **Cờ cảnh báo một chiều**, không cộng điểm. Bật khi đêm qua cao hơn trung vị 30 đêm ≥ max(1,5; 2 × độ lệch) lần/phút. Thở chậm hơn **không** được cộng điểm. Chưa có số → hiện "chưa có số", **không** hạ độ tin cậy. Có thể nhập tay từ HUAWEI Health ở thẻ *Chỉ số khi đồng bộ thiếu*. |
+| Nhịp thở | **0%** | **Cờ cảnh báo một chiều**, không cộng điểm. Bật khi đêm qua cao hơn trung vị 30 đêm ≥ max(1,5; 2 × độ lệch) lần/phút. Thở chậm hơn **không** được cộng điểm. Chưa có số → hiện "chưa có số", **không** hạ độ tin cậy. Có thể nhập tay từ HUAWEI Health ở thẻ *Số của hôm nay*, mục *Nhập tay*. |
 
 Mỗi phần đổi thành điểm con `50 + z × 22`, kẹp 2–99 (giấc ngủ: `50 + (% − 0,85) × 220`). Điểm cuối là trung bình có trọng số; thiếu phần nào thì **chia lại trọng số** và hạ độ tin cậy (3/3 = cao, 2 = vừa, 1 = thấp; HRV còn "sơ bộ" < 28 ngày thì tối đa "vừa"). Dải màu: **67–100 sẵn sàng**, **34–66 trung bình**, **0–33 cần hồi phục**.
 
@@ -389,15 +474,15 @@ Mặc định app chỉ chạy trong LAN, **không mở cổng router, không l�
 
 **Trên Mac (chủ máy chạy app):**
 
-- Đã cài Tailscale 1.104.2 vào `/Applications`, bật "Start on login" trong menu Tailscale để tự chạy sau khi khởi động lại.
-- Địa chỉ mạng riêng của Mac: `100.74.243.57` (cố định, không đổi khi đổi tên máy hay đổi Wi-Fi), tên MagicDNS: `m1-max.tail33a335.ts.net` (trước 11/2026 là `mac-nhip-song`, tên cũ không còn mở được).
-- Trang quản lý thành viên: https://login.tailscale.com/admin/users → *Invite external users* → nhập email của 5 người còn lại (mỗi người một tài khoản riêng).
+- Cài Tailscale vào `/Applications`, bật "Start on login" trong menu Tailscale để tự chạy sau khi khởi động lại.
+- Địa chỉ mạng riêng của Mac có dạng `100.x.y.z`, cố định dù đổi Wi-Fi. `bash scripts/nhip start` sẽ in ra địa chỉ này.
+- Trang quản lý thành viên: https://login.tailscale.com/admin/users → *Invite external users* → nhập email của những người còn lại (mỗi người một tài khoản riêng).
 
 **Trên iPhone từng người:**
 
 1. App Store → cài **Tailscale** (miễn phí).
 2. Mở app → *Log in* bằng đúng email được mời → bật VPN (có thể bật on-demand để tự kết nối).
-3. Safari → mở `http://100.74.243.57:8899` → Chia sẻ → *Thêm vào MH chính*. Địa chỉ này không bao giờ đổi, kể cả ở nhà. Đừng lưu địa chỉ `192.168.x.x`: router cấp lại số khác sau mỗi lần khởi động.
+3. Safari → mở `http://100.x.y.z:8899` → Chia sẻ → *Thêm vào MH chính*. Địa chỉ này không bao giờ đổi, kể cả ở nhà. Đừng lưu địa chỉ `192.168.x.x`: router cấp lại số khác sau mỗi lần khởi động.
 4. Đăng nhập tài khoản Nhịp Sống của riêng mình (admin tạo trong app, mục Cài đặt).
 
 **Lưu ý:**
