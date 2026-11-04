@@ -190,7 +190,7 @@ export function buildAdvice({ user, today, wellness, activities = [], checkin, s
   // ---- Insufficient data ----
   const measurable = reasons.filter((r) => ['rhr', 'hrv', 'sleep'].includes(r.kind)).length;
   if (measurable === 0) {
-    return finalize(VERDICT.UNKNOWN, LABEL[VERDICT.UNKNOWN], 'Chưa có đủ RHR / HRV / ngủ để kết luận. Hãy bấm Đồng bộ hoặc chờ thêm ngày.', reasons, gaps, { checkin, today, baselines, load });
+    return finalize(VERDICT.UNKNOWN, LABEL[VERDICT.UNKNOWN], 'Chưa có đủ RHR / HRV / ngủ để kết luận. Hãy đồng bộ hoặc nhập tay số hôm nay.', reasons, gaps, { checkin, today, baselines, load });
   }
 
   // ---- Quantitative signal aggregation (only the BAD direction counts) ----
