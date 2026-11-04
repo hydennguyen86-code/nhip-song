@@ -92,3 +92,14 @@ export function clearCookie() {
 export function ownedUserId(req) {
   return req.user ? req.user.id : null;
 }
+
+/** Hand-entered readings only (HRV, respiration): an admin may record them for a
+ * family member who cannot reach the app themselves. Returns the target id, or
+ * null when not allowed. */
+export function manualTargetUser(db, actor, requested) {
+  const id = Number(requested || 0);
+  if (!id || id === actor.id) return actor.id;
+  if (actor.role !== 'admin') return null;
+  const row = db.prepare('SELECT id FROM users WHERE id = ?').get(id);
+  return row ? row.id : null;
+}

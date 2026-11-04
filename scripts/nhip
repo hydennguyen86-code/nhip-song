@@ -24,7 +24,8 @@ case "${1:-status}" in
       LAN=$(ipconfig getifaddr en0 2>/dev/null || echo '(bạn tự xem Wi-Fi)')
       echo "Đã khởi động (PID $(cat "$PID_FILE"))."
       echo "  Trên Mac:      http://127.0.0.1:$PORT"
-      echo "  Trên iPhone:   http://$LAN:$PORT  (cùng Wi-Fi)"
+      echo "  Trên iPhone:   http://100.74.243.57:$PORT  (qua Tailscale, địa chỉ cố định)"
+      echo "  Cùng Wi-Fi:    http://$LAN:$PORT  (số này có thể đổi, đừng lưu)"
     else
       echo "Khởi động thất bại. Xem $LOG_FILE"; exit 1
     fi

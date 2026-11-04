@@ -8,12 +8,13 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { openDb, dataKey, localDate, localIso, encrypt, decrypt } from '../server/db.mjs';
-import { hashPassword, verifyPassword, createSession, sessionUser } from '../server/auth.mjs';
+import { hashPassword, verifyPassword, createSession, sessionUser, manualTargetUser } from '../server/auth.mjs';
 import { computeBaselines, compare, recentLoad, rollingMean } from '../server/baseline.mjs';
 import { buildAdvice } from '../server/advice.mjs';
 import { parseCsv, previewWellness, previewActivities } from '../server/csv.mjs';
-import { createUser, findUser, upsertWellness, upsertActivity, effectiveWellness, listActivitiesRange, listExclusions, excludeField, includeField, latestCheckin, addCheckin } from '../server/store.mjs';
+import { createUser, findUser, getUser, upsertWellness, upsertActivity, effectiveWellness, listActivitiesRange, listExclusions, excludeField, includeField, latestCheckin, addCheckin, setManualHrv, setManualRespiration, saveManualDay, mergeWellness } from '../server/store.mjs';
 import { syncUser } from '../server/sync.mjs';
+import { computeRecovery } from '../server/recovery.mjs';
 import * as icu from '../server/icu.mjs';
 
 function tmp(name = 'nhip-test') {
@@ -310,6 +311,257 @@ describe('sync error handling', () => {
     assert.equal(r.ok, false);
     assert.equal(r.skipped, true);
     assert.equal(db.prepare('SELECT COUNT(*) n FROM wellness WHERE user_id=?').get(a).n, 1);
+  });
+});
+
+describe('manual HRV fallback', () => {
+  test('stores a manual reading on a new day and marks it', () => {
+    const db = openDb(tmp());
+    const a = createUser(db, { username: 'abc', displayName: 'A', password: 'pwlong123' });
+    const entry = setManualHrv(db, a, { date: '2026-10-01', value: '65.5' });
+    assert.equal(entry.hrv, 65.5);
+    assert.equal(entry.manual, true);
+    const r = db.prepare('SELECT * FROM wellness WHERE user_id=? AND date=?').get(a, '2026-10-01');
+    assert.equal(r.hrv_rmssd, 65.5);
+    assert.equal(r.hrv_manual, 1);
+    assert.ok(r.hrv_manual_at);
+    assert.equal(r.source, 'manual');
+  });
+  test('adding manual HRV keeps other wellness fields', () => {
+    const db = openDb(tmp());
+    const a = createUser(db, { username: 'abc', displayName: 'A', password: 'pwlong123' });
+    upsertWellness(db, a, { date: '2026-10-01', restingHR: 52, sleepSecs: 28000 });
+    setManualHrv(db, a, { date: '2026-10-01', value: 64 });
+    const r = db.prepare('SELECT * FROM wellness WHERE user_id=? AND date=?').get(a, '2026-10-01');
+    assert.equal(r.resting_hr, 52);
+    assert.equal(r.sleep_secs, 28000);
+    assert.equal(r.hrv_rmssd, 64);
+    assert.equal(r.hrv_manual, 1);
+  });
+  test('sync with NULL HRV preserves the manual value and flag', () => {
+    const db = openDb(tmp());
+    const a = createUser(db, { username: 'abc', displayName: 'A', password: 'pwlong123' });
+    setManualHrv(db, a, { date: '2026-10-01', value: 64 });
+    upsertWellness(db, a, { date: '2026-10-01', restingHR: 52 });
+    const r = db.prepare('SELECT * FROM wellness WHERE user_id=? AND date=?').get(a, '2026-10-01');
+    assert.equal(r.hrv_rmssd, 64);
+    assert.equal(r.hrv_manual, 1);
+    assert.ok(r.hrv_manual_at);
+  });
+  test('sync with a real HRV replaces the manual value and clears the flag', () => {
+    const db = openDb(tmp());
+    const a = createUser(db, { username: 'abc', displayName: 'A', password: 'pwlong123' });
+    setManualHrv(db, a, { date: '2026-10-01', value: 64 });
+    upsertWellness(db, a, { date: '2026-10-01', hrv: 72 });
+    const r = db.prepare('SELECT * FROM wellness WHERE user_id=? AND date=?').get(a, '2026-10-01');
+    assert.equal(r.hrv_rmssd, 72);
+    assert.equal(r.hrv_manual, 0);
+    assert.equal(r.hrv_manual_at, null);
+  });
+  test('CSV HRV also overrides manual, while a blank CSV HRV preserves it', () => {
+    const db = openDb(tmp());
+    const a = createUser(db, { username: 'abc', displayName: 'A', password: 'pwlong123' });
+    setManualHrv(db, a, { date: '2026-10-01', value: 64 });
+    mergeWellness(db, a, { date: '2026-10-01', restingHR: 50 }, 'csv');
+    assert.equal(db.prepare('SELECT hrv_rmssd, hrv_manual FROM wellness WHERE user_id=? AND date=?').get(a, '2026-10-01').hrv_rmssd, 64);
+    mergeWellness(db, a, { date: '2026-10-01', hrv: 70 }, 'csv');
+    const r = db.prepare('SELECT hrv_rmssd, hrv_manual FROM wellness WHERE user_id=? AND date=?').get(a, '2026-10-01');
+    assert.equal(r.hrv_rmssd, 70);
+    assert.equal(r.hrv_manual, 0);
+  });
+  test('clearing a manual reading leaves other fields intact', () => {
+    const db = openDb(tmp());
+    const a = createUser(db, { username: 'abc', displayName: 'A', password: 'pwlong123' });
+    upsertWellness(db, a, { date: '2026-10-01', restingHR: 52, sleepSecs: 28000 });
+    setManualHrv(db, a, { date: '2026-10-01', value: 64 });
+    const cleared = setManualHrv(db, a, { date: '2026-10-01', value: null });
+    assert.equal(cleared.hrv, null);
+    const r = db.prepare('SELECT * FROM wellness WHERE user_id=? AND date=?').get(a, '2026-10-01');
+    assert.equal(r.hrv_rmssd, null);
+    assert.equal(r.hrv_manual, 0);
+    assert.equal(r.resting_hr, 52);
+    assert.equal(r.sleep_secs, 28000);
+  });
+  test('manual HRV is visible to effective/baseline reads', () => {
+    const db = openDb(tmp());
+    const a = createUser(db, { username: 'abc', displayName: 'A', password: 'pwlong123' });
+    setManualHrv(db, a, { date: '2026-10-01', value: 61.5 });
+    const rows = effectiveWellness(db, a, '2026-10-01', '2026-10-01');
+    assert.equal(rows[0].hrv_rmssd, 61.5);
+  });
+  test('rejects invalid dates, future dates and out-of-range values', () => {
+    const db = openDb(tmp());
+    const a = createUser(db, { username: 'abc', displayName: 'A', password: 'pwlong123' });
+    assert.throws(() => setManualHrv(db, a, { date: '2026-02-31', value: 64 }), /Ngày/);
+    assert.throws(() => setManualHrv(db, a, { date: '2999-01-01', value: 64 }), /tương lai/);
+    assert.throws(() => setManualHrv(db, a, { date: '2026-10-01', value: 0 }), /1–300/);
+    assert.throws(() => setManualHrv(db, a, { date: '2026-10-01', value: 301 }), /1–300/);
+    assert.throws(() => setManualHrv(db, a, { date: '2026-10-01', value: null }), /xoá/);
+  });
+  test('admin records for a family member, members cannot', () => {
+    const db = openDb(tmp());
+    const adminId = createUser(db, { username: 'abc', displayName: 'A', password: 'pwlong123', role: 'admin' });
+    const memberId = createUser(db, { username: 'def', displayName: 'B', password: 'pwlong123', role: 'member' });
+    const admin = getUser(db, adminId);
+    const member = getUser(db, memberId);
+    assert.equal(manualTargetUser(db, admin, memberId), memberId);
+    assert.equal(manualTargetUser(db, member, adminId), null);
+    assert.equal(manualTargetUser(db, member, memberId), memberId);
+    assert.equal(manualTargetUser(db, admin, null), adminId);
+    assert.equal(manualTargetUser(db, admin, 999), null);
+    assert.equal(manualTargetUser(db, member, ''), memberId);
+    setManualHrv(db, manualTargetUser(db, admin, memberId), { date: '2026-10-01', value: 58 });
+    assert.equal(effectiveWellness(db, memberId, '2026-10-01', '2026-10-01')[0].hrv_rmssd, 58);
+    assert.equal(effectiveWellness(db, adminId, '2026-10-01', '2026-10-01').length, 0);
+  });
+});
+
+describe('manual respiration', () => {
+  const row = (db, a, d = '2026-10-01') => db.prepare('SELECT * FROM wellness WHERE user_id=? AND date=?').get(a, d);
+  test('stores a reading on a new day and keeps other fields on an existing one', () => {
+    const db = openDb(tmp());
+    const a = createUser(db, { username: 'abc', displayName: 'A', password: 'pwlong123' });
+    const entry = setManualRespiration(db, a, { date: '2026-10-01', value: '14.5' });
+    assert.equal(entry.respiration, 14.5);
+    assert.equal(entry.manual, true);
+    assert.equal(row(db, a).respiration_manual, 1);
+    assert.equal(row(db, a).source, 'manual');
+    upsertWellness(db, a, { id: '2026-10-02', restingHR: 50, hrv: 70 });
+    setManualRespiration(db, a, { date: '2026-10-02', value: 15 });
+    const r = row(db, a, '2026-10-02');
+    assert.equal(r.resting_hr, 50);
+    assert.equal(r.hrv_rmssd, 70);
+    assert.equal(r.hrv_manual, 0);
+    assert.equal(r.respiration, 15);
+  });
+  test('sync with NULL keeps it, sync with a real value replaces it and clears the flag', () => {
+    const db = openDb(tmp());
+    const a = createUser(db, { username: 'abc', displayName: 'A', password: 'pwlong123' });
+    setManualRespiration(db, a, { date: '2026-10-01', value: 14 });
+    upsertWellness(db, a, { id: '2026-10-01', restingHR: 50, respiration: null });
+    assert.equal(row(db, a).respiration, 14);
+    assert.equal(row(db, a).respiration_manual, 1);
+    assert.ok(row(db, a).respiration_manual_at);
+    upsertWellness(db, a, { id: '2026-10-01', restingHR: 50, respiration: 16 });
+    assert.equal(row(db, a).respiration, 16);
+    assert.equal(row(db, a).respiration_manual, 0);
+    assert.equal(row(db, a).respiration_manual_at, null);
+  });
+  test('a blank CSV value keeps it, a CSV value replaces it', () => {
+    const db = openDb(tmp());
+    const a = createUser(db, { username: 'abc', displayName: 'A', password: 'pwlong123' });
+    setManualRespiration(db, a, { date: '2026-10-01', value: 14 });
+    mergeWellness(db, a, { date: '2026-10-01', restingHR: 50 }, 'csv');
+    assert.equal(row(db, a).respiration, 14);
+    assert.equal(row(db, a).respiration_manual, 1);
+    mergeWellness(db, a, { date: '2026-10-01', respiration: 16 }, 'csv');
+    assert.equal(row(db, a).respiration, 16);
+    assert.equal(row(db, a).respiration_manual, 0);
+  });
+  test('HRV and respiration flags are independent; clearing one leaves the other', () => {
+    const db = openDb(tmp());
+    const a = createUser(db, { username: 'abc', displayName: 'A', password: 'pwlong123' });
+    setManualHrv(db, a, { date: '2026-10-01', value: 60 });
+    setManualRespiration(db, a, { date: '2026-10-01', value: 14 });
+    setManualRespiration(db, a, { date: '2026-10-01', value: null });
+    assert.equal(row(db, a).respiration, null);
+    assert.equal(row(db, a).respiration_manual, 0);
+    assert.equal(row(db, a).hrv_rmssd, 60);
+    assert.equal(row(db, a).hrv_manual, 1);
+  });
+  test('rejects bad input and refuses to clear a synced value', () => {
+    const db = openDb(tmp());
+    const a = createUser(db, { username: 'abc', displayName: 'A', password: 'pwlong123' });
+    assert.throws(() => setManualRespiration(db, a, { date: '2026-02-31', value: 14 }), /Ngày/);
+    assert.throws(() => setManualRespiration(db, a, { date: '2999-01-01', value: 14 }), /tương lai/);
+    assert.throws(() => setManualRespiration(db, a, { date: '2026-10-01', value: 5.9 }), /6–30/);
+    assert.throws(() => setManualRespiration(db, a, { date: '2026-10-01', value: 31 }), /6–30/);
+    assert.throws(() => setManualRespiration(db, a, { date: '2026-10-01', value: 'abc' }), /6–30/);
+    upsertWellness(db, a, { id: '2026-10-01', respiration: 16 });
+    assert.throws(() => setManualRespiration(db, a, { date: '2026-10-01', value: null }), /xoá/);
+    assert.equal(row(db, a).respiration, 16);
+  });
+  test('an admin records for a member, and the reading reaches only that member', () => {
+    const db = openDb(tmp());
+    const adminId = createUser(db, { username: 'abc', displayName: 'A', password: 'pwlong123', role: 'admin' });
+    const memberId = createUser(db, { username: 'def', displayName: 'B', password: 'pwlong123', role: 'member' });
+    setManualRespiration(db, manualTargetUser(db, getUser(db, adminId), memberId), { date: '2026-10-01', value: 14 });
+    assert.equal(effectiveWellness(db, memberId, '2026-10-01', '2026-10-01')[0].respiration, 14);
+    assert.equal(effectiveWellness(db, adminId, '2026-10-01', '2026-10-01').length, 0);
+  });
+});
+
+describe('manual day form', () => {
+  const setup = () => {
+    const db = openDb(tmp());
+    return { db, a: createUser(db, { username: 'abc', displayName: 'A', password: 'pwlong123' }) };
+  };
+  const row = (db, a, d = '2026-10-01') => db.prepare('SELECT * FROM wellness WHERE user_id=? AND date=?').get(a, d);
+  test('saves every metric at once and marks each one manual', () => {
+    const { db, a } = setup();
+    const r = saveManualDay(db, a, { date: '2026-10-01', values: { resting_hr: 55, sleep_secs: 25200, sleep_score: 80, steps: 8000, spo2: 97, weight: 60.5, hrv_rmssd: 62, respiration: 15 } });
+    assert.equal(r.changed.length, 8);
+    const w = row(db, a);
+    assert.equal(w.resting_hr, 55);
+    assert.equal(w.sleep_secs, 25200);
+    assert.equal(w.resting_hr_manual, 1);
+    assert.ok(w.spo2_manual_at);
+    assert.equal(w.hrv_manual, 1);
+    assert.equal(w.respiration_manual, 1);
+  });
+  test('re-saving a synced value does not mark it manual, a blank leaves it alone', () => {
+    const { db, a } = setup();
+    upsertWellness(db, a, { id: '2026-10-01', restingHR: 50, sleepSecs: 25000 });
+    const r = saveManualDay(db, a, { date: '2026-10-01', values: { resting_hr: 50, sleep_secs: '', weight: 60 } });
+    assert.deepEqual(r.changed, ['weight']);
+    assert.equal(row(db, a).resting_hr_manual, 0);
+    assert.equal(row(db, a).sleep_secs, 25000);
+    assert.equal(row(db, a).weight_manual, 1);
+  });
+  test('a blank clears a manual value only', () => {
+    const { db, a } = setup();
+    saveManualDay(db, a, { date: '2026-10-01', values: { resting_hr: 55, steps: 8000 } });
+    assert.deepEqual(saveManualDay(db, a, { date: '2026-10-01', values: { resting_hr: '' } }).changed, ['resting_hr']);
+    assert.equal(row(db, a).resting_hr, null);
+    assert.equal(row(db, a).resting_hr_manual, 0);
+    assert.equal(row(db, a).steps, 8000);
+  });
+  test('one bad value rejects the whole form', () => {
+    const { db, a } = setup();
+    assert.throws(() => saveManualDay(db, a, { date: '2026-10-01', values: { resting_hr: 55, spo2: 40 } }), /SpO2/);
+    assert.equal(row(db, a), undefined);
+    assert.throws(() => saveManualDay(db, a, { date: '2026-10-01', values: { steps: 10.5 } }), /nguyên/);
+    assert.throws(() => saveManualDay(db, a, { date: '2026-10-01', values: { sleep_secs: 0 } }), /Giờ ngủ/);
+    assert.throws(() => saveManualDay(db, a, { date: '2026-10-01', values: { password: 1 } }), /không hợp lệ/);
+    assert.throws(() => saveManualDay(db, a, { date: '2999-01-01', values: { steps: 1 } }), /tương lai/);
+  });
+  test('sync with NULL keeps manual readings, a real value replaces them, a plain NULL still clears', () => {
+    const { db, a } = setup();
+    saveManualDay(db, a, { date: '2026-10-01', values: { resting_hr: 55, sleep_secs: 25200 } });
+    upsertWellness(db, a, { id: '2026-10-01', restingHR: null, sleepSecs: 26000 });
+    assert.equal(row(db, a).resting_hr, 55);
+    assert.equal(row(db, a).resting_hr_manual, 1);
+    assert.equal(row(db, a).sleep_secs, 26000);
+    assert.equal(row(db, a).sleep_secs_manual, 0);
+    upsertWellness(db, a, { id: '2026-10-01', restingHR: null, sleepSecs: null });
+    assert.equal(row(db, a).sleep_secs, null);
+  });
+  test('CSV blank keeps manual readings, CSV value replaces them', () => {
+    const { db, a } = setup();
+    saveManualDay(db, a, { date: '2026-10-01', values: { resting_hr: 55, weight: 60 } });
+    mergeWellness(db, a, { date: '2026-10-01', weight: 61 }, 'csv');
+    assert.equal(row(db, a).resting_hr_manual, 1);
+    assert.equal(row(db, a).weight, 61);
+    assert.equal(row(db, a).weight_manual, 0);
+  });
+  test('resting HR and sleep typed by hand produce a score without HRV', () => {
+    const { db, a } = setup();
+    for (let i = 1; i <= 10; i++) saveManualDay(db, a, { date: `2026-09-${String(i).padStart(2, '0')}`, values: { resting_hr: 55 + (i % 3), sleep_secs: 26000 } });
+    const wellness = effectiveWellness(db, a, '2026-09-01', '2026-09-10');
+    const r = computeRecovery({ wellness, today: '2026-09-10' });
+    assert.notEqual(r.score, null);
+    assert.equal(r.used, 2);
+    assert.equal(r.confidence, 'vừa');
   });
 });
 

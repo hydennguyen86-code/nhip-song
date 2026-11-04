@@ -9,16 +9,16 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { openDb, dataKey, localDate, localIso, getConfig, setConfig } from './db.mjs';
-import { createSession, sessionUser, destroySession, parseCookies, sessionCookie, clearCookie, SESSION_COOKIE, purgeExpiredSessions } from './auth.mjs';
-import { findUser, getUser, listUsers, createUser, setPassword, saveIcuKey, getIcuKey, clearIcuKey, upsertWellness, upsertActivity, effectiveWellness, listActivitiesRange, listWellnessRange, addCheckin, latestCheckin, listCheckins, excludeField, includeField, listExclusions, markSync, getAdviceSettings, setAdviceSettings } from './store.mjs';
+import { openDb, dataKey, localDate, localIso, getConfig, setConfig, MANUAL_COLUMNS } from './db.mjs';
+import { createSession, sessionUser, destroySession, parseCookies, sessionCookie, clearCookie, SESSION_COOKIE, purgeExpiredSessions, manualTargetUser } from './auth.mjs';
+import { findUser, getUser, listUsers, createUser, setPassword, saveIcuKey, getIcuKey, clearIcuKey, upsertWellness, upsertActivity, effectiveWellness, listActivitiesRange, listWellnessRange, addCheckin, latestCheckin, listCheckins, excludeField, includeField, listExclusions, markSync, getAdviceSettings, setAdviceSettings, saveManualDay } from './store.mjs';
 import { syncUser } from './sync.mjs';
 import { buildAdvice } from './advice.mjs';
 import { computeRecovery, recoveryHistory, buildSleepPlan, buildLoadTarget, buildMetrics, addDays, ACTIONS } from './recovery.mjs';
 import { JOURNAL_TAGS, normalizeTags, buildJournalInsights } from './journal.mjs';
 import { previewWellness, previewActivities } from './csv.mjs';
 import { computeBaselines } from './baseline.mjs';
-import { sickDatesFrom } from './signals.mjs';
+import { sickDatesFrom, priorValues, BASELINE_NEEDS } from './signals.mjs';
 import { startScheduler, getSchedule, setSchedule } from './scheduler.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -81,6 +81,31 @@ function requireAdmin(req, res) {
 
 function ip(req) {
   return req.socket?.remoteAddress || '';
+}
+
+const MANUAL_METRICS = ['hrv_rmssd', 'respiration', ...MANUAL_COLUMNS];
+const MANUAL_LOG_DAYS = 30;
+
+/** Newest days of every hand-enterable metric with manual flags, plus baseline progress. */
+function manualLog(db, userId, today) {
+  const rows = listWellnessRange(db, userId, addDays(today, -(MANUAL_LOG_DAYS - 1)), today);
+  const byDate = new Map(rows.map((r) => [r.date, r]));
+  const days = Array.from({ length: MANUAL_LOG_DAYS }, (_, i) => {
+    const date = addDays(today, -i);
+    const r = byDate.get(date);
+    const values = {};
+    const manual = {};
+    for (const c of MANUAL_METRICS) {
+      values[c] = r?.[c] ?? null;
+      manual[c] = r?.[`${c === 'hrv_rmssd' ? 'hrv' : c}_manual`] === 1;
+    }
+    return { date, values, manual };
+  });
+  const wellness = effectiveWellness(db, userId, addDays(today, -BASELINE_NEEDS.hrv_rmssd.windowDays), today);
+  const baseline = Object.fromEntries(Object.entries(BASELINE_NEEDS).map(([column, { windowDays, minDays }]) => (
+    [column, { have: priorValues(wellness, column, today, { windowDays }).length, need: minDays }]
+  )));
+  return { days, baseline };
 }
 
 /** The qualitative verdict wins over the index band when wording today's action. */
@@ -271,7 +296,27 @@ async function route(req, res) {
       recent: activities.slice(0, 4),
       checkin: checkin || null,
       journalTags: JOURNAL_TAGS,
+      manualLog: manualLog(db, req.user.id, today),
     });
+  }
+
+  // --- hand-entered readings for what the sync cannot deliver ---
+  if (p === '/api/wellness/manual' && method === 'GET') {
+    if (!requireUser(req, res)) return;
+    const target = manualTargetUser(db, req.user, u.searchParams.get('user'));
+    if (target == null) return json(res, 403, { error: 'Không có thành viên này.' });
+    return json(res, 200, manualLog(db, target, localDate()));
+  }
+  if (p === '/api/wellness/manual' && method === 'POST') {
+    if (!requireUser(req, res)) return;
+    const body = await readJson(req);
+    const target = manualTargetUser(db, req.user, body.user);
+    if (target == null) return json(res, 403, { error: 'Không có thành viên này.' });
+    try {
+      return json(res, 200, { ok: true, ...saveManualDay(db, target, { date: body.date, values: body.values }) });
+    } catch (e) {
+      return json(res, 400, { error: e.message });
+    }
   }
 
   // --- adjustable rule thresholds (spec: "có thể điều chỉnh hoặc vô hiệu hóa") ---
@@ -432,7 +477,7 @@ async function route(req, res) {
     if (!requireUser(req, res)) return;
     const body = await readJson(req);
     let counts = { wellness: 0, activities: 0, checkins: 0 };
-    for (const w of body.wellness || []) { if (upsertWellness(db, req.user.id, { date: w.date, restingHR: w.resting_hr, hrv: w.hrv_rmssd, hrvSDNN: w.hrv_sdnn, sleepSecs: w.sleep_secs, sleepScore: w.sleep_score, steps: w.steps, weight: w.weight, avgSleepingHR: w.avg_sleeping_hr, kcalConsumed: w.kcal_consumed, readiness: w.readiness, spO2: w.spo2, respiration: w.respiration })) counts.wellness++; }
+    for (const w of body.wellness || []) { if (upsertWellness(db, req.user.id, { date: w.date, restingHR: w.resting_hr, hrv: w.hrv_rmssd, hrvSDNN: w.hrv_sdnn, sleepSecs: w.sleep_secs, sleepScore: w.sleep_score, steps: w.steps, weight: w.weight, avgSleepingHR: w.avg_sleeping_hr, kcalConsumed: w.kcal_consumed, readiness: w.readiness, spO2: w.spo2, respiration: w.respiration, hrvManual: w.hrv_manual, hrvManualAt: w.hrv_manual_at, respirationManual: w.respiration_manual, respirationManualAt: w.respiration_manual_at, manualFields: Object.fromEntries(MANUAL_COLUMNS.map((c) => [c, { manual: w[`${c}_manual`], at: w[`${c}_manual_at`] }])) })) counts.wellness++; }
     for (const a of body.activities || []) { if (upsertActivity(db, req.user.id, { id: a.activity_id, start_date_local: a.start_date_local, name: a.name, type: a.type, moving_time: a.moving_time, elapsed_time: a.elapsed_time, distance: a.distance, total_elevation_gain: a.elevation, average_heartrate: a.avg_hr, max_heartrate: a.max_hr, average_watts: a.avg_watts, icu_training_load: a.training_load, rpe: a.rpe, icu_intensity: a.intensity }, a.source || 'restore')) counts.activities++; }
     for (const c of body.checkins || []) { if (c.local_date === localDate() || true) { /* historical checkins allowed */ } }
     return json(res, 200, { ok: true, counts });
