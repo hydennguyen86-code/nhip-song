@@ -2,6 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { AI_SCHEMA } from './ai-schema.mjs';
 
 export const APP_TZ = 'Asia/Ho_Chi_Minh';
 
@@ -113,6 +114,13 @@ CREATE TABLE IF NOT EXISTS advice_settings (
   strong_z REAL NOT NULL DEFAULT 2.0
 );
 
+CREATE TABLE IF NOT EXISTS daily_context (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  date TEXT NOT NULL,
+  data TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, date)
+);
 CREATE TABLE IF NOT EXISTS app_config (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
@@ -136,6 +144,7 @@ export function openDb(dir) {
     try { db.exec(`ALTER TABLE wellness ADD COLUMN ${c}_manual_at TEXT`); } catch { /* already there */ }
   }
   try { db.exec('ALTER TABLE checkins ADD COLUMN tags TEXT'); } catch { /* already there */ }
+  db.exec(AI_SCHEMA);
   return db;
 }
 

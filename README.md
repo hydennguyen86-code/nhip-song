@@ -21,11 +21,14 @@ App **cần HRV rMSSD mỗi đêm**. Không có HRV thì không có điểm và 
 | **Giấc ngủ** | So với nhu cầu của bạn, có kế hoạch tối nay cần ngủ bao nhiêu |
 | **Vận động** | Danh sách buổi tập và mục tiêu tải tuần theo mức hồi phục |
 | **Cần HRV** | Không có HRV rMSSD thì app không chấm điểm, không gợi ý tập, và nói rõ lý do: thiết bị không đo HRV, đang dựng nền, hay thiếu đêm qua |
-| **Cảnh báo** | Nhịp thở tăng cùng nhịp tim nghỉ tăng hoặc HRV giảm thì chặn điểm ở 50. Báo triệu chứng nặng thì ẩn điểm và nhắc gọi 115 |
+| **Cảnh báo** | Nhịp thở tăng cùng nhịp tim nghỉ tăng hoặc HRV giảm thì chặn điểm ở 50. Báo triệu chứng nặng thì ẩn điểm và nhắc gọi 115. HRV cao bất thường (z > 2,5) không được cộng điểm. Số bất thường kéo dài (HRV cao 2 đêm liền, hoặc nhịp tim nghỉ cao 3 ngày liền) chỉ ghi "Nên hỏi bác sĩ" |
 | **Xu hướng** | Biểu đồ 7, 30, 90 ngày và mức nền cá nhân. Đánh dấu được số sai để loại khỏi nền |
 | **Nhật ký** | Ghi cảm giác và thói quen hằng ngày |
+| **Bối cảnh** | Ghi nhanh hôm qua tập gì, mức tạ, xông hơi, cà phê, rượu bia, giờ lên giường, căng thẳng |
+| **Quy luật** | Code so sáng hôm sau với ngày có và không có yếu tố đó: HRV theo % và SWC, nhịp tim nghỉ, giấc ngủ, số ngày HRV còn thấp, độ chắc |
+| **AI (Haiku 5.5)** | Giải thích hôm nay, hỏi đáp, tóm tắt tuần Chủ nhật. Phân tích quý bằng Sonnet khi bấm |
 | **Gia đình** | Mỗi người một tài khoản, dữ liệu tách riêng. Quản trị thấy các số trong form nhập tay của thành viên để nhập hộ, nhưng không xem được điểm, nhật ký hay buổi tập của họ |
-| **Riêng tư** | Không cần dịch vụ đám mây của app. API key được mã hoá, có sao lưu, nhập CSV, không cần cài thư viện npm |
+| **Riêng tư** | Dữ liệu nằm trên máy Mac của bạn. Chỉ tính năng AI gửi số liệu đã rút gọn ra ngoài. API key Intervals.icu được mã hoá, có sao lưu, nhập CSV, không cần cài thư viện npm |
 
 <img src="docs/images/xu-huong.jpg" alt="Trang Xu hướng với biểu đồ điểm hồi phục, HRV, nhịp tim nghỉ và giấc ngủ" width="760">
 
@@ -46,6 +49,8 @@ bash scripts/nhip start
 ```
 
 Lệnh sẽ in địa chỉ để mở trên Mac và trên điện thoại. Lần đầu mở, app yêu cầu **tạo tài khoản quản trị**. Sau đó vào **Cài đặt → Quản lý gia đình** để tạo tài khoản cho từng người.
+
+Muốn bật tính năng AI, làm theo [Cài API key](#cài-api-key-không-đưa-lên-github). Không có key, mọi tính năng khác vẫn chạy.
 
 **Muốn xem thử bằng dữ liệu giả, không đụng dữ liệu thật:**
 
@@ -82,6 +87,124 @@ Khi chưa có HRV, trang Hôm nay hiện thẻ **Cần HRV** với một trong b
 | --- | --- | --- |
 | <img src="docs/images/can-hrv.jpg" width="220" alt="Thẻ Cần HRV khi thiết bị không gửi HRV"> | <img src="docs/images/quan-tri-ghi-cho.jpg" width="220" alt="Ô Ghi cho để quản trị chọn người cần nhập"> | <img src="docs/images/tu-dong.jpg" width="220" alt="Mục Tự động báo số còn thiếu và nút nhập tay phần thiếu"> |
 
+## AI phân tích (Claude Haiku 5.5)
+
+AI trong app **chỉ diễn đạt lại**. Điểm, kết luận và quy luật đều do code tính. AI chỉ đọc các con số đó rồi viết vài câu tiếng Việt.
+
+Có ba lớp:
+
+1. **Điểm hằng ngày** do code tính theo công thức ở mục 7.1. **Không dùng AI.**
+2. **Quy luật** do code tính theo thống kê (xem [Ghi bối cảnh và đọc quy luật](#ghi-bối-cảnh-và-đọc-quy-luật)). AI chỉ đọc bảng kết quả và viết lại.
+3. **Giải thích hôm nay, hỏi đáp và tóm tắt tuần** dùng **Claude Haiku 5.5**. Tóm tắt tuần có từ 18h Chủ nhật. **Phân tích quý** dùng **Sonnet 5.5**, chỉ chạy khi bạn bấm.
+
+### Dữ liệu gửi cho AI
+
+Gói dữ liệu chỉ có **số và nhãn**:
+
+- Ngày, điểm hồi phục, mức, độ tin cậy, kết luận của code, và có cần HRV hay không.
+- Từng yếu tố: tên, giá trị, mức nền, z, trạng thái. Có cờ nếu HRV cao bất thường.
+- Số liệu theo ngày: HRV, nhịp tim nghỉ, giờ ngủ, điểm. Lấy 14 ngày gần nhất. Hỏi đáp lấy 28 ngày, phân tích quý lấy 90 ngày.
+- Bối cảnh các ngày, dạng nhãn như "Tập chân" hay "Cà phê 3 ly". Trường riêng tư không bao giờ được gửi.
+- Quy luật: tên yếu tố, số lần, độ chắc, số liệu sáng hôm sau.
+- Dòng "nên hỏi bác sĩ" nếu có.
+
+**Không bao giờ gửi**: tên, tên đăng nhập, ghi chú tự do, triệu chứng, bệnh sử.
+
+Khi hỏi đáp, **câu hỏi bạn gõ cũng được gửi đi**. Đừng gõ tên người hay thông tin cá nhân vào đó.
+
+### Rào an toàn
+
+Các lớp này nằm trong code, không chỉ là lời nhắc gửi cho AI:
+
+- **Câu hỏi y khoa** (thuốc, bệnh, chẩn đoán) được trả lời ngay trên máy: "nên hỏi bác sĩ". **Không gọi API.**
+- **Câu trả lời của AI được lọc theo từng câu.** Câu nhắc đến chủ đề y khoa, hoặc giục "đẩy mạnh", "tăng tạ", đều bị bỏ. Nếu không còn câu nào, app hiện một câu cố định.
+- **Lời nhắc "nên hỏi bác sĩ"** do `alerts.mjs` tạo, không do AI tạo.
+- AI **không có công cụ** nào. Nó chỉ trả về chữ. Nó không đổi được lịch tập hay bất kỳ số liệu nào.
+
+### Chi phí và giới hạn
+
+- Giá dùng để ước tính chi phí trong app, tính theo USD cho mỗi triệu token (prompt tối đa 100k token):
+  - **Haiku 5.5**: $0,10 đầu vào, $0,50 đầu ra.
+  - **Sonnet 5.5**: $2 đầu vào, $10 đầu ra.
+- **Kết quả được lưu lại**, nên không gọi lại khi dữ liệu không đổi:
+  - Giải thích hôm nay: lưu theo ngày và dữ liệu. Dữ liệu đổi thì tính lại.
+  - Tóm tắt tuần: lưu theo tuần.
+  - Phân tích quý: lưu theo ngày và dữ liệu.
+  - Hỏi đáp **không** lưu, nên mỗi câu tốn một lượt. Câu hỏi y khoa trả lời trên máy thì không tốn.
+  - Kết quả lấy từ cache không tốn lượt.
+- **Giới hạn mặc định**:
+  - 15 lượt mỗi người mỗi ngày.
+  - 80 lượt cả server mỗi ngày.
+  - Phân tích quý (Sonnet): 2 lần mỗi người mỗi tháng.
+  - Tất cả chỉnh được trong `.env`, xem `.env.example`.
+- Mức dùng và chi phí ước tính hiện trong **Cài đặt**.
+- Nên đặt thêm **giới hạn chi tiêu hằng tháng** cho workspace Anthropic trong **Claude Console**. Đó là lớp bảo vệ thứ hai, ngoài giới hạn của app.
+
+## Cài API key (không đưa lên GitHub)
+
+Tính năng AI cần API key của Anthropic. Key chỉ nằm trong file `.env` trên máy Mac chạy server. Các tính năng khác không cần key.
+
+Trong thư mục app, trên Mac chạy server:
+
+```bash
+cp .env.example .env
+```
+
+Mở `.env` và điền dòng:
+
+```
+ANTHROPIC_API_KEY=...
+```
+
+Thay `...` bằng key của bạn. Sau đó khởi động lại:
+
+```bash
+bash scripts/nhip restart
+```
+
+Quy tắc:
+
+- `.env` nằm trong `.gitignore`, không được đưa lên GitHub.
+- Chỉ server đọc key. Key **không** gửi xuống trình duyệt, **không** lưu trong database, **không** ghi vào log.
+- App **không có ô nhập key trên web**. Đây là thiết kế có chủ đích.
+- Không dán key vào chat, commit hay ảnh chụp màn hình. Nếu lỡ dán, vào Claude Console thu hồi key đó rồi tạo key mới.
+
+## Ghi bối cảnh và đọc quy luật
+
+Bối cảnh là những việc xảy ra trong ngày: buổi tập, mức tạ, xông hơi, cà phê, rượu bia, giờ lên giường, căng thẳng. App dùng chúng để xem các buổi sáng sau đó khác đi thế nào.
+
+### Cách ghi
+
+- Trang **Hôm nay** có thẻ **"Hôm qua bạn đã làm gì?"** ngay dưới thẻ *Số của hôm nay*. Chạm chọn là xong, khoảng 15 giây. Dải 14 chấm bên dưới cho thấy ngày nào còn thiếu.
+- Ghi theo **ngày việc đã xảy ra**. Buổi chân hôm qua thì ghi vào hôm qua.
+- Tác động được đọc vào **các buổi sáng +1, +2, +3** sau đó. Ví dụ: tập chân hôm nay, app xem HRV và giấc ngủ của 3 buổi sáng kế tiếp.
+- Ghi bù được tối đa 60 ngày trước.
+- Ngày **chưa ghi** bối cảnh không được tính là "không có yếu tố". Buổi sáng chỉ được dùng khi 3 ngày trước đó đều đã ghi, nên **ghi đều mỗi ngày** quan trọng hơn ghi thật chi tiết.
+- Kết quả xem ở tab **Quy luật**.
+
+**Trường ghi triệu chứng sau tập** là trường riêng tư. App chỉ đếm số ngày có đánh dấu trong 90 ngày gần nhất, để bạn đưa cho bác sĩ. App **không phân tích** trường này và **không gửi** cho AI.
+
+### Cách app đọc quy luật (bằng lời thường)
+
+- Mỗi buổi sáng được so với **mức nền của chính bạn**: HRV, nhịp tim nghỉ, giấc ngủ.
+- App tính **cùng lúc mọi yếu tố** bằng hồi quy theo độ trễ: buổi sáng = mức chung + ảnh hưởng của từng yếu tố xảy ra 1, 2, 3 ngày trước. Nhờ vậy ảnh hưởng của tập chân được tách khỏi pickleball hay tập ngực nếu chúng hay đi liền nhau. (Cách so "ngày có / ngày không có" đơn giản bị nhiễu: ngày đối chứng của tập ngực lại toàn ngày sau tập chân, nên tập ngực trông như làm HRV *tăng*.)
+- Mỗi con số có **khoảng tin cậy 95%**. Khoảng nằm hẳn một phía của 0 thì mới gọi là khác biệt rõ. Yếu tố có dưới 4 lần thì chưa tính.
+- **1 SWC** là mức thay đổi HRV nhỏ nhất có ý nghĩa, bằng nửa độ lệch chuẩn của chính bạn.
+- Kết quả là **mô tả trên dữ liệu của bạn, không phải nhân quả**.
+- Nếu một yếu tố khác xuất hiện trong **ít nhất 40%** số lần và nhiều hơn hẳn bình thường (≥ 1,5 lần tỉ lệ thường ngày), app ghi là "thường đi kèm" để bạn biết hai thói quen hay đi cùng nhau. Nếu chúng **luôn** đi cùng nhau thì không thuật toán nào tách được; muốn biết riêng thì thỉnh thoảng làm tách ra.
+
+Mức độ chắc, theo HRV sáng hôm sau:
+
+| Mức | Khi nào |
+| --- | --- |
+| **rõ** | Ít nhất 8 lần có yếu tố, khoảng tin cậy **99%** không chứa 0 (chặt hơn vì app thử nhiều yếu tố cùng lúc), chênh lệch ≥ 1 SWC |
+| **có thể** | Chênh lệch ≥ 1 SWC nhưng ít hơn 8 lần, hoặc khoảng tin cậy còn chứa 0 |
+| **chưa thấy ảnh hưởng** | Ít nhất 8 lần, chênh lệch dưới 0,5 SWC, khoảng tin cậy nằm trong ±1 SWC |
+| **chưa rõ** | Các trường hợp còn lại, kể cả khi yếu tố **luôn trùng** với một yếu tố khác ("chưa tách được", ví dụ lịch cứng: tuần nào tập vai cũng đúng 2 ngày trước tập chân) |
+| **chưa đủ dữ liệu** | Dưới 4 lần có yếu tố, hoặc chưa đủ buổi sáng có 3 ngày ghi bối cảnh liền trước |
+
+> **Thật thà về tốc độ.** Buổi tập chân khoảng một lần mỗi tuần. Để đủ 8 lần, cần ghi đều đặn khoảng 2–3 tháng. Trước đó, kết quả thường chỉ ở mức "có thể", "chưa rõ" hoặc "chưa đủ dữ liệu". Đó không phải lỗi của app.
+
 ---
 
 ## 1. Chạy lần đầu trên Mac
@@ -90,7 +213,7 @@ Xem [Bắt đầu nhanh](#bắt-đầu-nhanh) ở trên. Lệnh start in ra:
 
 - URL trên chính Mac: `http://127.0.0.1:8899`
 - URL cho iPhone cùng Wi-Fi: `http://192.168.x.x:8899` (đọc từ `ipconfig getifaddr en0`)
-- URL qua Tailscale nếu máy có cài ([mục 18](#18-truy-cập-từ-xa-bằng-tailscale-tuỳ-chọn))
+- URL qua Tailscale nếu cả nhà dùng từ xa ([mục 18](#18-truy-cập-từ-xa-bằng-tailscale-tuỳ-chọn))
 
 Nếu Node không có sẵn:
 
@@ -209,6 +332,8 @@ Mỗi phần đổi thành điểm con `50 + z × 22`, kẹp 2–99 (giấc ng�
 
 **Mẫu hình ốm**: nhịp thở tăng **cùng lúc** với nhịp tim nghỉ tăng (z ≥ 1) hoặc HRV giảm (z ≤ −1) → điểm bị chặn ở 50 và kết luận buổi sáng ít nhất là "ưu tiên hồi phục".
 
+**HRV cao bất thường** (z > 2,5) không được cộng điểm. Một đêm HRV vọt lên có thể do nhịp không đều hoặc đo sai, không phải hồi phục tốt hơn.
+
 **Làm sạch nền**: giá trị vô lý (ngủ < 3h hoặc > 14h, RHR ngoài 30–110, HRV ngoài 5–250 ms, nhịp thở ngoài 6–30) và **ngày bạn báo "đang bệnh"** không vào mức nền. Đêm ngủ < 3h của *hôm nay* vẫn được tính (có thể là thức trắng thật) nhưng có ghi chú "nếu là lỗi đồng bộ, hãy đánh dấu sai".
 
 Vì sao đổi (v1 → v2):
@@ -273,11 +398,9 @@ Tải 7 ngày gần nhất chia cho trung bình tuần 28 ngày, hiển thị th
 
 Tải dùng `icu_training_load`; app nói rõ đây không phải thước đo đầy đủ cho tập sức mạnh, bơi hay yoga.
 
-### 7.5 Nhật ký và thói quen
+### 7.5 Cảm giác hằng ngày và bối cảnh
 
-Mỗi buổi sáng ghi cảm giác (bình thường / mệt / bệnh / triệu chứng nặng) và gắn thói quen tối qua: rượu, cà phê sau 14h, tập sau 19h, căng thẳng, ăn muộn, ốm.
-
-Sau khi một thói quen có **≥ 3 ngày** và có **≥ 3 ngày không có** thói quen đó, app so sánh điểm hồi phục **sáng hôm sau** giữa hai nhóm. Kết quả là mô tả ("thấp hơn trung bình X điểm"), **không phải quan hệ nhân quả**; app ghi rõ giới hạn này. Mẫu chưa đủ sẽ hiện tiến độ `2/3` thay vì bịa kết luận.
+Mỗi buổi sáng ghi cảm giác (bình thường / mệt / bệnh / triệu chứng nặng). Cảm giác luôn thắng số đồng hồ. Thói quen và buổi tập ghi ở thẻ **"Hôm qua bạn đã làm gì?"**, xem [Ghi bối cảnh và đọc quy luật](#ghi-bối-cảnh-và-đọc-quy-luật). Các tag nhật ký cũ (rượu, cà phê sau 14h, căng thẳng, ăn muộn, tập sau 19h) đã ghi trước đây vẫn được tính vào quy luật.
 
 ## 8. Mức nền — cách tính thật
 
@@ -299,15 +422,17 @@ Mức nền là **thống kê mô tả**, không phải ngưỡng chẩn đoán.
 
 - Có triệu chứng nặng → màn hình hôm nay hiện **thông báo đỏ, hướng dẫn gọi 115**, không cho phép "bỏ qua để tập".
 - App không chẩn đoán bệnh, không khẳng định "phục hồi tốt" chỉ vì HRV cao.
+- **Số bất thường kéo dài** (HRV cao 2 đêm liền, hoặc nhịp tim nghỉ cao 3 ngày liền) → app chỉ ghi **Nên hỏi bác sĩ**, không giải thích nguyên nhân.
 - App **không** phải thiết bị y tế; đây là công cụ tham khảo cho cá nhân.
 
 ## 10. Mạng & quyền riêng tư
 
-- App **chỉ chạy trong mạng LAN** tại nhà. Không tự động mở cổng router, không public Internet, không cloud.
+- App chạy trên Mac trong nhà. Mặc định **chỉ trong mạng LAN**. **Không tự động mở cổng router.**
 - Mọi endpoint API **bắt buộc session cookie HttpOnly**. Nếu mất cookie, không đọc được dữ liệu người khác.
 - Không tắt xác thực.
 - `data/`, `backups/`, `secret.key`, `*.env` đều ở `.gitignore`.
-- **Khi nào cần mở từ ngoài mạng** (chưa làm): Tailscale hoặc WireGuard là lựa chọn an toàn, vì chúng tạo mạng riêng ảo mà không mở cổng công khai. Cloudflare Tunnel + Access cũng ổn nhưng cần domain. Không dùng port-forward 8899 lên Internet.
+- **Từ ngoài mạng**: dùng Tailscale, xem [Một server cho cả nhà](#một-server-cho-cả-nhà-qua-tailscale). Không dùng port-forward 8899 lên Internet.
+- **Tính năng AI là ngoại lệ**: khi dùng, gói số liệu đã rút gọn và câu hỏi bạn gõ được gửi tới API của Anthropic. Không gửi tên, ghi chú hay triệu chứng. Database vẫn nằm trên Mac của bạn.
 - **OAuth**: nếu sau này app cho nhiều người ngoài gia đình dùng, chuyển sang OAuth 2.0 để mỗi người không phải dán API key. API key cá nhân **đủ cho bản gia đình**, chưa cần.
 
 ## 11. Sao lưu / khôi phục
@@ -339,7 +464,7 @@ bash scripts/nhip start
 ```bash
 bash scripts/nhip stop
 # thay/sửa code, rồi:
-bash scripts/nhip test    # 81 test unit
+bash scripts/nhip test    # 134 test unit
 bash scripts/nhip start   # dữ liệu vẫn nguyên trong data/
 ```
 
@@ -353,11 +478,17 @@ bash scripts/nhip start   # dữ liệu vẫn nguyên trong data/
 | "Intervals.icu tạm chặn" | Đã bấm *Đồng bộ ngay* quá nhiều lần trong ít phút. Chờ 60 giây. |
 | Sync lỗi nhưng dữ liệu mất | Không xảy ra theo thiết kế; nếu thấy, gửi log `scripts/nhip logs`. |
 | Quảng cáo đổi mật khẩu hiện liên tục | Bạn vẫn còn `must_change_pw=1` — vào Cài đặt → *Đổi mật khẩu*. |
+| "Chưa cấu hình ANTHROPIC_API_KEY" | Chưa điền key trong `.env`. Xem [Cài API key](#cài-api-key-không-đưa-lên-github). |
+| "API key không hợp lệ hoặc đã bị thu hồi" | Key sai hoặc đã bị thu hồi. Tạo key mới, sửa `.env`, rồi chạy `bash scripts/nhip restart`. |
+| "API đang giới hạn tốc độ hoặc đã chạm hạn mức chi tiêu" | Chờ một lúc. Kiểm tra hạn mức chi tiêu trong Claude Console. |
+| "Hôm nay bạn đã dùng hết … lượt AI" | Đã chạm giới hạn mỗi người mỗi ngày. Mai dùng tiếp, hoặc chỉnh `AI_USER_DAILY_CALLS` trong `.env`. |
+| Điện thoại không mở được `http://100.x.y.z:8899` | Kiểm tra Tailscale đã bật và điện thoại đã vào cùng tailnet. Mac phải đang thức và app đang chạy. |
 
 ## 14. Chi phí
 
-- **0 đồng** cho bản dùng trong nhà. Node.js, SQLite, Intervals.icu API đều miễn phí; máy Mac bạn đã có.
-- Tuỳ chọn trả phí: Tailscale Pro (nhiều thiết bị), Cloudflare Tunnel (nếu cần domain). Không cần cho bản gia đình.
+- **0 đồng** cho bản dùng trong nhà không có AI. Node.js, SQLite, Intervals.icu API đều miễn phí; máy Mac bạn đã có.
+- **Tính năng AI** tính tiền theo lượt dùng của API Anthropic. Xem [AI phân tích](#ai-phân-tích-claude-haiku-55).
+- Tailscale Personal miễn phí cho 6 người dùng, đủ cho gói gia đình. Tailscale Pro là tuỳ chọn nếu cần nhiều hơn.
 
 ## 15. Cấu trúc mã
 
@@ -375,10 +506,18 @@ server/
   recovery.mjs    chỉ số hồi phục 0–100, kế hoạch ngủ, mục tiêu tải tuần
   journal.mjs     thói quen + tương quan điểm hồi phục sáng hôm sau
   advice.mjs      quy tắc quyết định sáng, có red-flag
+  signals.mjs     hàm thống kê dùng chung (median, MAD, ngày, dữ liệu hợp lệ)
+  context.mjs     bối cảnh hằng ngày và các yếu tố có/không cho quy luật
+  patterns.mjs    quy luật: sáng hôm sau khi có yếu tố so với đối chứng
+  alerts.mjs      số bất thường: HRV cao, nhịp tim nghỉ cao → nên hỏi bác sĩ
+  ai.mjs          lớp AI: gói số liệu, rào an toàn, cache, giới hạn, chi phí
+  routes-ext.mjs  route bối cảnh, quy luật và AI
+  security.mjs    IP qua proxy, header bảo mật, khoá đăng nhập
+  env.mjs         đọc file .env (biến đã có sẵn thì giữ nguyên)
 public/
   index.html, styles.css, app.js  — vanilla JS, responsive (sidebar + bottom nav), SVG chart
 test/
-  all.test.mjs, recovery.test.mjs  — 81 unit test (node:test)
+  all.test.mjs, recovery.test.mjs, signals.test.mjs, insights.test.mjs  — 134 unit test (node:test)
 scripts/nhip, backup.sh, seed-demo.mjs
 ```
 
@@ -391,6 +530,9 @@ Không có `node_modules`. Không build. Không Docker (nếu bạn muốn Docke
 - `POST /api/wellness/hrv` — nhập/xoá HRV rMSSD thủ công cho một ngày (`{ date, value }`, `value: null` để xoá, thêm `user` khi ghi hộ).
 - `GET|POST /api/checkin` — nhật ký, tags thói quen và insights.
 - `GET /api/wellness`, `GET /api/activities`, `GET /api/baseline`, `GET /api/config/icu`, `POST /api/sync`.
+- `GET|POST /api/context` — bối cảnh một ngày (`{ date, data }`; `data` rỗng để xoá).
+- `GET /api/patterns` — bảng quy luật.
+- `GET /api/ai/status`, `POST /api/ai/explain`, `POST /api/ai/ask`, `GET /api/ai/weekly` (thêm `?generate=1` để tạo), `POST /api/ai/quarter`.
 
 ## 16. Kiểm thử
 
@@ -413,12 +555,20 @@ Bao phủ (đặc tả mục 11):
 - Advice: red-flag → emergency, tired beats HRV, thiếu dữ liệu → UNKNOWN.
 - Sync: không có key → skipped, giữ nguyên dữ liệu; API key trống → IcuError.
 - Session, đổi mật khẩu, vai trò member không đọc được endpoint admin.
+- Bối cảnh: trường lạ hoặc giá trị sai bị từ chối.
+- Quy luật: engine tìm đúng tác động của buổi tập chân đã gài sẵn trong dữ liệu thử.
+- HRV cao bất thường không được cộng điểm.
+- Cảnh báo bác sĩ: HRV cao 2 đêm liền, hoặc nhịp tim nghỉ cao 3 ngày liền.
+- Lọc AI: câu nhắc chủ đề y khoa và câu giục tăng cường độ bị bỏ.
+- Câu hỏi y khoa được trả lời trên máy, không gọi API.
+- API key không bao giờ được trả về trong phản hồi.
 
 **Chưa tự kiểm thử được**:
 
 - Kết nối Intervals.icu **thật bằng tài khoản của bạn** — cần bạn tự nhập API key trong app.
 - UI trên iPhone thật — cần bạn mở bằng Safari điện thoại và phản hồi.
 - Rate limit 429 thật — mock đã test, nhưng Intervals.icu docs không nêu con số cụ thể; code xử lý an toàn (giữ dữ liệu, thông báo, chờ).
+- Chất lượng câu trả lời AI trên dữ liệu thật của gia đình — cần bạn đọc và đánh giá.
 
 ## 17. So với WHOOP và khoa học
 
@@ -448,9 +598,45 @@ Tóm lại: app dùng **cùng hướng khoa học** (nền cá nhân, z-score, H
 
 Nguồn tham khảo chính: Bellenger et al. 2022 (tổng quan độ tin cậy WHOOP, PMC9505647), Plews & Laursen (baseline HRV tối thiểu 4 tuần, trung bình cuộn 7 ngày), Schmitt et al. 2015 (LnRMSSD, tần suất đo HRV), tài liệu công khai của WHOOP về Recovery.
 
+## Một server cho cả nhà qua Tailscale
+
+Cách dùng hiện tại. Chỉ có **một server** trên Mac ở nhà. Cả nhà vào cùng một địa chỉ từ 4G hay wifi khác. App **không lộ ra Internet**: không mở cổng router, không cần tên miền.
+
+1. **Mac ở nhà** chạy app như bình thường (`HOST=0.0.0.0`, mặc định). Cài Tailscale trên Mac và bật *Start on login*.
+2. **Mời từng người** vào tailnet: trong Tailscale admin console, chọn *Invite external users* và nhập email của từng người. Khoảng 6 người là đủ cho gói Personal.
+3. **Mỗi người** cài Tailscale trên điện thoại, đăng nhập bằng email được mời và bật VPN.
+4. **Mở địa chỉ** `http://<IP Tailscale của Mac>:8899`. Địa chỉ có dạng `100.x.y.z`, lệnh `scripts/nhip start` sẽ in ra. Thêm vào màn hình chính điện thoại.
+5. **Admin tạo tài khoản** cho từng người trong **Cài đặt → Quản lý gia đình**. Mỗi người một tài khoản riêng.
+
+Lưu ý:
+
+- Điện thoại phải bật Tailscale. Mac phải đang thức và app đang chạy. Chi tiết xem [mục 18](#18-truy-cập-từ-xa-bằng-tailscale-tuỳ-chọn).
+- Địa chỉ `100.x.y.z` chỉ vào được khi thiết bị nằm trong tailnet. **Không mở cổng 8899 trên router.**
+- Các lớp bảo vệ của app vẫn áp dụng: khoá đăng nhập sau 8 lần sai trong 15 phút (theo IP và theo tên đăng nhập), header bảo mật, cookie HttpOnly.
+- Code có thể chạy sau Cloudflare Tunnel về sau (`TRUST_PROXY=1`, `HOST=127.0.0.1`), nhưng hiện **không** dùng cách đó.
+
+## Máy ở công ty (chỉ để test)
+
+Máy ở công ty chỉ dùng để thử nghiệm, với dữ liệu giả. Chạy một bản riêng:
+
+```bash
+NHIP_DATA_DIR=./demo-data node scripts/seed-demo.mjs
+```
+
+```bash
+PORT=8901 NHIP_DATA_DIR=./demo-data node server/index.mjs
+```
+
+- Bản test có `.env` riêng, và có thể dùng chung API key.
+- Dữ liệu thật chỉ nằm trên Mac ở nhà. **Không đồng bộ** hai database với nhau.
+
+---
+
 ## 18. Truy cập từ xa bằng Tailscale (tuỳ chọn)
 
-Mặc định app chỉ chạy trong LAN, **không mở cổng router, không lộ ra internet công cộng**. Nếu muốn cả nhà mở app khi ra ngoài (4G, wifi cơ quan…), dùng **Tailscale** — mạng riêng ảo mã hoá đầu-cuối, gói Personal miễn phí cho **6 người dùng** (từ 04/2026), không cần tên miền, không tốn phí.
+Đây là cách hiện tại để cả nhà mở app khi ra ngoài. Các bước mời người nhà nằm ở mục [Một server cho cả nhà](#một-server-cho-cả-nhà-qua-tailscale).
+
+Dùng **Tailscale** — mạng riêng ảo mã hoá đầu-cuối, gói Personal miễn phí cho **6 người dùng** (từ 04/2026), không cần tên miền, không tốn phí.
 
 **Trên Mac (chủ máy chạy app):**
 
@@ -469,4 +655,5 @@ Mặc định app chỉ chạy trong LAN, **không mở cổng router, không l�
 
 - Mac phải **đang thức và app Nhịp Sống đang chạy** thì mới truy cập được. Bật *System Settings → Lock Screen → "Prevent automatic sleeping when display is off"* nếu muốn dùng 24/7.
 - Điện thoại phải **bật Tailscale** trước khi mở app. Tắt Tailscale là mất kết nối (đúng như thiết kế riêng tư).
+- Tailscale cần app nghe trên `0.0.0.0` (mặc định). Đừng đặt `HOST=127.0.0.1` khi dùng Tailscale.
 - Toàn bộ dữ liệu đi trong đường hầm mã hoá của Tailscale; app không phát sóng ra internet công cộng, không cần mở cổng router.
