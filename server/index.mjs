@@ -2,9 +2,16 @@
  * Nhịp Sống — HTTP server.
  * Zero npm dependencies: node:http + node:sqlite + node:crypto.
  *
- * Runs on the LAN. Binds to 0.0.0.0 by default so the iPhone can reach it, but
- * the router ports are NEVER opened. Do not expose this to the Internet.
+ * Two ways to run it:
+ *   - LAN only: HOST=0.0.0.0, plain HTTP inside the home network.
+ *   - Public via Cloudflare Tunnel: HOST=127.0.0.1 + TRUST_PROXY=1, cloudflared
+ *     forwards https://<your-host> to http://127.0.0.1:8899 (see README). Never
+ *     open router ports. Secure cookies, login limits and security headers are
+ *     in security.mjs; the first admin can only be created from the Mac itself.
+ *
+ * Secrets (ANTHROPIC_API_KEY) live in .env, loaded by env.mjs — never committed.
  */
+import './env.mjs';
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -20,6 +27,10 @@ import { previewWellness, previewActivities } from './csv.mjs';
 import { computeBaselines } from './baseline.mjs';
 import { sickDatesFrom, priorValues, BASELINE_NEEDS } from './signals.mjs';
 import { startScheduler, getSchedule, setSchedule } from './scheduler.mjs';
+import { handleExtRoutes } from './routes-ext.mjs';
+import { clientIp, viaProxy, isHttps, applySecurityHeaders, createLoginLimiter } from './security.mjs';
+
+const loginLimiter = createLoginLimiter();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -151,12 +162,18 @@ async function route(req, res) {
     const body = await readJson(req);
     const username = String(body.username || '').toLowerCase().trim();
     const password = String(body.password || '');
+    const limitKeys = [`ip:${clientIp(req)}`, `user:${username}`];
+    if (loginLimiter.blocked(limitKeys)) {
+      res.setHeader('Retry-After', String(loginLimiter.retryAfterSec(limitKeys)));
+      return json(res, 429, { error: 'Đăng nhập sai quá nhiều lần. Đợi 15 phút rồi thử lại.' });
+    }
     const user = findUser(db, username);
-    if (!user) { await delay(500); return json(res, 401, { error: 'Sai tên đăng nhập hoặc mật khẩu.' }); }
+    if (!user) { loginLimiter.fail(limitKeys); await delay(500); return json(res, 401, { error: 'Sai tên đăng nhập hoặc mật khẩu.' }); }
     const { verifyPassword } = await import('./auth.mjs');
-    if (!verifyPassword(password, user.pw_hash)) return json(res, 401, { error: 'Sai tên đăng nhập hoặc mật khẩu.' });
+    if (!verifyPassword(password, user.pw_hash)) { loginLimiter.fail(limitKeys); return json(res, 401, { error: 'Sai tên đăng nhập hoặc mật khẩu.' }); }
+    loginLimiter.reset(limitKeys);
     const token = createSession(db, user.id);
-    res.setHeader('Set-Cookie', sessionCookie(token, { secure: false }));
+    res.setHeader('Set-Cookie', sessionCookie(token, { secure: isHttps(req) }));
     return json(res, 200, { ok: true, user: { id: user.id, username: user.username, displayName: user.display_name, role: user.role, mustChangePw: !!user.must_change_pw } });
   }
   if (p === '/api/logout' && method === 'POST') {
@@ -185,11 +202,12 @@ async function route(req, res) {
   if (p === '/api/setup-admin' && method === 'POST') {
     const count = db.prepare('SELECT COUNT(*) AS n FROM users').get().n;
     if (count > 0) return json(res, 403, { error: 'Đã có tài khoản. Không tạo thêm admin công khai.' });
+    if (viaProxy(req)) return json(res, 403, { error: 'Tạo tài khoản quản trị đầu tiên trên chính máy chủ (http://127.0.0.1:8899), không qua Internet.' });
     const body = await readJson(req);
     try {
       const id = createUser(db, { username: body.username, displayName: body.displayName || body.username, password: body.password, role: 'admin' });
       const token = createSession(db, id);
-      res.setHeader('Set-Cookie', sessionCookie(token));
+      res.setHeader('Set-Cookie', sessionCookie(token, { secure: isHttps(req) }));
       return json(res, 200, { ok: true, id });
     } catch (e) { return json(res, 400, { error: e.message }); }
   }
@@ -494,6 +512,8 @@ async function route(req, res) {
   // --- debug endpoints ---
   if (p === '/api/health') return json(res, 200, { ok: true, tz: 'Asia/Ho_Chi_Minh', now: localIso() });
 
+  if (await handleExtRoutes({ p, method, u, req, res, db, json, readJson, requireUser, log })) return;
+
   return json(res, 404, { error: 'API not found.' });
 }
 
@@ -551,6 +571,7 @@ async function loadCsv() { csvModule = await import('./csv.mjs'); }
 function delay(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
 const server = http.createServer(async (req, res) => {
+  applySecurityHeaders(res);
   try {
     const u = new URL(req.url, 'http://localhost');
     if (u.pathname.startsWith('/api/')) {

@@ -19,6 +19,10 @@
  * person for hard training, so the app says so instead of guessing.
  * The result then carries `needsHrv: true` and `hrvGate` for the UI.
  *
+ * HRV far ABOVE baseline (last night z > 2.5) earns no bonus: a wrist rMSSD
+ * spike can be irregular beats or a bad reading. `alerts.doctor` is set by code
+ * (alerts.mjs) when readings stay unusual; it only says "nên hỏi bác sĩ".
+ *
  * Missing RHR/sleep lowers confidence; it is never silently filled in. A "sick" or
  * "tired" check-in caps the index, because self-report outranks the watch.
  * Implausible values (sleep < 3h, RHR outside 30–110, ...) and days reported
@@ -26,6 +30,7 @@
  */
 
 import { computeBaselines, rollingMean } from './baseline.mjs';
+import { unusualReadings, ALERT_RULES } from './alerts.mjs';
 import { hrvModel, rhrModel, sleepPerformance, sleepNeed, respiratorySignal, sickDatesFrom, plausible, SLEEP_PERF } from './signals.mjs';
 
 /** Respiration is no longer scored (one-sided illness flag, see signals.mjs). */
@@ -148,6 +153,7 @@ export function computeRecovery({ wellness, today, checkin, settings = DEFAULT_S
       confidence: '—',
       capped: 'triệu chứng nặng',
       illness: null,
+      alerts: null,
       note: 'Bạn báo triệu chứng nặng. Chỉ số hồi phục bị ẩn để không khuyến khích tập.',
     };
   }
@@ -155,16 +161,21 @@ export function computeRecovery({ wellness, today, checkin, settings = DEFAULT_S
   const factors = [];
   let hrv = null;
   let rhr = null;
+  const alerts = unusualReadings(wellness, today, { sickDates });
 
   {
     hrv = hrvModel(wellness, today, { sickDates });
     if (hrv.ready) {
+      // Unusually HIGH HRV last night: no bonus (never let a suspect spike turn the day green).
+      const suspectHigh = alerts.hrvHigh;
+      if (suspectHigh) hrv = { ...hrv, z: Math.min(hrv.z, 0) };
       const sub = subScore(hrv.z);
       const parts = [];
       if (hrv.acute) parts.push(`đêm qua ${hrv.acute.value.toFixed(0)} ms (${signed(hrv.acute.z)}σ)`);
       if (hrv.chronic) parts.push(`TB ${hrv.chronic.count} ngày ${hrv.chronic.value.toFixed(0)} ms (${signed(hrv.chronic.z)}σ, ${hrv.chronicState === 'inside' ? 'trong SWC' : hrv.chronicState === 'below' ? 'dưới SWC' : 'trên SWC'})`);
       let text = `HRV ${hrv.name}: ${parts.join('; ')}. Nền ${hrv.baselineMs.toFixed(0)} ms, vùng thay đổi nhỏ nhất có ý nghĩa ${hrv.swc.low.toFixed(0)}–${hrv.swc.high.toFixed(0)} ms (${hrv.daysAvailable} ngày, ${hrv.tier}).`;
       if (hrv.cv7?.high) text += ` HRV dao động mạnh bất thường 7 ngày qua (CV ${hrv.cv7.value.toFixed(0)}% so với thường ${hrv.cv7.typical.toFixed(0)}%).`;
+      if (suspectHigh) text += ` HRV đêm qua cao bất thường so với nền (z ${signed(alerts.hrvHighZ)} > ${ALERT_RULES.hrvHighZ}), nên không được cộng điểm.`;
       factors.push({
         ...factorBase('hrv', `HRV ${hrv.name}`),
         basis: hrv.basis,
@@ -177,6 +188,7 @@ export function computeRecovery({ wellness, today, checkin, settings = DEFAULT_S
         text,
         tier: hrv.tier,
         cvHigh: Boolean(hrv.cv7?.high),
+        suspectHigh,
       });
     } else {
       factors.push({
@@ -275,6 +287,7 @@ export function computeRecovery({ wellness, today, checkin, settings = DEFAULT_S
       weights: RECOVERY_WEIGHTS,
       needsHrv: true,
       hrvGate: gate,
+      alerts,
       note: gate.text,
     };
   }
@@ -327,6 +340,7 @@ export function computeRecovery({ wellness, today, checkin, settings = DEFAULT_S
     confidence,
     capped,
     illness,
+    alerts,
     explanation,
     weights: RECOVERY_WEIGHTS,
     note: 'Chỉ số tham khảo, công thức công khai: HRV ln (đêm qua + 7 ngày), nhịp tim nghỉ so trung vị, giấc ngủ so với nhu cầu. Nhịp thở là cờ cảnh báo, không cộng điểm. Không phải thuật toán WHOOP, không phải thiết bị y tế.',

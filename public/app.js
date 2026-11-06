@@ -109,7 +109,7 @@ const NAV = [
   { id: 'today', label: 'Hôm nay', icon: 'today' },
   { id: 'trends', label: 'Xu hướng', icon: 'trends' },
   { id: 'activities', label: 'Tập', icon: 'activities' },
-  { id: 'journal', label: 'Nhật ký', icon: 'journal' },
+  { id: 'journal', label: 'Quy luật', icon: 'journal' },
   { id: 'settings', label: 'Cài đặt', icon: 'settings' },
 ];
 
@@ -431,7 +431,7 @@ function factorRow(f) {
   const hasPts = Number.isFinite(f.contribution);
   const pts = hasPts ? `${f.contribution > 0 ? '+' : ''}${f.contribution} đ` : '';
   return `<div class="factor">
-    <div class="factor-top"><span class="factor-name">${esc(f.label)}</span><span class="factor-value">${esc(f.valueText)}</span></div>
+    <div class="factor-top"><span class="factor-name">${esc(f.label)}${f.suspectHigh ? '<span class="chip-suspect">cao bất thường · không cộng điểm</span>' : ''}</span><span class="factor-value">${esc(f.valueText)}</span></div>
     <div class="factor-mid"><span>${esc(f.basis)} · nền ${esc(f.meanText)}</span><span class="z-chip ${f.status}">${esc(z)}</span></div>
     <div class="zbar"><span class="zbar-zero"></span><span class="zbar-fill ${f.status}" style="left:${left.toFixed(1)}%;width:${fill.toFixed(1)}%"></span></div>
     <div class="factor-bottom"><span>${esc(f.text)}</span>${hasPts ? `<span class="pts ${f.contribution >= 0 ? 'up' : 'down'}">${esc(pts)}</span>` : '<span class="pts muted">bổ sung</span>'}</div>
@@ -537,7 +537,7 @@ function heroCard(d) {
         <div class="hero-band">${esc(r.bandLabel)}</div>
         <div class="hero-verdict"><span class="dot"></span>${esc(d.advice.label)}</div>
         <p class="hero-action">${esc(r.action)}</p>
-        <div class="hero-cta"><button class="btn small" data-go="trends">Xem xu hướng ${ICONS.chev}</button></div>
+        <div class="hero-cta"><button class="btn small" data-go="trends">Xem xu hướng ${ICONS.chev}</button> <button class="btn small" type="button" data-explain hidden>Vì sao hôm nay?</button></div>
       </div>
       ${weekStrip(d.history)}
     </div>
@@ -969,16 +969,12 @@ async function autoSyncIfMissing(view, d) {
 }
 
 
-function checkinFormHtml(tags, current) {
+function checkinFormHtml(current) {
   const level = current?.level || 'ok';
-  const chosen = new Set(current?.tags || []);
   return `<div class="checkin-form">
-    <div class="today-note">${current ? `Hôm nay đã ghi: <b>${esc(levelLabel(current.level))}</b>${current.tags?.length ? ' · ' + current.tags.map((t) => esc(tagLabel(tags, t))).join(', ') : ''}` : 'Chưa ghi cảm giác hôm nay.'}</div>
+    <div class="today-note">${current ? `Hôm nay đã ghi: <b>${esc(levelLabel(current.level))}</b>` : 'Chưa ghi cảm giác hôm nay.'}</div>
     <div class="level-grid" data-levels>
       ${[['ok', 'Bình thường'], ['tired', 'Mệt / ngủ kém'], ['sick', 'Đang bệnh'], ['serious', 'Triệu chứng nặng']].map(([id, label]) => `<button type="button" class="level-btn ${level === id ? 'selected' : ''}" data-level="${id}"><span class="dot"></span>${label}</button>`).join('')}
-    </div>
-    <div class="tag-row" data-tags>
-      ${tags.map((t) => `<button type="button" class="tag-btn ${chosen.has(t.id) ? 'selected' : ''}" data-tag="${t.id}">${esc(t.label)}</button>`).join('')}
     </div>
     <textarea data-note placeholder="Ghi chú: cảm giác, triệu chứng, giấc ngủ… (không bắt buộc)">${esc(current?.note || current?.symptoms || '')}</textarea>
     <div class="checkin-actions">
@@ -990,22 +986,14 @@ function checkinFormHtml(tags, current) {
 
 function tagLabel(tags, id) { return tags.find((t) => t.id === id)?.label || id; }
 
-function attachCheckin(root, tags) {
+function attachCheckin(root) {
   const box = root.querySelector('.checkin-form');
   if (!box) return;
   let level = box.querySelector('.level-btn.selected')?.dataset.level || 'ok';
-  const chosen = new Set([...box.querySelectorAll('.tag-btn.selected')].map((b) => b.dataset.tag));
   box.querySelectorAll('.level-btn').forEach((b) => {
     b.onclick = () => {
       level = b.dataset.level;
       box.querySelectorAll('.level-btn').forEach((x) => x.classList.toggle('selected', x === b));
-    };
-  });
-  box.querySelectorAll('.tag-btn').forEach((b) => {
-    b.onclick = () => {
-      const id = b.dataset.tag;
-      if (chosen.has(id)) chosen.delete(id); else chosen.add(id);
-      b.classList.toggle('selected', chosen.has(id));
     };
   });
   const save = box.querySelector('[data-save]');
@@ -1014,7 +1002,7 @@ function attachCheckin(root, tags) {
     save.disabled = true;
     const note = box.querySelector('[data-note]').value;
     try {
-      await api('/api/checkin', { method: 'POST', body: { level, note, symptoms: note, tags: [...chosen], redFlag: level === 'serious' ? 1 : 0 } });
+      await api('/api/checkin', { method: 'POST', body: { level, note, symptoms: note, tags: [], redFlag: level === 'serious' ? 1 : 0 } });
       toastMsg(level === 'serious' ? 'Đã ghi nhận. Hãy tìm hỗ trợ y tế.' : 'Đã lưu cảm giác hôm nay.');
       await renderView();
     } catch (e) { toastMsg(e.message); save.disabled = false; }
@@ -1024,7 +1012,7 @@ function attachCheckin(root, tags) {
 function checkinCard(d) {
   return `<div class="card checkin-card">
     <div class="card-head"><div class="card-title"><span class="ico-chip">${ICONS.leaf}</span><div><div class="eyebrow">Tinh thần</div><h3>Cảm giác hôm nay</h3></div></div></div>
-    ${checkinFormHtml(d.journalTags || [], d.checkin)}
+    ${checkinFormHtml(d.checkin)}
   </div>`;
 }
 
@@ -1070,8 +1058,13 @@ async function renderToday(view) {
       </div>
     </div>
     <div class="today-grid">
-      ${heroCard(d)}
+      <div class="hero-stack">
+        ${doctorBanner(d)}
+        ${heroCard(d)}
+        <div id="aiExplain"></div>
+      </div>
       ${manualCard(d)}
+      ${contextCardHtml()}
       ${miniWrap(d)}
       ${d.recovery.needsHrv ? '' : factorsCard(d)}
       ${historyCard(d)}
@@ -1109,8 +1102,10 @@ async function renderToday(view) {
       });
     };
   }
-  attachCheckin(view, d.journalTags || []);
+  attachCheckin(view);
   attachManualCard(view, d);
+  attachContext(view);
+  attachExplain(view);
   view.querySelectorAll('[data-go]').forEach((b) => {
     b.onclick = () => go(b.dataset.go);
     if (b.getAttribute('role') === 'button') b.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(b.dataset.go); } };
@@ -1253,69 +1248,357 @@ async function renderActivities(view) {
   });
 }
 
-/* ---------------- journal ---------------- */
-async function renderJournal(view) {
-  const d = await api('/api/checkin');
-  const ins = d.insights;
-  const journalDays = new Set(d.items.map((c) => c.local_date)).size;
-  const pendingHtml = ins.pending.length
-    ? `<div class="pending-list">${ins.pending.map((p) => `<div class="pending-row">
-        <span>${esc(p.label)}</span>
-        <span class="track"><span style="width:${Math.round((p.days / p.need) * 100)}%"></span></span>
-        <span class="small">${p.days}/${p.need}</span>
-      </div>`).join('')}</div>`
-    : '';
-  const emptyHtml = `<div class="journal-guide">
-    <p>Cần ít nhất <b>3 ngày</b> có cùng một thói quen để so sánh điểm hồi phục sáng hôm sau.</p>
-    <ol class="guide-steps">
-      <li><span>1</span><div><b>Ghi cảm giác mỗi sáng</b><small>Bình thường, mệt hoặc đang bệnh — mất khoảng 10 giây.</small></div></li>
-      <li><span>2</span><div><b>Gắn thói quen tối qua</b><small>Rượu, cà phê sau 14h, tập muộn, căng thẳng, ăn muộn…</small></div></li>
-      <li><span>3</span><div><b>Đối chiếu sau 3 lần</b><small>App so sánh điểm hồi phục hôm sau giữa ngày có và không có thói quen.</small></div></li>
-    </ol>
-    ${pendingHtml}
-  </div>`;
-  view.innerHTML = `
-    <div class="view-head"><div><h1>Nhật ký</h1><div class="view-sub">Ghi cảm giác và thói quen để đối chiếu với điểm hồi phục.</div></div></div>
-    <div class="charts-grid">
-      <div class="card">
-        <div class="card-head"><div><div class="eyebrow">Hôm nay</div><h3>Ghi cảm giác</h3></div></div>
-        ${checkinFormHtml(d.tags, d.items.find((x) => x.local_date === todayIso()))}
-      </div>
-      <div class="card">
-        <div class="card-head"><div><div class="eyebrow">Đối chiếu</div><h3>Thói quen và hôm sau</h3></div><span class="confidence-chip">${ins.insights.length ? `${ins.insights.length} thói quen` : `${journalDays} ngày ghi`}</span></div>
-        ${ins.insights.length ? ins.insights.map((i) => insightRow(i)).join('') : emptyHtml}
-        <div class="hint" style="margin-top:10px">${esc(ins.note)}</div>
-      </div>
-    </div>
-    <div class="card" style="margin-top:14px">
-      <div class="card-head"><div><h3>Lịch sử</h3></div><span class="confidence-chip">${d.items.length} mục</span></div>
-      ${d.items.length ? `<div class="timeline">${d.items.map((c) => {
-        const tags = (c.tags || []).map((t) => `<span>${esc(tagLabel(d.tags, t))}</span>`).join('');
-        return `<div class="tl-item"><span class="tl-dot ${esc(c.level)}"></span><div class="tl-main">
-          <b>${esc(fmtDate(c.local_date))}</b> · <span class="muted">${esc(levelLabel(c.level))}</span>
-          ${c.note || c.symptoms ? `<div class="tl-meta">${esc(c.note || c.symptoms)}</div>` : ''}
-          ${tags ? `<div class="tl-tags">${tags}</div>` : ''}
-        </div><div class="small">${esc(fmtDateTime(c.created_at))}</div></div>`;
-      }).join('')}</div>` : '<div class="empty">Chưa có mục nào.</div>'}
-    </div>`;
-  attachCheckin(view, d.tags);
+/* ---------------- AI helpers ---------------- */
+function getAiStatus(force) {
+  if (force || !state.aiStatusP) {
+    state.aiStatusP = api('/api/ai/status').catch(() => ({ configured: false, failed: true }));
+  }
+  return state.aiStatusP;
+}
+function aiErrText(e) {
+  const k = e?.data?.kind;
+  return ({
+    not_configured: 'Chưa bật AI trên máy chủ.',
+    cap_user: 'Bạn đã dùng hết lượt hỏi AI hôm nay.',
+    cap_global: 'Máy chủ đã hết lượt AI hôm nay.',
+    cap_deep: 'Đã hết lượt phân tích quý của tháng này.',
+    auth: 'Khoá API của AI không hợp lệ.',
+    rate: 'AI đang bận. Thử lại sau ít phút.',
+    http: 'Không gọi được AI. Thử lại sau.',
+    network: 'Không gọi được AI. Kiểm tra mạng của máy chủ.',
+  })[k] || e?.message || 'Có lỗi. Thử lại sau.';
+}
+function aiTextBox(r, title) {
+  const foot = r.local ? 'Viết sẵn trên máy, không gọi AI.' : `AI chỉ diễn giải số do app tính. Không thay lời khuyên y tế.${r.cached ? ' (đã lưu)' : ''}`;
+  return `<div class="ai-card card">${title ? `<h3>${esc(title)}</h3>` : ''}<div class="ai-text">${esc(r.text)}</div><div class="ai-foot">${esc(foot)}</div></div>`;
 }
 
-function insightRow(i) {
-  const down = i.delta < 0;
-  return `<div class="insight">
-    <div class="insight-head"><b>${esc(i.label)}</b><span class="delta ${down ? 'down' : 'up'}">${i.delta > 0 ? '+' : ''}${i.delta} điểm</span></div>
-    <div class="insight-bars">
-      <div class="insight-bar"><span style="width:92px">Có ${esc(i.label.toLowerCase())}</span><span class="track"><span class="fill tag" style="width:${Math.max(2, i.avgTagged)}%"></span></span><span>${i.avgTagged}</span></div>
-      <div class="insight-bar"><span style="width:92px">Ngày khác</span><span class="track"><span class="fill other" style="width:${Math.max(2, i.avgOther)}%"></span></span><span>${i.avgOther}</span></div>
-    </div>
-    <div class="small" style="margin-top:4px">${i.days} ngày có thói quen · điểm hồi phục sáng hôm sau</div>
+/* ---------------- today: doctor + explain ---------------- */
+function doctorBanner(d) {
+  const t = d.recovery?.alerts?.doctor?.text;
+  return t ? `<div class="doctor-banner" role="status">${esc(t)}</div>` : '';
+}
+
+async function attachExplain(view) {
+  const btn = view.querySelector('[data-explain]');
+  const slot = view.querySelector('#aiExplain');
+  if (!btn || !slot) return;
+  const st = await getAiStatus();
+  if (!st.configured || !btn.isConnected) return;
+  btn.hidden = false;
+  btn.onclick = async () => {
+    btn.disabled = true;
+    const old = btn.textContent;
+    btn.innerHTML = '<span class="spinner"></span>Đang hỏi…';
+    try {
+      const r = await api('/api/ai/explain', { method: 'POST', body: {} });
+      slot.innerHTML = aiTextBox(r, 'Giải thích (AI)');
+    } catch (e) {
+      slot.innerHTML = `<div class="ai-card card"><div class="ai-err">${esc(aiErrText(e))}</div></div>`;
+    }
+    btn.disabled = false;
+    btn.textContent = old;
+  };
+}
+
+/* ---------------- today: Bối cảnh ---------------- */
+function contextCardHtml() {
+  return `<div class="card context-card" data-ctx>
+    <div class="card-head"><div class="card-title"><span class="ico-chip" style="--chip:#7cc4ff">${ICONS.journal}</span><div><div class="eyebrow">Bối cảnh</div><h3>Hôm qua bạn đã làm gì?</h3></div></div></div>
+    <div data-ctx-body><div class="hint">Đang tải…</div></div>
+  </div>`;
+}
+
+function attachContext(view) {
+  const root = view.querySelector('[data-ctx-body]');
+  if (!root) return;
+  const S = { date: null, today: null, fields: [], recent: [], activities: [], draft: {}, labels: null, error: null, tok: 0 };
+
+  const dowOf = (iso) => ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'][new Date(iso + 'T12:00:00').getDay()];
+  const minDate = () => {
+    const t = new Date(S.today + 'T12:00:00'); t.setDate(t.getDate() - 60);
+    return new Intl.DateTimeFormat('en-CA').format(t);
+  };
+
+  function fieldHtml(f) {
+    const v = S.draft[f.id];
+    const label = `<div class="ctx-label">${esc(f.label)}</div>`;
+    let body = '';
+    if (f.type === 'multi' || f.type === 'choice') {
+      const sel = f.type === 'multi' ? (Array.isArray(v) ? v : []) : (v == null ? [] : [v]);
+      body = `<div class="ctx-chips">${(f.options || []).map((o) => `<button type="button" class="ctx-chip ${sel.includes(o.id) ? 'selected' : ''}" data-f="${esc(f.id)}" data-opt="${esc(o.id)}" aria-pressed="${sel.includes(o.id)}">${esc(o.label)}</button>`).join('')}</div>`;
+    } else if (f.type === 'count') {
+      const min = f.min ?? 0, max = f.max ?? 99;
+      body = `<div class="ctx-stepper"><button type="button" data-f="${esc(f.id)}" data-step="-1" aria-label="Giảm">−</button><output>${v ?? min}</output><button type="button" data-f="${esc(f.id)}" data-step="1" aria-label="Tăng">+</button></div>`;
+      void max;
+    } else if (f.type === 'bool') {
+      body = `<div class="ctx-chips"><button type="button" class="ctx-chip ${v ? 'selected' : ''}" data-f="${esc(f.id)}" data-bool="1" aria-pressed="${!!v}">${esc(f.label)}</button></div>`;
+      return `<div class="ctx-field ${f.private ? 'ctx-private' : ''}">${body}</div>`;
+    } else if (f.type === 'time') {
+      body = `<input type="time" data-f="${esc(f.id)}" data-time="1" value="${esc(v || '')}">`;
+    } else if (f.type === 'scale') {
+      body = `<div class="ctx-chips">${(f.labels || []).map((l, i) => `<button type="button" class="ctx-chip ${v === i ? 'selected' : ''}" data-f="${esc(f.id)}" data-scale="${i}" aria-pressed="${v === i}">${esc(l)}</button>`).join('')}</div>`;
+    }
+    return `<div class="ctx-field ${f.private ? 'ctx-private' : ''}">${label}${body}${f.private ? '<div class="hint" style="margin-top:6px">Chỉ để bạn đếm và báo bác sĩ. Không phân tích, không gửi AI.</div>' : ''}</div>`;
+  }
+
+  function stripHtml() {
+    const days = [...S.recent].reverse();
+    if (!days.length) return '';
+    return `<div class="ctx-strip" aria-label="14 ngày gần đây">${days.map((r) => `<button type="button" class="ctx-day ${r.logged ? 'logged' : ''} ${r.date === S.date ? 'current' : ''}" data-day="${esc(r.date)}" title="${esc(fmtDate(r.date))}${r.logged ? ': ' + esc((r.labels || []).join(', ')) : ': chưa ghi'}"><i></i><span>${esc(r.date.slice(8, 10))}</span></button>`).join('')}</div>`;
+  }
+
+  function render() {
+    const normal = S.fields.filter((f) => !f.private);
+    const priv = S.fields.filter((f) => f.private);
+    const act = S.activities.length
+      ? `<div class="ctx-intervals">Intervals.icu: ${S.activities.map((a) => `${esc(a.name)}${a.start ? ' ' + esc(a.start) : ''} · ${esc(a.minutes)} phút${a.load != null ? ' · tải ' + esc(a.load) : ''}`).join(' · ')}</div>`
+      : '';
+    root.innerHTML = `
+      <div class="ctx-date-row"><input type="date" data-ctx-date value="${esc(S.date)}" min="${esc(minDate())}" max="${esc(S.today)}"><span class="small muted">${esc(dowOf(S.date))}</span></div>
+      ${act}
+      ${normal.map(fieldHtml).join('')}
+      ${priv.map(fieldHtml).join('')}
+      ${S.error ? `<div class="ai-err">${esc(S.error)}</div>` : ''}
+      <div class="ctx-actions"><button class="btn primary small" type="button" data-ctx-save>Lưu bối cảnh</button></div>
+      ${S.labels ? `<div class="ctx-saved">${S.labels.length ? 'Đã ghi: ' + esc(S.labels.join(', ')) : 'Ngày này để trống.'}</div>` : ''}
+      ${stripHtml()}`;
+  }
+
+  async function load(date) {
+    const tok = ++S.tok;
+    try {
+      const r = await api('/api/context' + (date ? `?date=${encodeURIComponent(date)}` : ''));
+      if (tok !== S.tok || !root.isConnected) return;
+      Object.assign(S, { date: r.date, today: r.today, fields: r.fields || [], recent: r.recent || [], activities: r.activities || [], draft: JSON.parse(JSON.stringify(r.data || {})), labels: null, error: null });
+    } catch (e) {
+      if (tok !== S.tok || !root.isConnected) return;
+      S.error = e.message;
+      if (!S.fields.length) { root.innerHTML = `<div class="ai-err">${esc(e.message)}</div>`; return; }
+    }
+    render();
+  }
+
+  root.addEventListener('click', async (ev) => {
+    const t = ev.target.closest('button');
+    if (!t || !root.contains(t)) return;
+    if (t.dataset.day) return load(t.dataset.day);
+    if (t.hasAttribute('data-ctx-save')) {
+      t.disabled = true;
+      const data = {};
+      for (const [k, v] of Object.entries(S.draft)) if (v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && !v.length)) data[k] = v;
+      try {
+        const r = await api('/api/context', { method: 'POST', body: { date: S.date, data } });
+        S.draft = JSON.parse(JSON.stringify(r.data || {}));
+        S.labels = r.labels || [];
+        S.error = null;
+        const row = S.recent.find((x) => x.date === S.date);
+        const logged = Object.keys(S.draft).length > 0;
+        if (row) { row.logged = logged; row.labels = S.labels; }
+        toastMsg(logged ? 'Đã lưu' : 'Đã xoá bối cảnh ngày này');
+      } catch (e) { S.error = e.message; }
+      render();
+      return;
+    }
+    const f = S.fields.find((x) => x.id === t.dataset.f);
+    if (!f) return;
+    if (t.dataset.opt !== undefined) {
+      const id = t.dataset.opt;
+      if (f.type === 'choice') {
+        if (S.draft[f.id] === id) delete S.draft[f.id]; else S.draft[f.id] = id;
+      } else {
+        let arr = Array.isArray(S.draft[f.id]) ? [...S.draft[f.id]] : [];
+        if (arr.includes(id)) arr = arr.filter((x) => x !== id);
+        else if (id === 'rest') arr = ['rest'];
+        else arr = arr.filter((x) => x !== 'rest').concat(id);
+        if (arr.length) S.draft[f.id] = arr; else delete S.draft[f.id];
+      }
+    } else if (t.dataset.step) {
+      const min = f.min ?? 0, max = f.max ?? 99;
+      const cur = S.draft[f.id] ?? min;
+      const next = Math.max(min, Math.min(max, cur + Number(t.dataset.step)));
+      if (next === min) delete S.draft[f.id]; else S.draft[f.id] = next;
+    } else if (t.dataset.bool) {
+      if (S.draft[f.id]) delete S.draft[f.id]; else S.draft[f.id] = true;
+    } else if (t.dataset.scale !== undefined) {
+      const i = Number(t.dataset.scale);
+      if (S.draft[f.id] === i) delete S.draft[f.id]; else S.draft[f.id] = i;
+    } else return;
+    S.labels = null;
+    render();
+  });
+  root.addEventListener('change', (ev) => {
+    const t = ev.target;
+    if (t.matches('[data-ctx-date]')) { if (t.value) load(t.value); else t.value = S.date; return; }
+    if (t.matches('[data-time]')) {
+      if (t.value) S.draft[t.dataset.f] = t.value; else delete S.draft[t.dataset.f];
+      S.labels = null;
+    }
+  });
+  load();
+}
+
+/* ---------------- Quy luật (journal route) ---------------- */
+function confChip(c, label) {
+  const cls = { clear: 'green', possible: 'amber', none: '', unclear: '', insufficient: 'outline' }[c] ?? '';
+  const txt = { clear: 'rõ', possible: 'có thể', none: 'chưa thấy ảnh hưởng', unclear: 'chưa rõ', insufficient: 'chưa đủ dữ liệu' }[c] || label || c;
+  return `<span class="confidence-chip ${cls}">${esc(txt)}</span>`;
+}
+
+function curveHtml(f) {
+  const bars = [1, 2, 3].map((k) => {
+    const swc = f.lags?.find((l) => l.k === k)?.hrv?.swc;
+    const has = Number.isFinite(swc);
+    const h = has ? Math.min(Math.abs(swc) / 3, 1) * 50 : 0;
+    const cls = !has ? '' : swc <= -1 ? 'neg bad' : swc < 0 ? 'neg' : '';
+    const pos = swc < 0 ? `top:50%;height:${h}%` : `bottom:50%;height:${h}%`;
+    return `<div class="pat-bar" title="Ngày +${k}: ${has ? fmtNum(swc, 1) + ' SWC' : 'chưa có'}"><div class="plot">${has ? `<span class="${cls}" style="${pos}"></span>` : ''}</div><div>D+${k}</div><div>${has ? fmtNum(swc, 1) : '–'}</div></div>`;
+  }).join('');
+  return `<div class="pat-curve" aria-label="HRV theo SWC, ngày +1 đến +3"><div class="pat-bar" style="width:auto;justify-content:center;padding-right:2px"><div class="plot" style="display:flex;align-items:center">SWC</div><div>&nbsp;</div><div>&nbsp;</div></div>${bars}</div>`;
+}
+
+function patternCard(f) {
+  return `<div class="card pat-card">
+    <div class="pat-top"><b>${esc(f.label)}</b>${confChip(f.confidence, f.confidenceLabel)}</div>
+    <div class="pat-sum">${esc(f.summary)}</div>
+    <div class="pat-meta">${curveHtml(f)}<div class="pat-n">${esc(f.nEvents)} lần${f.nUsed ? `<br>${esc(f.nUsed)} sáng dùng được` : ''}</div></div>
+  </div>`;
+}
+
+function askRemaining(st) {
+  if (!st?.limits || !st.usage) return null;
+  return Math.max(0, (st.limits.userDailyCalls ?? 0) - (st.usage.todayCalls ?? 0));
+}
+
+async function renderJournal(view) {
+  const [st, pat, weekly, hist] = await Promise.all([
+    getAiStatus(true),
+    api('/api/patterns').catch((e) => ({ error: e.message })),
+    api('/api/ai/weekly').catch((e) => ({ available: false, reason: 'error', error: aiErrText(e) })),
+    api('/api/checkin').catch(() => null),
+  ]);
+  const dm = (x) => (x ? `${String(x).slice(8, 10)}/${String(x).slice(5, 7)}` : '—');
+  const wk = (w) => `Tóm tắt tuần ${dm(w.weekStart)} – ${dm(w.weekEnd)}`;
+  const rem = askRemaining(st);
+  const noKey = '<div class="hint">Chưa bật AI: thêm ANTHROPIC_API_KEY vào file .env trên máy chủ rồi khởi động lại.</div>';
+  const weeklyBody = (w) => w.available ? `<div class="ai-text">${esc(w.text)}</div><div class="ai-foot">AI chỉ diễn giải số do app tính. Không thay lời khuyên y tế.</div>`
+    : w.reason === 'not_configured' ? noKey
+    : w.reason === 'not_generated' && st.configured ? '<div class="hint"><span class="spinner"></span>Đang tạo tóm tắt tuần…</div>'
+    : `<div class="hint">${esc(w.error || 'Chưa có tóm tắt tuần này.')}</div>`;
+
+  const patHtml = pat.error ? `<div class="card pat-card"><div class="ai-err">${esc(pat.error)}</div></div>`
+    : `<p class="pat-head">Đã ghi bối cảnh ${esc(pat.loggedDays ?? 0)} ngày</p>
+      ${(pat.factors || []).map(patternCard).join('') || '<div class="card pat-card"><div class="empty">Chưa có thói quen nào để so sánh. Hãy ghi bối cảnh mỗi ngày ở trang Hôm nay.</div></div>'}
+      ${pat.symptomDays > 0 ? `<p class="hint" style="margin-top:12px">Có cơn tê/run sau tập: ${esc(pat.symptomDays)} ngày trong ${esc(pat.symptomWindowDays)} ngày gần nhất. Ghi lại để báo bác sĩ.</p>` : ''}
+      ${pat.note ? `<p class="hint" style="margin-top:10px">${esc(pat.note)}</p>` : ''}`;
+
+  view.innerHTML = `
+    <div class="view-head"><div><h1>Quy luật</h1><div class="view-sub">Thói quen nào ảnh hưởng đến hồi phục của riêng bạn.</div></div></div>
+    <div class="settings-stack">
+      <div class="card" id="weeklyCard">
+        <div class="card-head"><div><div class="eyebrow">Tuần</div><h3>${esc(wk(weekly))}</h3></div></div>
+        <div id="weeklyBody">${weeklyBody(weekly)}</div>
+      </div>
+
+      <div class="card" id="askCard">
+        <div class="card-head"><div><div class="eyebrow">AI</div><h3>Hỏi AI</h3></div></div>
+        ${st.configured ? '' : noKey}
+        <textarea id="askQ" maxlength="500" placeholder="Ví dụ: Tuần này nên dồn buổi tập chân vào ngày nào?" ${st.configured ? '' : 'disabled'}></textarea>
+        <div class="ask-row"><span class="hint" id="askLeft">${rem == null ? '' : `Còn ${rem} lượt hôm nay`}</span><button class="btn primary small" id="askGo" ${st.configured ? '' : 'disabled'}>Gửi</button></div>
+        <div id="askOut"></div>
+      </div>
+
+      <div id="patterns">${patHtml}</div>
+
+      <div class="card" id="quarterCard">
+        <div class="card-head"><div><div class="eyebrow">Sâu hơn</div><h3>Cả quý</h3></div></div>
+        <button class="btn small" id="quarterGo" ${st.configured ? '' : 'disabled'}>Phân tích cả quý (Sonnet)</button>
+        <div class="hint" style="margin-top:8px">Tối đa ${esc(st.limits?.deepPerMonth ?? '—')} lần/tháng, chi phí cao hơn Haiku.</div>
+        <div id="quarterOut"></div>
+      </div>
+
+      ${hist ? `<div class="card">
+        <div class="card-head"><div><h3>Lịch sử cảm giác</h3></div><span class="confidence-chip">${hist.items.length} mục</span></div>
+        ${hist.items.length ? `<div class="timeline">${hist.items.map((c) => {
+          const tags = (c.tags || []).map((t) => `<span>${esc(tagLabel(hist.tags || [], t))}</span>`).join('');
+          return `<div class="tl-item"><span class="tl-dot ${esc(c.level)}"></span><div class="tl-main">
+            <b>${esc(fmtDate(c.local_date))}</b> · <span class="muted">${esc(levelLabel(c.level))}</span>
+            ${c.note || c.symptoms ? `<div class="tl-meta">${esc(c.note || c.symptoms)}</div>` : ''}
+            ${tags ? `<div class="tl-tags">${tags}</div>` : ''}
+          </div><div class="small">${esc(fmtDateTime(c.created_at))}</div></div>`;
+        }).join('')}</div>` : '<div class="empty">Chưa có mục nào.</div>'}
+      </div>` : ''}
+    </div>`;
+
+  const alive = () => view.isConnected && state.view === 'journal';
+  const refreshLeft = async () => {
+    const s2 = await getAiStatus(true);
+    const left = view.querySelector('#askLeft');
+    const r = askRemaining(s2);
+    if (left && r != null) left.textContent = `Còn ${r} lượt hôm nay`;
+  };
+
+  // weekly: generate once when AI is on but nothing was made yet
+  if (!weekly.available && weekly.reason === 'not_generated' && st.configured) {
+    api('/api/ai/weekly?generate=1').then((w) => {
+      if (!alive()) return;
+      view.querySelector('#weeklyBody').innerHTML = weeklyBody(w.available ? w : { ...w, available: false, reason: 'error', error: 'Chưa tạo được tóm tắt.' });
+      refreshLeft();
+    }).catch((e) => {
+      if (alive()) view.querySelector('#weeklyBody').innerHTML = `<div class="ai-err">${esc(aiErrText(e))}</div>`;
+    });
+  }
+
+  const askGo = view.querySelector('#askGo');
+  askGo.onclick = async () => {
+    const q = view.querySelector('#askQ').value.trim();
+    const out = view.querySelector('#askOut');
+    if (!q) { out.innerHTML = '<div class="ai-err">Hãy nhập câu hỏi trước.</div>'; return; }
+    askGo.disabled = true;
+    out.innerHTML = '<div class="hint" style="margin-top:10px"><span class="spinner"></span>Đang hỏi…</div>';
+    try {
+      const r = await api('/api/ai/ask', { method: 'POST', body: { question: q } });
+      out.innerHTML = `<div style="margin-top:12px">${aiTextBox(r)}</div>`;
+    } catch (e) { out.innerHTML = `<div class="ai-err">${esc(aiErrText(e))}</div>`; }
+    askGo.disabled = false;
+    refreshLeft();
+  };
+
+  const qGo = view.querySelector('#quarterGo');
+  qGo.onclick = async () => {
+    const out = view.querySelector('#quarterOut');
+    qGo.disabled = true;
+    out.innerHTML = '<div class="hint" style="margin-top:10px"><span class="spinner"></span>Đang phân tích…</div>';
+    try {
+      const r = await api('/api/ai/quarter', { method: 'POST', body: {} });
+      out.innerHTML = `<div style="margin-top:12px">${aiTextBox(r)}</div>`;
+    } catch (e) { out.innerHTML = `<div class="ai-err">${esc(aiErrText(e))}</div>`; }
+    qGo.disabled = !st.configured;
+    refreshLeft();
+  };
+}
+
+function aiSettingsCard(ai) {
+  if (!ai) return `<div class="card"><div class="card-head"><div><div class="eyebrow">AI</div><h3>AI phân tích</h3></div></div><div class="hint">Không đọc được trạng thái AI.</div></div>`;
+  const u = ai.usage || {};
+  const usd = (n) => '$' + Number(n || 0).toFixed(4);
+  const sv = ai.server ? (ai.server.usage || ai.server) : null;
+  return `<div class="card">
+    <div class="card-head"><div><div class="eyebrow">AI</div><h3>AI phân tích</h3></div>${ai.configured ? '<span class="confidence-chip green">đã cấu hình</span>' : '<span class="confidence-chip red">chưa cấu hình</span>'}</div>
+    <div class="set-row"><span class="k">Hằng ngày</span><span class="v">${esc(ai.model || '—')} (Haiku)</span></div>
+    <div class="set-row"><span class="k">Phân tích quý</span><span class="v">${esc(ai.deepModel || '—')} (Sonnet)</span></div>
+    <div class="set-row"><span class="k">Tháng này</span><span class="v">${esc(u.monthCalls ?? 0)} lượt · ${usd(u.monthCostUsd)}</span></div>
+    <div class="set-row"><span class="k">Hôm nay</span><span class="v">${esc(u.todayCalls ?? 0)} / ${esc(ai.limits?.userDailyCalls ?? '—')} lượt</span></div>
+    ${sv ? `<div class="set-sub"><div class="small muted" style="margin-bottom:2px">Toàn máy chủ</div>
+      <div class="set-row"><span class="k">Tháng này</span><span class="v">${esc(sv.monthCalls ?? 0)} lượt · ${usd(sv.monthCostUsd)}</span></div>
+      <div class="set-row"><span class="k">Hôm nay</span><span class="v">${esc(sv.todayCalls ?? 0)} / ${esc(ai.limits?.globalDailyCalls ?? '—')} lượt</span></div></div>` : ''}
+    <div class="hint" style="margin-top:8px">API key nằm trong file .env trên máy chủ, không nhập trên web.</div>
   </div>`;
 }
 
 /* ---------------- settings ---------------- */
 async function renderSettings(view) {
-  const [icu, status] = await Promise.all([api('/api/config/icu'), api('/api/status')]);
+  const [icu, status, ai] = await Promise.all([api('/api/config/icu'), api('/api/status'), api('/api/ai/status').catch(() => null)]);
   const me = state.user;
   view.innerHTML = `
     <div class="view-head"><div><h1>Cài đặt</h1><div class="view-sub">Kết nối dữ liệu, ngưỡng gợi ý, sao lưu và giải thích chỉ số.</div></div></div>
@@ -1325,6 +1608,8 @@ async function renderSettings(view) {
         <div class="set-row"><span class="k">Tên đăng nhập</span><span class="v">${esc(me.username)}</span></div>
         <div class="actions"><button class="btn ghost small" id="pw">Đổi mật khẩu</button><button class="btn ghost small" id="out">Đăng xuất</button></div>
       </div>
+
+      ${aiSettingsCard(ai)}
 
       <div class="card">
         <div class="card-head"><div><div class="eyebrow">Dữ liệu</div><h3>Intervals.icu</h3></div>${icu.hasKey ? '<span class="confidence-chip green">đã kết nối</span>' : '<span class="confidence-chip red">chưa kết nối</span>'}</div>
