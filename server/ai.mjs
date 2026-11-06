@@ -41,7 +41,11 @@ export function aiConfig(env = process.env) {
     userDailyCalls: num(env.AI_USER_DAILY_CALLS, 15),
     globalDailyCalls: num(env.AI_GLOBAL_DAILY_CALLS, 80),
     deepPerMonth: num(env.AI_DEEP_PER_MONTH, 2),
-    timeoutMs: num(env.AI_TIMEOUT_MS, 30000),
+    timeoutMs: num(env.AI_TIMEOUT_MS, 45000),
+    // Haiku/Sonnet 5.5 think adaptively; thinking tokens count against max_tokens.
+    // Low effort keeps short explanations fast and cheap. "none" = do not send the field.
+    effort: ['low', 'medium', 'high', 'none'].includes(env.AI_EFFORT) ? env.AI_EFFORT : 'low',
+    deepEffort: ['low', 'medium', 'high', 'none'].includes(env.AI_EFFORT_DEEP) ? env.AI_EFFORT_DEEP : 'medium',
   };
 }
 
@@ -83,10 +87,10 @@ const SYSTEM = [
 ].join('\n');
 
 const TASKS = {
-  explain: { maxSentences: 5, maxTokens: 400, instruction: 'Giải thích ngắn vì sao điểm hôm nay như vậy: yếu tố nào kéo lên/xuống, bối cảnh 1–3 ngày trước có khớp quy luật nào không. Kết thúc bằng một gợi ý nhẹ về nghỉ ngơi hoặc lịch tập hôm nay.' },
-  ask: { maxSentences: 6, maxTokens: 500, instruction: 'Trả lời câu hỏi của người dùng dựa trên DỮ LIỆU. Nếu dữ liệu không đủ để trả lời, nói thẳng là chưa đủ.' },
-  weekly: { maxSentences: 8, maxTokens: 650, instruction: 'Tóm tắt tuần: xu hướng điểm, HRV, nhịp tim nghỉ, giấc ngủ so với tuần trước; quy luật nổi bật; một gợi ý cho cách xếp lịch tuần tới (ví dụ ngày nặng nên cách nhau bao lâu), dạng "có thể cân nhắc".' },
-  quarter: { maxSentences: 12, maxTokens: 1100, instruction: 'Nhìn lại cả quý: xu hướng dài hạn, quy luật nào đã rõ hơn, quy luật nào vẫn chưa đủ dữ liệu, nên ghi thêm bối cảnh gì để biết rõ hơn.' },
+  explain: { maxSentences: 5, maxTokens: 2000, instruction: 'Giải thích ngắn vì sao điểm hôm nay như vậy: yếu tố nào kéo lên/xuống, bối cảnh 1–3 ngày trước có khớp quy luật nào không. Kết thúc bằng một gợi ý nhẹ về nghỉ ngơi hoặc lịch tập hôm nay.' },
+  ask: { maxSentences: 6, maxTokens: 2500, instruction: 'Trả lời câu hỏi của người dùng dựa trên DỮ LIỆU. Nếu dữ liệu không đủ để trả lời, nói thẳng là chưa đủ.' },
+  weekly: { maxSentences: 8, maxTokens: 3000, instruction: 'Tóm tắt tuần: xu hướng điểm, HRV, nhịp tim nghỉ, giấc ngủ so với tuần trước; quy luật nổi bật; một gợi ý cho cách xếp lịch tuần tới (ví dụ ngày nặng nên cách nhau bao lâu), dạng "có thể cân nhắc".' },
+  quarter: { maxSentences: 12, maxTokens: 6000, instruction: 'Nhìn lại cả quý: xu hướng dài hạn, quy luật nào đã rõ hơn, quy luật nào vẫn chưa đủ dữ liệu, nên ghi thêm bối cảnh gì để biết rõ hơn.' },
 };
 
 export function buildPrompt(kind, packet, question = '') {
@@ -160,7 +164,8 @@ export function hashPacket(obj) {
 }
 
 export function cached(db, userId, kind, key) {
-  return db.prepare('SELECT text, model, created_at FROM ai_cache WHERE user_id = ? AND kind = ? AND cache_key = ?').get(userId, kind, key) || null;
+  const row = db.prepare('SELECT text, model, created_at FROM ai_cache WHERE user_id = ? AND kind = ? AND cache_key = ?').get(userId, kind, key) || null;
+  return row && row.text !== FALLBACK_REPLY ? row : null; // a fallback is never a real answer: retry instead
 }
 function storeCache(db, userId, kind, key, model, text) {
   db.prepare(`INSERT INTO ai_cache(user_id,kind,cache_key,model,text,created_at) VALUES(?,?,?,?,?,?)
@@ -215,7 +220,10 @@ export async function callClaude({ cfg, model, system, user, maxTokens, fetchImp
     res = await fetchImpl(`${cfg.baseUrl}/v1/messages`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model, max_tokens: maxTokens, system, messages: [{ role: 'user', content: user }] }),
+      body: JSON.stringify({
+        model, max_tokens: maxTokens, system, messages: [{ role: 'user', content: user }],
+        ...((() => { const e = model === cfg.deepModel ? cfg.deepEffort : cfg.effort; return e === 'none' ? {} : { output_config: { effort: e } }; })()),
+      }),
       signal: ctl.signal,
     });
   } catch (err) {
@@ -231,7 +239,7 @@ export async function callClaude({ cfg, model, system, user, maxTokens, fetchImp
     throw new AiError(msg, kind, 502);
   }
   const textOut = (body?.content || []).filter((c) => c.type === 'text').map((c) => c.text).join('\n').trim();
-  return { text: textOut, usage: body?.usage || {} };
+  return { text: textOut, usage: body?.usage || {}, stopReason: body?.stop_reason || null };
 }
 
 /**
@@ -256,8 +264,13 @@ export async function runAi({ db, userId, kind, packet, question = '', cacheKey 
   const prompt = buildPrompt(kind, packet, question);
   const out = await callClaude({ cfg, model, system: prompt.system, user: prompt.user, maxTokens: prompt.maxTokens, fetchImpl, env });
   recordUsage(db, cfg, userId, kind, model, out.usage);
+  if (!out.text) {
+    throw new AiError(out.stopReason === 'max_tokens'
+      ? 'AI dùng hết giới hạn trước khi kịp trả lời. Bấm lại thử.'
+      : 'AI không trả về nội dung. Bấm lại thử.', 'empty', 502);
+  }
   const guarded = guardOutput(out.text);
-  if (cacheKey) storeCache(db, userId, kind, cacheKey, model, guarded.text);
+  if (cacheKey && guarded.text !== FALLBACK_REPLY) storeCache(db, userId, kind, cacheKey, model, guarded.text);
   return { text: guarded.text, cached: false, filtered: guarded.filtered, model };
 }
 

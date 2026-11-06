@@ -270,6 +270,27 @@ describe('runAi', () => {
     assert.equal(row.input_tokens, 1000);
     assert.ok(Math.abs(row.cost_usd - (1000 * 0.1 + 100 * 0.5) / 1e6) < 1e-12);
   });
+  test('asks for low effort and has room to think; empty answers are errors, not cached', async () => {
+    const { db, u } = setup();
+    const f = fakeFetch();
+    await runAi({ db, userId: u, kind: 'explain', packet: {}, cacheKey: 'e1', fetchImpl: f, env });
+    const body = JSON.parse(f.calls[0].init.body);
+    assert.deepEqual(body.output_config, { effort: 'low' });
+    assert.ok(body.max_tokens >= 1500);
+    const thinkingOnly = async () => ({ ok: true, status: 200, json: async () => ({ content: [{ type: 'thinking', thinking: '...' }], stop_reason: 'max_tokens', usage: { input_tokens: 10, output_tokens: 2000 } }) });
+    await assert.rejects(runAi({ db, userId: u, kind: 'explain', packet: { x: 1 }, cacheKey: 'e2', fetchImpl: thinkingOnly, env }), (e) => e.kind === 'empty' && /hết giới hạn/.test(e.message));
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM ai_cache WHERE cache_key='e2'").get().n, 0);
+  });
+  test('a fully filtered answer is shown but not cached, so the next click retries', async () => {
+    const { db, u } = setup();
+    const bad = fakeFetch('Van tim của bạn ổn. Hãy đẩy mạnh.');
+    const first = await runAi({ db, userId: u, kind: 'explain', packet: {}, cacheKey: 'f1', fetchImpl: bad, env });
+    assert.equal(first.text, FALLBACK_REPLY);
+    const good = fakeFetch('Ngủ ít làm điểm giảm.');
+    const second = await runAi({ db, userId: u, kind: 'explain', packet: {}, cacheKey: 'f1', fetchImpl: good, env });
+    assert.equal(second.cached, false);
+    assert.equal(second.text, 'Ngủ ít làm điểm giảm.');
+  });
   test('second identical request is served from cache without a call', async () => {
     const { db, u } = setup();
     const f = fakeFetch();
