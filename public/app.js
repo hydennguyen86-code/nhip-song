@@ -537,7 +537,7 @@ function heroCard(d) {
         <div class="hero-band">${esc(r.bandLabel)}</div>
         <div class="hero-verdict"><span class="dot"></span>${esc(d.advice.label)}</div>
         <p class="hero-action">${esc(r.action)}</p>
-        <div class="hero-cta"><button class="btn small" data-go="trends">Xem xu hướng ${ICONS.chev}</button> <button class="btn small" type="button" data-explain hidden>Vì sao hôm nay?</button></div>
+        <div class="hero-cta"><button class="btn small" data-go="trends">Xem xu hướng ${ICONS.chev}</button><button class="btn small" type="button" data-explain hidden>Vì sao hôm nay?</button></div>
       </div>
       ${weekStrip(d.history)}
     </div>
