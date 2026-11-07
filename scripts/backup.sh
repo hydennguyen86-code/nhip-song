@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Sao lưu dữ liệu người dùng (không chứa API key, không chứa secret.key).
+# Sao lưu database và secret.key. Database chứa API key đã mã hoá, secret.key giải mã được chúng: đừng gửi cả hai đi cùng nhau.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DATA="$HERE/data"
