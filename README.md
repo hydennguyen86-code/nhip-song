@@ -251,13 +251,22 @@ Với HUAWEI Watch, dữ liệu đi theo đường HUAWEI Health → Intervals.i
 | `bash scripts/nhip start` | Khởi động app (chạy nền) |
 | `bash scripts/nhip stop` | Dừng |
 | `bash scripts/nhip restart` | Dừng rồi chạy lại |
-| `bash scripts/nhip status` | Đang chạy? in `/api/health` |
+| `bash scripts/nhip status` | Đang chạy? in `/api/health`, và tự chạy đang bật hay tắt |
+| `bash scripts/nhip autostart on` | Bật tự chạy: app chạy lại khi bị tắt và sau khi đăng nhập Mac |
+| `bash scripts/nhip autostart off` | Tắt tự chạy, app vẫn chạy nền như cũ |
 | `bash scripts/nhip logs [N]` | Xem N dòng log cuối (mặc định 80) |
 | `bash scripts/nhip test` | Chạy bộ test unit |
 | `bash scripts/nhip seed` | Nạp dữ liệu giả để xem UI |
 | `bash scripts/nhip backup` | Sao lưu database + secret.key sang `backups/` |
 
-Bật lại sau khi Mac khởi động: thêm `bash <thư-mục-app>/scripts/nhip start` vào *System Settings → General → Login Items* (dạng script, dùng Shortcut app hoặc launchagent tuỳ bạn). Không cần cài lại gì, dữ liệu nằm trong `data/`.
+Máy chạy thật cho cả nhà nên bật `autostart on`. Lệnh này dùng launchd của macOS và tạo `~/Library/LaunchAgents/com.nhipsong.server.plist`. Cần lưu ý:
+
+- launchd chỉ chạy sau khi tài khoản đã **đăng nhập** Mac. Sau khi Mac khởi động lại mà chưa ai đăng nhập, app chưa chạy.
+- `stop` dừng app đến khi `start` hoặc lần đăng nhập tới.
+- Log nằm ở `~/Library/Logs/NhipSong/server.log` thay vì `data/server.log`, vì macOS không cho launchd mở file trong `~/Documents`.
+- Node được ghi cố định đường dẫn lúc bật. Nếu đổi bản Node hoặc chuyển thư mục app, chạy lại `autostart on`.
+
+Dữ liệu vẫn nằm trong `data/`, không cần cài lại gì.
 
 ## 3. Tạo tài khoản
 
