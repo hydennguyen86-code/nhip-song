@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# nhip-song <start|stop|restart|status|logs|backup|test|seed> [args]
+# nhip-song <start|stop|restart|status|autostart|logs|backup|test|seed> [args]
 # Một lệnh duy nhất để vận hành ứng dụng trên Mac.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -12,39 +12,127 @@ PID_FILE="$HERE/data/server.pid"
 LOG_FILE="$HERE/data/server.log"
 mkdir -p "$HERE/data"
 
-running() { [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; }
+# Khi đã bật `autostart on`, launchd giữ app chạy; không dùng PID_FILE nữa.
+LABEL="com.nhipsong.server"
+PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
+SERVICE="gui/$(id -u)/$LABEL"
+# launchd không mở được file trong ~/Documents thay cho app (quyền riêng tư macOS),
+# nên log nằm ngoài thư mục app và plist không đặt WorkingDirectory.
+AGENT_LOG="$HOME/Library/Logs/NhipSong/server.log"
+
+managed() { [ -f "$PLIST" ]; }
+if managed; then LOG_FILE="$AGENT_LOG"; fi
+loaded() { launchctl print "$SERVICE" >/dev/null 2>&1; }
+current_pid() {
+  if managed; then launchctl print "$SERVICE" 2>/dev/null | awk '$1 == "pid" && $2 == "=" { print $3; exit }'
+  elif [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then cat "$PID_FILE"
+  fi
+}
+running() { [ -n "$(current_pid)" ]; }
+healthy() { curl -fs -m 2 -o /dev/null "http://127.0.0.1:$PORT/api/health"; }
+wait_healthy() {
+  for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+    healthy && return 0
+    sleep 0.5
+  done
+  return 1
+}
+print_urls() {
+  LAN=$(ipconfig getifaddr en0 2>/dev/null || echo '(bạn tự xem Wi-Fi)')
+  echo "Đã khởi động (PID $(current_pid))."
+  echo "  Trên Mac:      http://127.0.0.1:$PORT"
+  TS_BIN="$(command -v tailscale || echo /Applications/Tailscale.app/Contents/MacOS/Tailscale)"
+  TS_IP="$("$TS_BIN" ip -4 2>/dev/null | head -1 || true)"
+  [ -n "$TS_IP" ] && echo "  Trên iPhone:   http://$TS_IP:$PORT  (qua Tailscale, địa chỉ cố định)"
+  echo "  Cùng Wi-Fi:    http://$LAN:$PORT  (số này có thể đổi, đừng lưu)"
+}
+xml_escape() { printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'; }
+write_plist() {
+  mkdir -p "$(dirname "$PLIST")" "$(dirname "$AGENT_LOG")"
+  cat > "$PLIST" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>$LABEL</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>$(xml_escape "$NODE")</string>
+    <string>$(xml_escape "$HERE/server/index.mjs")</string>
+  </array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>10</integer>
+  <key>StandardOutPath</key><string>$(xml_escape "$AGENT_LOG")</string>
+  <key>StandardErrorPath</key><string>$(xml_escape "$AGENT_LOG")</string>
+</dict>
+</plist>
+EOF
+  plutil -lint -s "$PLIST"
+}
 
 case "${1:-status}" in
   start)
-    if running; then echo "Đang chạy, PID $(cat "$PID_FILE"), http://127.0.0.1:$PORT"; exit 0; fi
-    nohup "$NODE" server/index.mjs > "$LOG_FILE" 2>&1 &
-    echo $! > "$PID_FILE"
-    sleep 1
-    if running; then
-      LAN=$(ipconfig getifaddr en0 2>/dev/null || echo '(bạn tự xem Wi-Fi)')
-      echo "Đã khởi động (PID $(cat "$PID_FILE"))."
-      echo "  Trên Mac:      http://127.0.0.1:$PORT"
-      TS_BIN="$(command -v tailscale || echo /Applications/Tailscale.app/Contents/MacOS/Tailscale)"
-      TS_IP="$("$TS_BIN" ip -4 2>/dev/null | head -1 || true)"
-      [ -n "$TS_IP" ] && echo "  Trên iPhone:   http://$TS_IP:$PORT  (qua Tailscale, địa chỉ cố định)"
-      echo "  Cùng Wi-Fi:    http://$LAN:$PORT  (số này có thể đổi, đừng lưu)"
+    if running; then echo "Đang chạy, PID $(current_pid), http://127.0.0.1:$PORT"; exit 0; fi
+    if managed; then
+      loaded || launchctl bootstrap "gui/$(id -u)" "$PLIST"
+      launchctl kickstart "$SERVICE"
     else
-      echo "Khởi động thất bại. Xem $LOG_FILE"; exit 1
+      nohup "$NODE" server/index.mjs > "$LOG_FILE" 2>&1 &
+      echo $! > "$PID_FILE"
+    fi
+    if wait_healthy; then print_urls
+    else echo "Khởi động thất bại. Xem $LOG_FILE"; exit 1
     fi
     ;;
   stop)
-    if running; then
+    if managed; then
+      if loaded; then launchctl bootout "$SERVICE"; echo "Đã dừng. App sẽ tự chạy lại ở lần đăng nhập Mac tới."
+      else echo "Không có tiến trình đang chạy."; fi
+    elif running; then
       kill "$(cat "$PID_FILE")"; rm -f "$PID_FILE"; echo "Đã dừng."
     else echo "Không có tiến trình đang chạy."; fi
     ;;
-  restart) "$0" stop; "$0" start ;;
+  restart)
+    if managed && loaded; then
+      launchctl kickstart -k "$SERVICE"
+      sleep 1
+      if wait_healthy; then print_urls
+      else echo "Khởi động thất bại. Xem $LOG_FILE"; exit 1
+      fi
+    else "$0" stop; "$0" start
+    fi
+    ;;
   status)
-    if running; then echo "ĐANG CHẠY · PID $(cat "$PID_FILE") · cổng $PORT"; curl -sS "http://127.0.0.1:$PORT/api/health"; echo
+    if running; then echo "ĐANG CHẠY · PID $(current_pid) · cổng $PORT"; curl -sS "http://127.0.0.1:$PORT/api/health"; echo
     else echo "DỪNG"; fi
+    if managed; then echo "Tự chạy: BẬT"; else echo "Tự chạy: TẮT"; fi
+    ;;
+  autostart)
+    case "${2:-}" in
+      on)
+        [ -x "$NODE" ] || { echo "Không tìm thấy Node tại: $NODE"; exit 1; }
+        LOG_FILE="$AGENT_LOG"
+        if ! managed && running; then kill "$(cat "$PID_FILE")"; rm -f "$PID_FILE"; sleep 1; fi
+        if loaded; then launchctl bootout "$SERVICE"; sleep 1; fi
+        write_plist
+        launchctl bootstrap "gui/$(id -u)" "$PLIST"
+        if wait_healthy; then print_urls; echo "Tự chạy: BẬT. App chạy lại sau khi bị tắt và sau khi đăng nhập Mac."
+        else echo "Khởi động thất bại. Xem $LOG_FILE"; exit 1
+        fi
+        ;;
+      off)
+        if loaded; then launchctl bootout "$SERVICE"; sleep 1; fi
+        rm -f "$PLIST"
+        echo "Tự chạy: TẮT."
+        "$0" start
+        ;;
+      *) echo "Dùng: nhip autostart <on|off>"; exit 2 ;;
+    esac
     ;;
   logs) tail -n "${2:-80}" "$LOG_FILE" ;;
   backup) bash "$HERE/scripts/backup.sh" ;;
   test) "$NODE" --test 'test/*.test.mjs' ;;
   seed) "$NODE" scripts/seed-demo.mjs ;;
-  *) echo "Dùng: nhip <start|stop|restart|status|logs [N]|backup|test|seed>"; exit 2 ;;
+  *) echo "Dùng: nhip <start|stop|restart|status|autostart on|off|logs [N]|backup|test|seed>"; exit 2 ;;
 esac
