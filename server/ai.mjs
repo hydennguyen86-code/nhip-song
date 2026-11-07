@@ -153,6 +153,8 @@ export function buildPacket({ today, recovery, advice, wellness = [], history = 
       ngu_dem_sau_phut: f.lags[0]?.sleep ? Math.round(f.lags[0].sleep.diff) : null,
       so_ngay_hrv_con_thap: f.affectedDays,
       thuong_di_kem: f.oftenWith ? f.oftenWith.label : null,
+      muc_thuong: f.dose ? { don_vi: f.dose.unit, gia_tri: r1(f.dose.usual), phut: f.dose.usualMinutes ? Math.round(f.dose.usualMinutes) : null } : null,
+      hrv_moi_don_vi_pct: f.dose?.perUnit ? r1(f.dose.hrvPctPerUnit) : null,
     })),
   };
 }

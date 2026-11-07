@@ -182,6 +182,23 @@ Bối cảnh là những việc xảy ra trong ngày: buổi tập, mức tạ, 
 - Ngày **chưa ghi** bối cảnh không được tính là "không có yếu tố". Buổi sáng chỉ được dùng khi 3 ngày trước đó đều đã ghi, nên **ghi đều mỗi ngày** quan trọng hơn ghi thật chi tiết.
 - Kết quả xem ở tab **Quy luật**.
 
+**Phần lấy tự động từ đồng hồ (qua Intervals.icu)**, không cần ghi tay. Mỗi người chỉ thấy các môn mình thực sự tập:
+
+| Môn | Đồng hồ ghi là | App tự nhận? | Liều dùng để so |
+| --- | --- | --- | --- |
+| Pickleball | **Padel** (HUAWEI không có chế độ pickleball), tennis, cầu lông, squash | Có | Load |
+| Chạy bộ | Run, TrailRun, VirtualRun | Có | Load |
+| Đạp xe | Ride, VirtualRide, EBikeRide… | Có | Load |
+| Đi bộ | Walk, Hike | Có | **Số phút** (load đi bộ gần như bằng 0) |
+| Yoga | Yoga, Pilates | Có | **Số phút** |
+| Lớp HIIT | HIIT | **Chỉ khi chạm "Lớp HIIT"**: HUAWEI hay tự gắn nhãn HIIT cho cả lúc không tập. Đã chạm thì lấy load của buổi HIIT cùng ngày | Load |
+| Gym (chân, ngực/lưng, vai/tay, toàn thân) | WeightTraining | Chỉ khi chạm tập gì; load và phút lấy từ đồng hồ, tập nhiều nhóm thì chia đều | Load |
+| Cardio khác | Bơi, chèo, máy elliptical… | Chỉ khi chạm | Load |
+
+Hôm không đeo đồng hồ thì chạm môn đó trong thẻ bối cảnh, app tính ở mức tập thường của người đó.
+
+- Bản ghi **dưới 10 phút** bị bỏ qua (thường là bấm nhầm trên đồng hồ).
+
 **Trường "Có cơn tê / run sau tập"** là trường riêng tư. App chỉ đếm số ngày có đánh dấu trong 90 ngày gần nhất, để bạn đưa cho bác sĩ. App **không phân tích** trường này và **không gửi** cho AI.
 
 ### Cách app đọc quy luật (bằng lời thường)
@@ -190,6 +207,8 @@ Bối cảnh là những việc xảy ra trong ngày: buổi tập, mức tạ, 
 - App tính **cùng lúc mọi yếu tố** bằng hồi quy theo độ trễ: buổi sáng = mức chung + ảnh hưởng của từng yếu tố xảy ra 1, 2, 3 ngày trước. Nhờ vậy ảnh hưởng của tập chân được tách khỏi pickleball hay tập ngực nếu chúng hay đi liền nhau. (Cách so "ngày có / ngày không có" đơn giản bị nhiễu: ngày đối chứng của tập ngực lại toàn ngày sau tập chân, nên tập ngực trông như làm HRV *tăng*.)
 - Mỗi con số có **khoảng tin cậy 95%**. Khoảng nằm hẳn một phía của 0 thì mới gọi là khác biệt rõ. Yếu tố có dưới 4 lần thì chưa tính.
 - **1 SWC** là mức thay đổi HRV nhỏ nhất có ý nghĩa, bằng nửa độ lệch chuẩn của chính bạn.
+- **Yếu tố có liều** (rượu bia theo số ly, giờ lên giường lệch bao nhiêu, load của pickleball và gym) được tính theo lượng, không chỉ có/không. Con số chính là ảnh hưởng **ở mức thường của bạn** (trung vị các lần có yếu tố đó). Với rượu bia và giờ ngủ, app ghi thêm **mỗi ly / mỗi giờ** bao nhiêu %, giả định quan hệ là đường thẳng.
+- **Giờ lên giường so với thói quen của chính bạn**: giờ thường lệ = trung vị giờ lên giường đã ghi trong 28 ngày trước (cần ít nhất 7 đêm). Lên giường trễ hơn ≥ 30 phút tính là *trễ*, sớm hơn ≥ 30 phút tính là *sớm*, hai yếu tố tách riêng nên ngủ sớm có thể cho thấy HRV *tăng*. Ví dụ thường lệ 23:30 thì 23:00 là sớm 0,5 giờ, 00:30 là trễ 1 giờ. Chưa đủ 7 đêm, hoặc hôm đó không ghi giờ, thì coi là đêm bình thường.
 - Kết quả là **mô tả trên dữ liệu của bạn, không phải nhân quả**.
 - Nếu một yếu tố khác xuất hiện trong **ít nhất 40%** số lần và nhiều hơn hẳn bình thường (≥ 1,5 lần tỉ lệ thường ngày), app ghi là "thường đi kèm" để bạn biết hai thói quen hay đi cùng nhau. Nếu chúng **luôn** đi cùng nhau thì không thuật toán nào tách được; muốn biết riêng thì thỉnh thoảng làm tách ra.
 

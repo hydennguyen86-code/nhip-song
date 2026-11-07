@@ -8,7 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { openDb } from '../server/db.mjs';
 import { createUser } from '../server/store.mjs';
-import { normalizeContext, saveContext, listContexts, buildDayFacts, contextLabels } from '../server/context.mjs';
+import { normalizeContext, saveContext, listContexts, buildDayFacts, contextLabels, addBedtimeDeviation, FACTORS } from '../server/context.mjs';
 import { computePatterns, welch, morningOutcomes } from '../server/patterns.mjs';
 import { unusualReadings } from '../server/alerts.mjs';
 import { computeRecovery } from '../server/recovery.mjs';
@@ -373,5 +373,149 @@ describe('Cloudflare hardening', () => {
   test('.env parser: comments, quotes, export', () => {
     const v = parseEnv('# c\nexport A=1\nB="x y"\nC=z # note\nbad line\n');
     assert.deepEqual(v, { A: '1', B: 'x y', C: 'z' });
+  });
+});
+
+/* ------------------------------------------------ dose factors (11/2026) -- */
+
+/** Every day logged as rest; `extra(i)` adds context, `hrvMul(i)` shapes the NEXT morning. */
+function doseWorld({ days = 160, extra = () => ({}), hrvMul = () => 1, activities = () => [] } = {}) {
+  const contexts = new Map();
+  const wellness = [];
+  const acts = [];
+  const start = addDays(TODAY, -days);
+  for (let i = 0; i <= days; i++) {
+    const date = addDays(start, i);
+    contexts.set(date, { workout: ['rest'], ...extra(i) });
+    for (const a of activities(i)) acts.push({ ...a, start_date_local: `${date}T${a.at || '17:30:00'}` });
+    const hrv = 60 * Math.exp(0.05 * noise(i, 3)) * (i > 0 ? hrvMul(i - 1) : 1);
+    wellness.push({ date, hrv_rmssd: hrv, resting_hr: 52 + 0.8 * noise(i, 7), sleep_secs: (7.5 * 60 + 15 * noise(i, 11)) * 60 });
+  }
+  return { contexts, wellness, activities: acts };
+}
+
+describe('dose factors', () => {
+  test('alcohol is read per drink: about −3 % HRV per drink, at the usual amount too', () => {
+    const drinks = (i) => (i % 9 === 4 ? [2, 3, 5, 6][(i / 9 | 0) % 4] : 0);
+    const w = doseWorld({ extra: (i) => (drinks(i) ? { alcohol: drinks(i) } : {}), hrvMul: (i) => Math.exp(-0.03 * drinks(i)) });
+    const p = computePatterns({ ...w, today: TODAY });
+    const al = p.factors.find((f) => f.id === 'alcohol');
+    assert.ok(al.dose, 'alcohol should carry a dose');
+    assert.equal(al.dose.unit, 'ly');
+    assert.ok(al.dose.usual >= 3 && al.dose.usual <= 5, `usual ${al.dose.usual}`);
+    assert.ok(al.dose.hrvPctPerUnit < -1.5 && al.dose.hrvPctPerUnit > -5, `per drink ${al.dose.hrvPctPerUnit}`);
+    assert.ok(al.lags[0].hrv.pct < -6, `at usual ${al.lags[0].hrv.pct}`);
+    assert.match(al.summary, /mức thường của bạn: \d+ ly/);
+    assert.match(al.summary, /mỗi ly HRV −/);
+  });
+
+  test('bedtime is compared with the person’s own usual time, both later and earlier', () => {
+    // Usual 23:30. Every 10th day 22:45 (early, +6 % HRV), every 10th+4 day 00:45 (late, −10 %).
+    const bed = (i) => (i % 10 === 2 ? '22:45' : i % 10 === 6 ? '00:45' : '23:30');
+    const w = doseWorld({ extra: (i) => ({ bedtime: bed(i) }), hrvMul: (i) => (i % 10 === 2 ? 1.06 : i % 10 === 6 ? 0.9 : 1) });
+    const p = computePatterns({ ...w, today: TODAY });
+    const late = p.factors.find((f) => f.id === 'late_bed');
+    const early = p.factors.find((f) => f.id === 'early_bed');
+    assert.ok(late && early, 'both bedtime factors expected');
+    assert.ok(late.lags[0].hrv.pct < -5, `late ${late.lags[0].hrv.pct}`);
+    assert.ok(early.lags[0].hrv.pct > 2, `early ${early.lags[0].hrv.pct}`);
+    assert.ok(Math.abs(late.dose.usual - 1.25) < 0.01 && Math.abs(early.dose.usual - 0.75) < 0.01);
+    assert.match(late.summary, /mỗi giờ HRV −/);
+  });
+
+  test('usual bedtime needs 7 logged nights before; 23:00 is early only for a 23:30 person', () => {
+    const days = new Map();
+    for (let i = 0; i < 9; i++) days.set(addDays('2026-10-01', i), { bedtime: i < 8 ? '23:30' : '23:00', _logged: true });
+    addBedtimeDeviation(days);
+    assert.equal(days.get('2026-10-05')._bed_dev_h, undefined, 'only 4 nights before: no usual time yet');
+    assert.equal(days.get('2026-10-09')._bed_dev_h, -0.5);
+    const early = FACTORS.find((f) => f.id === 'early_bed');
+    assert.equal(early.test(days.get('2026-10-09')), true);
+    const days2 = new Map([...Array(9)].map((_, i) => [addDays('2026-10-01', i), { bedtime: i < 8 ? '22:30' : '23:00', _logged: true }]));
+    addBedtimeDeviation(days2);
+    assert.equal(early.test(days2.get('2026-10-09')), false, 'for a 22:30 person 23:00 is late, not early');
+  });
+
+  test('watch activities: Padel = pickleball with load and minutes, stray < 10 min recordings ignored, gym load shared by ticked parts', () => {
+    const days = buildDayFacts({
+      contexts: new Map([['2026-10-03', { workout: ['leg', 'shoulder_arm'] }]]),
+      activities: [
+        { start_date_local: '2026-10-02T17:49:00', type: 'Padel', moving_time: 95, training_load: 0 },
+        { start_date_local: '2026-10-02T17:52:00', type: 'Padel', moving_time: 4200, training_load: 36 },
+        { start_date_local: '2026-10-03T06:00:00', type: 'WeightTraining', moving_time: 3600, training_load: 20 },
+      ],
+    });
+    const d2 = days.get('2026-10-02');
+    assert.equal(d2._racket_load, 36);
+    assert.equal(d2._racket_min, 70);
+    assert.equal(d2._activities, 1, 'the 95-second recording is ignored');
+    const pb = FACTORS.find((f) => f.id === 'pickleball');
+    assert.equal(pb.test(d2), true, 'pickleball found without a tag');
+    const leg = FACTORS.find((f) => f.id === 'leg');
+    assert.equal(leg.dose(days.get('2026-10-03')), 10, 'gym load split between leg and shoulder');
+  });
+
+  test('pickleball from the watch alone: effect read at the usual load, with minutes', () => {
+    const load = (i) => (i % 4 === 1 ? [20, 30, 40][(i / 4 | 0) % 3] : 0);
+    const w = doseWorld({
+      activities: (i) => (load(i) ? [{ type: 'Padel', moving_time: load(i) * 140, training_load: load(i) }] : []),
+      hrvMul: (i) => Math.exp(-0.004 * load(i)),
+    });
+    const p = computePatterns({ ...w, today: TODAY });
+    const pb = p.factors.find((f) => f.id === 'pickleball');
+    assert.ok(pb.nEvents >= 30);
+    assert.equal(pb.dose.unit, 'load');
+    assert.equal(pb.dose.usual, 30);
+    assert.equal(Math.round(pb.dose.usualMinutes), 70);
+    assert.ok(pb.lags[0].hrv.pct < -6 && pb.lags[0].hrv.pct > -18, `pct ${pb.lags[0].hrv.pct}`);
+    assert.match(pb.summary, /30 load, khoảng 70 phút/);
+  });
+});
+
+describe('family sports from the watch', () => {
+  test('run, ride, walk, yoga are found from Intervals.icu; walk and yoga use minutes; HIIT needs the tag', () => {
+    const d = '2026-10-05';
+    const days = buildDayFacts({
+      contexts: new Map([['2026-10-06', { workout: ['hiit'] }]]),
+      activities: [
+        { start_date_local: `${d}T05:30:00`, type: 'Run', moving_time: 1800, training_load: 30 },
+        { start_date_local: `${d}T06:30:00`, type: 'Ride', moving_time: 3600, training_load: 40 },
+        { start_date_local: `${d}T17:00:00`, type: 'Walk', moving_time: 2700, training_load: 3 },
+        { start_date_local: `${d}T19:00:00`, type: 'Yoga', moving_time: 3600, training_load: 0 },
+        { start_date_local: '2026-10-07T12:00:00', type: 'HighIntensityIntervalTraining', moving_time: 3000, training_load: 4 },
+        { start_date_local: '2026-10-06T18:00:00', type: 'HighIntensityIntervalTraining', moving_time: 2700, training_load: 35 },
+      ],
+    });
+    const f = (id) => FACTORS.find((x) => x.id === id);
+    const day = days.get(d);
+    for (const id of ['run', 'ride', 'walk', 'yoga']) assert.equal(f(id).test(day), true, id);
+    assert.equal(f('run').dose(day), 30);
+    assert.equal(f('ride').dose(day), 40);
+    assert.equal(f('walk').unit, 'phút');
+    assert.equal(f('walk').dose(day), 45);
+    assert.equal(f('yoga').dose(day), 60);
+    assert.equal(f('hiit').test(days.get('2026-10-07')), false, 'watch-only HIIT is not counted');
+    assert.equal(f('hiit').test(days.get('2026-10-06')), true);
+    assert.equal(f('hiit').dose(days.get('2026-10-06')), 35, 'tagged HIIT takes the watch load');
+    assert.equal(f('cardio').test(day), false, 'named sports do not leak into "Cardio khác"');
+  });
+
+  test('running from the watch alone gets its own pattern, read at the usual load', () => {
+    const load = (i) => (i % 5 === 2 ? [25, 35, 45][(i / 5 | 0) % 3] : 0);
+    const w = doseWorld({
+      activities: (i) => (load(i) ? [{ type: 'Run', moving_time: load(i) * 60, training_load: load(i), at: '06:00:00' }] : []),
+      hrvMul: (i) => Math.exp(-0.003 * load(i)),
+    });
+    const p = computePatterns({ ...w, today: TODAY });
+    const run = p.factors.find((x) => x.id === 'run');
+    assert.ok(run && run.nEvents >= 25);
+    assert.equal(run.dose.usual, 35);
+    assert.ok(run.lags[0].hrv.pct < -5, `pct ${run.lags[0].hrv.pct}`);
+    assert.match(run.summary, /Sau ngày chạy bộ \(mức thường của bạn: 35 load, khoảng 35 phút\)/);
+    assert.equal(p.factors.find((x) => x.id === 'pickleball'), undefined, 'sports someone never does are not listed');
+  });
+
+  test('context labels name watch sessions and tagged sports plainly', () => {
+    assert.deepEqual(contextLabels({ workout: ['yoga', 'leg'] }), ['Yoga', 'Tập chân']);
   });
 });

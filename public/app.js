@@ -1026,6 +1026,9 @@ function recentCard(d) {
 
 function actType(a) {
   const t = String(a.type || '');
+  if (/padel|pickle/i.test(t)) return 'PB';
+  if (/yoga|pilates/i.test(t)) return 'YOGA';
+  if (/hiit|highintensity/i.test(t)) return 'HIIT';
   if (/run/i.test(t)) return 'RUN';
   if (/ride|bike|cycl/i.test(t)) return 'RIDE';
   if (/swim/i.test(t)) return 'SWIM';

@@ -35,12 +35,18 @@
  *   "Often with": another factor on the same or next day in ≥ 40 % of cases
  *   and ≥ 1.5× its usual rate, shown so the reader knows two habits travel together.
  *   Sick days (check-in "sick") are excluded from outcomes and baselines.
+ *
+ *   Dose factors (drinks, hours late/early to bed, watch load of pickleball and
+ *   gym days): the column holds dose ÷ the person's usual dose (median over
+ *   their event days, capped at 3×), so b[f,k] is the change at the USUAL
+ *   amount and the ridge penalty stays on the same scale as yes/no factors.
+ *   Per-unit effect = b ÷ usual dose (assumes a straight line).
  */
 import { robustStats, plausible, HRV_LN_SPREAD_FLOOR, addDays } from './signals.mjs';
-import { FACTORS, buildDayFacts, PRIVATE_FIELDS } from './context.mjs';
+import { FACTORS, buildDayFacts, addBedtimeDeviation, PRIVATE_FIELDS } from './context.mjs';
 
 export const PATTERN_RULES = Object.freeze({
-  lags: [1, 2, 3], minEvents: 4, clearEvents: 8, minObsExtra: 10, ridge: 1, swcZ: 0.5, oftenWithShare: 0.4,
+  lags: [1, 2, 3], minEvents: 4, maxDoseRatio: 3, clearEvents: 8, minObsExtra: 10, ridge: 1, swcZ: 0.5, oftenWithShare: 0.4,
   hrvWindow: 60, hrvMin: 14, rhrWindow: 30, rhrMin: 7, sleepWindow: 30, sleepMin: 7,
 });
 
@@ -167,6 +173,13 @@ export const CONFIDENCE_LABEL = Object.freeze({
 const fmt = (n, d = 0) => (n == null ? '—' : n.toLocaleString('vi-VN', { minimumFractionDigits: d, maximumFractionDigits: d }));
 const signed = (n, d = 0) => (n == null ? '—' : `${n > 0 ? '+' : n < 0 ? '−' : ''}${fmt(Math.abs(n), d)}`);
 
+const UNIT_TEXT = { ly: 'ly', 'giờ': 'giờ', load: 'load', 'phút': 'phút' };
+function doseText(d) {
+  if (!d) return '';
+  if (d.unit === 'load') return `${fmt(d.usual, 0)} load${d.usualMinutes ? `, khoảng ${fmt(d.usualMinutes, 0)} phút` : ''}`;
+  return `${fmt(d.usual, d.unit === 'giờ' ? 1 : 0)} ${UNIT_TEXT[d.unit] || d.unit}`;
+}
+
 function summarize(f) {
   const l1 = f.lags[0];
   if (f.confidence === 'insufficient') {
@@ -178,7 +191,8 @@ function summarize(f) {
   if (l1.hrv) parts.push(`HRV sáng hôm sau ${signed(l1.hrv.pct, 0)}% (${signed(l1.hrv.swc, 1)} SWC)`);
   if (l1.rhr) parts.push(`nhịp tim nghỉ ${signed(l1.rhr.diff, 1)} bpm`);
   if (l1.sleep) parts.push(`ngủ ${signed(l1.sleep.diff, 0)} phút`);
-  let s = `Sau ngày ${f.label.toLowerCase()}: ${parts.join(', ')}, đã tách ảnh hưởng của các yếu tố khác.`;
+  let s = `Sau ngày ${f.label.toLowerCase()}${f.dose ? ` (mức thường của bạn: ${doseText(f.dose)})` : ''}: ${parts.join(', ')}, đã tách ảnh hưởng của các yếu tố khác.`;
+  if (f.dose?.perUnit && f.dose.hrvPctPerUnit != null) s += ` Tính ra mỗi ${f.dose.unit} HRV ${signed(f.dose.hrvPctPerUnit, 1)}%.`;
   if (f.affectedDays >= 2) s += ` HRV còn thấp ${f.affectedDays > 3 ? 'hơn 3' : f.affectedDays} ngày.`;
   if (f.inseparable) s += ` Chưa tách được: luôn trùng với ${f.inseparable.label.toLowerCase()} ${f.inseparable.lag === 1 ? 'cùng ngày' : `${f.inseparable.lag - 1} ngày trước đó`}; muốn biết riêng thì thỉnh thoảng đổi lịch.`;
   else if (f.oftenWith) s += ` Thường đi kèm ${f.oftenWith.label.toLowerCase()} (${Math.round(f.oftenWith.share * 100)}% số lần).`;
@@ -191,7 +205,7 @@ function summarize(f) {
 export function computePatterns({ wellness, contexts, checkins = [], activities = [], sickDates = null, today, symptomWindowDays = 90 }) {
   const R = PATTERN_RULES;
   const outcomes = morningOutcomes(wellness, { sickDates });
-  const days = buildDayFacts({ contexts, checkins, activities });
+  const days = addBedtimeDeviation(buildDayFacts({ contexts, checkins, activities }));
   const spreads = [...outcomes.values()].map((o) => o.hrvSpread).filter(Boolean);
   const typicalSpread = spreads.length ? mean(spreads) : HRV_LN_SPREAD_FLOOR;
 
@@ -200,9 +214,31 @@ export function computePatterns({ wellness, contexts, checkins = [], activities 
   const eventDays = new Map(FACTORS.map((f) => [f.id, [...days.keys()].filter((d) => known(f, d) && has(f, d)).sort()]));
   const fitted = FACTORS.filter((f) => eventDays.get(f.id).length >= R.minEvents);
 
+  // Usual dose per dose factor = median over its event days with a known dose.
+  const median = (xs) => { const v = [...xs].sort((a, b) => a - b); const m = v.length >> 1; return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2; };
+  const usualDose = new Map();
+  const usualMin = new Map();
+  for (const f of FACTORS) {
+    if (!f.dose) continue;
+    const ds = eventDays.get(f.id).map((d) => f.dose(days.get(d))).filter((v) => Number.isFinite(v) && v > 0);
+    if (ds.length) usualDose.set(f.id, median(ds));
+    if (f.minutes) {
+      const ms = eventDays.get(f.id).map((d) => f.minutes(days.get(d))).filter((v) => Number.isFinite(v) && v > 0);
+      if (ms.length) usualMin.set(f.id, median(ms));
+    }
+  }
+  /** Column value of factor f on day d: 0 if it did not happen, else dose ÷ usual dose (1 for yes/no factors). */
+  const value = (f, d) => {
+    if (!has(f, d)) return 0;
+    const usual = usualDose.get(f.id);
+    if (!usual) return 1;
+    const v = f.dose(days.get(d));
+    return Number.isFinite(v) && v > 0 ? Math.min(v / usual, R.maxDoseRatio) : 1;
+  };
+
   // Mornings whose previous 3 days are known for every fitted factor.
   const usable = [...outcomes.keys()].filter((m) => fitted.every((f) => R.lags.every((k) => known(f, addDays(m, -k)))));
-  const design = (m) => [1, ...fitted.flatMap((f) => R.lags.map((k) => (has(f, addDays(m, -k)) ? 1 : 0)))];
+  const design = (m) => [1, ...fitted.flatMap((f) => R.lags.map((k) => value(f, addDays(m, -k))))];
 
   const fit = (key) => {
     const ms = usable.filter((m) => typeof outcomes.get(m)[key] === 'number');
@@ -215,7 +251,7 @@ export function computePatterns({ wellness, contexts, checkins = [], activities 
 
   // Columns that are (almost) the same cannot be told apart.
   const hrvMornings = usable.filter((m) => typeof outcomes.get(m).hrvZ === 'number');
-  const cols = fitted.flatMap((f) => R.lags.map((k) => ({ f, k, v: hrvMornings.map((m) => (has(f, addDays(m, -k)) ? 1 : 0)) })));
+  const cols = fitted.flatMap((f) => R.lags.map((k) => ({ f, k, v: hrvMornings.map((m) => value(f, addDays(m, -k))) })));
   const corr = (a, b) => {
     const ma = mean(a); const mb = mean(b);
     let sab = 0; let saa = 0; let sbb = 0;
@@ -278,9 +314,21 @@ export function computePatterns({ wellness, contexts, checkins = [], activities 
       }
     }
 
+    const usual = usualDose.get(f.id);
+    const l1hrv = lags[0].hrv;
+    const dose = usual ? {
+      unit: f.unit,
+      usual,
+      usualMinutes: usualMin.get(f.id) ?? null,
+      perUnit: Boolean(f.perUnit),
+      hrvPctPerUnit: l1hrv ? (Math.exp((l1hrv.diffZ / usual) * typicalSpread) - 1) * 100 : null,
+      rhrPerUnit: lags[0].rhr ? lags[0].rhr.diff / usual : null,
+    } : null;
+
     const item = {
       id: f.id,
       label: f.label,
+      dose,
       nEvents: events.length,
       nUsed,
       lags: lags.map(({ _h, ...rest }) => rest),

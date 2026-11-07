@@ -17,8 +17,14 @@ export const CONTEXT_FIELDS = Object.freeze([
       { id: 'leg', label: 'Chân' },
       { id: 'chest_back', label: 'Ngực / Lưng' },
       { id: 'shoulder_arm', label: 'Vai / Tay' },
+      { id: 'gym_full', label: 'Gym toàn thân' },
       { id: 'pickleball', label: 'Pickleball' },
-      { id: 'cardio', label: 'Cardio nhẹ' },
+      { id: 'run', label: 'Chạy bộ' },
+      { id: 'ride', label: 'Đạp xe' },
+      { id: 'walk', label: 'Đi bộ' },
+      { id: 'yoga', label: 'Yoga' },
+      { id: 'hiit', label: 'Lớp HIIT' },
+      { id: 'cardio', label: 'Cardio khác' },
       { id: 'rest', label: 'Nghỉ' },
     ],
   },
@@ -114,33 +120,122 @@ export function listContexts(db, userId, oldest, newest) {
   return new Map(rows.map((r) => [r.date, JSON.parse(r.data)]));
 }
 
-/* ------------------------------------------------- binary factors -- */
+/* ---------------------------------------------------------- factors -- */
 
 const bedMinutes = (t) => { const [h, m] = String(t).split(':').map(Number); const mins = h * 60 + m; return mins < 5 * 60 ? mins + 24 * 60 : mins; };
 const hasWorkout = (c, id) => Array.isArray(c.workout) && c.workout.includes(id);
+const GYM_PARTS = ['leg', 'chest_back', 'shoulder_arm', 'gym_full'];
+/** Watch load of a gym day, shared between the body parts ticked that day. */
+const gymShare = (c) => {
+  if (!(c._gym_load > 0)) return null;
+  const parts = GYM_PARTS.filter((p) => hasWorkout(c, p)).length;
+  return parts ? c._gym_load / parts : null;
+};
+const gymMinShare = (c) => {
+  if (!(c._gym_min > 0)) return null;
+  const parts = GYM_PARTS.filter((p) => hasWorkout(c, p)).length;
+  return parts ? c._gym_min / parts : null;
+};
 
 /**
- * Yes/no factors the pattern engine compares. `source` says where a day counts
- * as "known": 'context' = only days with a saved context (or legacy journal
- * tags); 'activity' = every day, because Intervals.icu activities are synced.
+ * A sport the watch records when the person starts it (run, ride, walk, yoga,
+ * pickleball): found from Intervals.icu even without a tag, so every day is
+ * "known" (no recording and no tag = did not do it). Tagging it covers days
+ * without the watch. Load is the dose for hard sports; minutes for gentle ones
+ * (walking, yoga), where heart-rate load is near zero and tells little.
+ */
+const watchSport = (id, label, kind, unit = 'load') => ({
+  id, label, source: 'activity',
+  test: (c) => hasWorkout(c, id) || c[`_${kind}_min`] > 0,
+  dose: unit === 'phút' ? (c) => (c[`_${kind}_min`] > 0 ? c[`_${kind}_min`] : null) : (c) => (c[`_${kind}_load`] > 0 ? c[`_${kind}_load`] : null),
+  minutes: (c) => (c[`_${kind}_min`] > 0 ? c[`_${kind}_min`] : null),
+  unit,
+});
+
+/**
+ * Factors the pattern engine compares. `test` says whether the factor happened
+ * on a day; `source` says where a day counts as "known": 'context' = only days
+ * with a saved context (or legacy journal tags); 'activity' = every day,
+ * because Intervals.icu activities are synced.
+ *
+ * Optional `dose(c)` makes the factor "how much", not just "yes/no": the
+ * regression then uses the dose relative to the person's usual dose, so the
+ * effect is read at their usual amount and per unit (per drink, per hour…).
+ * A day where the factor happened but the dose is unknown (no watch data)
+ * counts at the usual dose. `minutes(c)` is only for the summary text.
  */
 export const FACTORS = Object.freeze([
-  { id: 'leg', label: 'Tập chân', source: 'context', test: (c) => hasWorkout(c, 'leg') },
-  { id: 'chest_back', label: 'Tập ngực / lưng', source: 'context', test: (c) => hasWorkout(c, 'chest_back') },
-  { id: 'shoulder_arm', label: 'Tập vai / tay', source: 'context', test: (c) => hasWorkout(c, 'shoulder_arm') },
-  { id: 'pickleball', label: 'Pickleball', source: 'context', test: (c) => hasWorkout(c, 'pickleball') },
-  { id: 'cardio', label: 'Cardio nhẹ', source: 'context', test: (c) => hasWorkout(c, 'cardio') },
+  { id: 'leg', label: 'Tập chân', source: 'context', test: (c) => hasWorkout(c, 'leg'), dose: gymShare, minutes: gymMinShare, unit: 'load' },
+  { id: 'chest_back', label: 'Tập ngực / lưng', source: 'context', test: (c) => hasWorkout(c, 'chest_back'), dose: gymShare, minutes: gymMinShare, unit: 'load' },
+  { id: 'shoulder_arm', label: 'Tập vai / tay', source: 'context', test: (c) => hasWorkout(c, 'shoulder_arm'), dose: gymShare, minutes: gymMinShare, unit: 'load' },
+  { id: 'gym_full', label: 'Gym toàn thân', source: 'context', test: (c) => hasWorkout(c, 'gym_full'), dose: gymShare, minutes: gymMinShare, unit: 'load' },
+  watchSport('pickleball', 'Pickleball', 'racket'),
+  watchSport('run', 'Chạy bộ', 'run'),
+  watchSport('ride', 'Đạp xe', 'ride'),
+  watchSport('walk', 'Đi bộ', 'walk', 'phút'),
+  watchSport('yoga', 'Yoga', 'yoga', 'phút'),
+  // HIIT needs the tag: HUAWEI labels many ordinary moments "HIIT" on its own.
+  { id: 'hiit', label: 'Lớp HIIT', source: 'context', test: (c) => hasWorkout(c, 'hiit'), dose: (c) => (c._hiit_load > 0 ? c._hiit_load : null), minutes: (c) => (c._hiit_min > 0 ? c._hiit_min : null), unit: 'load' },
+  { id: 'cardio', label: 'Cardio khác', source: 'context', test: (c) => hasWorkout(c, 'cardio'), dose: (c) => (c._cardio_load > 0 ? c._cardio_load : null), minutes: (c) => (c._cardio_min > 0 ? c._cardio_min : null), unit: 'load' },
   { id: 'heavy_load', label: 'Tạ > 70% (thêm)', source: 'context', test: (c) => c.load === 'gt70' },
   { id: 'sauna_day', label: 'Xông hơi ban ngày', source: 'context', test: (c) => c.sauna === 'day' },
   { id: 'sauna_evening', label: 'Xông hơi buổi tối', source: 'context', test: (c) => c.sauna === 'evening' },
   { id: 'coffee_3plus', label: 'Cà phê ≥ 3 ly', source: 'context', test: (c) => (c.coffee_cups || 0) >= 3 },
   { id: 'coffee_late', label: 'Cà phê sau 14h', source: 'context', test: (c) => c.coffee_late === true },
-  { id: 'alcohol', label: 'Rượu bia', source: 'context', test: (c) => (c.alcohol || 0) >= 1 },
+  { id: 'alcohol', label: 'Rượu bia', source: 'context', test: (c) => (c.alcohol || 0) >= 1, dose: (c) => Math.min(c.alcohol || 0, 12) || null, unit: 'ly', perUnit: true },
   { id: 'late_meal', label: 'Ăn tối muộn', source: 'context', test: (c) => c.late_meal === true },
-  { id: 'late_bed', label: 'Ngủ sau 23h30', source: 'context', test: (c) => c.bedtime != null && bedMinutes(c.bedtime) >= 23 * 60 + 30 },
+  { id: 'late_bed', label: 'Lên giường trễ hơn thường lệ', source: 'context', test: (c) => c._bed_dev_h >= BEDTIME_RULES.minShiftH, dose: (c) => c._bed_dev_h, unit: 'giờ', perUnit: true },
+  { id: 'early_bed', label: 'Lên giường sớm hơn thường lệ', source: 'context', test: (c) => c._bed_dev_h <= -BEDTIME_RULES.minShiftH, dose: (c) => -c._bed_dev_h, unit: 'giờ', perUnit: true },
   { id: 'stress_high', label: 'Làm việc căng thẳng', source: 'context', test: (c) => c.work_stress === 2 },
   { id: 'late_workout', label: 'Tập sau 19h', source: 'activity', test: (c) => c._late_workout === true },
 ]);
+
+/**
+ * "Usual bedtime" = median of the bedtimes logged in the 28 days before
+ * (needs ≥ 7 of them). A night ≥ 30 min later counts as late, ≥ 30 min earlier
+ * as early, with the shift in hours as the dose. Until there are 7 logged
+ * bedtimes, or when the bedtime is not logged that day, the day counts as a
+ * usual night (neither late nor early).
+ */
+export const BEDTIME_RULES = Object.freeze({ window: 28, min: 7, minShiftH: 0.5, maxShiftH: 4 });
+
+const shiftDate = (date, n) => { const d = new Date(`${date}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+const median = (xs) => { const v = [...xs].sort((a, b) => a - b); const m = v.length >> 1; return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2; };
+
+/** Adds `_bed_dev_h` (+ later, − earlier) and `_bed_usual` (minutes) to day facts in place. */
+export function addBedtimeDeviation(days, rules = BEDTIME_RULES) {
+  const beds = [...days.entries()].filter(([, c]) => c.bedtime != null).map(([d, c]) => [d, bedMinutes(c.bedtime)]).sort((a, b) => (a[0] < b[0] ? -1 : 1));
+  for (let i = 0; i < beds.length; i++) {
+    const [date, mins] = beds[i];
+    const from = shiftDate(date, -rules.window);
+    const prior = [];
+    for (let j = i - 1; j >= 0 && beds[j][0] >= from; j--) prior.push(beds[j][1]);
+    if (prior.length < rules.min) continue;
+    const usual = median(prior);
+    const dev = Math.max(-rules.maxShiftH, Math.min(rules.maxShiftH, (mins - usual) / 60));
+    const c = days.get(date);
+    c._bed_usual = usual;
+    c._bed_dev_h = dev;
+  }
+  return days;
+}
+
+/** Intervals.icu activity types. Huawei has no pickleball mode, so pickleball arrives as Padel. */
+export const ACTIVITY_KIND = Object.freeze({
+  racket: /padel|pickle|tennis|badminton|squash|racquet/i,
+  gym: /weight|strength|crossfit/i,
+  yoga: /yoga|pilates/i,
+  hiit: /hiit|highintensity|interval/i,
+  run: /run$/i,
+  ride: /ride$|bike|cycl/i,
+  walk: /walk|hike/i,
+  cardio: /swim|row|elliptic|stair|cardio|workout/i,
+});
+const KINDS = Object.keys(ACTIVITY_KIND);
+const KIND_LABEL = { racket: 'Pickleball', run: 'Chạy bộ', ride: 'Đạp xe', walk: 'Đi bộ', yoga: 'Yoga' };
+const KIND_TAG = { racket: 'pickleball', run: 'run', ride: 'ride', walk: 'walk', yoga: 'yoga' };
+/** Recordings shorter than this are ignored (stray starts on the watch). */
+export const MIN_ACTIVITY_SECS = 600;
 
 /** Old journal tags (checkins.tags) expressed as context, so existing history counts. */
 const LEGACY_TAG = {
@@ -175,9 +270,19 @@ export function buildDayFacts({ contexts = new Map(), checkins = [], activities 
     const start = String(a.start_date_local || '');
     const date = start.slice(0, 10);
     if (!isDate(date)) continue;
+    const secs = a.moving_time ?? a.elapsed_time;
+    if (secs != null && secs < MIN_ACTIVITY_SECS) continue;
     const d = get(date);
+    const load = a.training_load || 0;
+    const mins = secs != null ? secs / 60 : 0;
     d._activities = (d._activities || 0) + 1;
-    d._load = (d._load || 0) + (a.training_load || 0);
+    d._load = (d._load || 0) + load;
+    const type = String(a.type || '');
+    const kind = KINDS.find((k) => ACTIVITY_KIND[k].test(type)) || null;
+    if (kind) {
+      d[`_${kind}_load`] = (d[`_${kind}_load`] || 0) + load;
+      d[`_${kind}_min`] = (d[`_${kind}_min`] || 0) + mins;
+    }
     const hour = Number(start.slice(11, 13));
     if (Number.isFinite(hour) && hour >= 19) d._late_workout = true;
   }
@@ -189,7 +294,10 @@ export function contextLabels(c) {
   if (!c) return [];
   const out = [];
   const wf = FIELD.get('workout');
-  if (Array.isArray(c.workout)) for (const id of c.workout) out.push(id === 'rest' ? 'Nghỉ tập' : `Tập ${wf.options.find((o) => o.id === id)?.label.toLowerCase()}`);
+  if (Array.isArray(c.workout)) for (const id of c.workout) {
+    const label = wf.options.find((o) => o.id === id)?.label;
+    out.push(id === 'rest' ? 'Nghỉ tập' : GYM_PARTS.includes(id) && id !== 'gym_full' ? `Tập ${label.toLowerCase()}` : label);
+  }
   if (c.load) out.push(`Tạ ${FIELD.get('load').options.find((o) => o.id === c.load)?.label}`);
   if (c.sauna && c.sauna !== 'none') out.push(c.sauna === 'evening' ? 'Xông hơi tối' : 'Xông hơi');
   if (c.coffee_cups) out.push(`Cà phê ${c.coffee_cups} ly`);
@@ -198,6 +306,9 @@ export function contextLabels(c) {
   if (c.late_meal) out.push('Ăn tối muộn');
   if (c.bedtime) out.push(`Lên giường ${c.bedtime}`);
   if (c.work_stress != null) out.push(`Căng thẳng: ${FIELD.get('work_stress').labels[c.work_stress]}`);
+  for (const [kind, label] of Object.entries(KIND_LABEL)) {
+    if (c[`_${kind}_min`] > 0 && !(Array.isArray(c.workout) && c.workout.includes(KIND_TAG[kind]))) out.push(`${label} ${Math.round(c[`_${kind}_min`])} phút (đồng hồ)`);
+  }
   if (c._late_workout && !out.some((x) => x.startsWith('Tập'))) out.push('Tập sau 19h');
   return out;
 }
