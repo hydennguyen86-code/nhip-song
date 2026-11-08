@@ -157,6 +157,15 @@ export function summarizeEpisode(ep) {
     }
   }
   const asleep = count.deep + count.core + count.rem + count.asleep;
+  // Deep-sleep blocks as [startMs, endMs]: WHOOP reads HRV in slow-wave sleep.
+  const deepBlocks = [];
+  for (let i = 0; i < n; i++) {
+    if (minutes[i] !== 'deep') continue;
+    let j = i;
+    while (j + 1 < n && minutes[j + 1] === 'deep') j++;
+    deepBlocks.push([ep.start + i * MIN, ep.start + (j + 1) * MIN]);
+    i = j;
+  }
   const bedFrom = minutes.findIndex((st) => st != null);
   let bedTo = -1;
   for (let i = n - 1; i >= 0; i--) if (minutes[i] != null) { bedTo = i; break; }
@@ -177,6 +186,7 @@ export function summarizeEpisode(ep) {
     awakenings,
     efficiency: inBed > 0 ? Math.round((asleep / inBed) * 1000) / 1000 : null,
     hasStages: count.deep + count.core + count.rem > 0,
+    deepBlocks,
     sources: [...new Set(ep.samples.map((s) => s.source).filter(Boolean))],
     samples: ep.samples.length,
   };
@@ -240,6 +250,13 @@ export function userForToken(db, header) {
 }
 
 export function saveNight(db, userId, n, { sleepScore = null } = {}) {
+  // A push covering "the last 2 days" cuts the start of the oldest night; never
+  // let that partial night replace the full one stored by an earlier push.
+  const old = db.prepare('SELECT samples, asleep_min, sleep_score FROM apple_sleep WHERE user_id = ? AND date = ?').get(userId, n.date);
+  if (old && (n.samples || 0) < (old.samples || 0) && (n.asleepMin || 0) < (old.asleep_min || 0)) {
+    if (sleepScore != null && old.sleep_score == null) db.prepare('UPDATE apple_sleep SET sleep_score = ? WHERE user_id = ? AND date = ?').run(sleepScore, userId, n.date);
+    return false;
+  }
   db.prepare(`INSERT INTO apple_sleep(user_id,date,bed_start,bed_end,in_bed_min,asleep_min,deep_min,core_min,rem_min,unspecified_min,
       awake_min,awakenings,efficiency,nap_min,sleep_score,sources,samples,updated_at)
     VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
@@ -341,6 +358,7 @@ export function sleepDetailView(db, userId, today = localDate(), { intervalsSlee
         awakeMin: mean(prior.map((r) => r.awake_min)),
         awakenings: mean(prior.map((r) => r.awakenings)),
         efficiency: mean(prior.map((r) => r.efficiency).filter((x) => x != null)),
+        restorativePct: mean(prior.map((r) => (r.deep_min + r.rem_min) / r.asleep_min)),
       }
     : { nights: prior.length, need: 7 };
   const night = last
@@ -363,6 +381,8 @@ export function sleepDetailView(db, userId, today = localDate(), { intervalsSlee
         remPct: pct(last, 'rem_min'),
         corePct: pct(last, 'core_min'),
         hasStages: (last.deep_min + last.core_min + last.rem_min) > 0,
+        restorativeMin: Math.round(last.deep_min + last.rem_min),
+        restorativePct: last.asleep_min > 0 ? (last.deep_min + last.rem_min) / last.asleep_min : null,
         updatedAt: last.updated_at,
       }
     : null;

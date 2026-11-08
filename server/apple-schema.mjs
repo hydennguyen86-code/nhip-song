@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS apple_daily (
   date TEXT NOT NULL,
   hrv REAL,
   hrv_n INTEGER,
+  hrv_method TEXT,
   rhr REAL,
   sleep_hr REAL,
   avg_hr REAL,

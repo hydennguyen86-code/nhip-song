@@ -2,7 +2,7 @@
 
 Ứng dụng web cho cả nhà xem mỗi sáng: **hôm nay cơ thể hồi phục tới đâu và nên làm gì**. App chạy trên một máy Mac trong nhà, mọi người mở bằng trình duyệt trên điện thoại. Dữ liệu nằm trên máy của bạn.
 
-App **cần HRV rMSSD mỗi đêm**. Không có HRV thì không có điểm và không có lời khuyên, vì HRV là tín hiệu chính của thuật toán (xem [Thiết bị dùng được](#thiết-bị-dùng-được)). Số đi vào tự động theo đường **đồng hồ HUAWEI → Health Sync → Intervals.icu → Nhịp Sống**. Nhập tay chỉ để bù một số còn thiếu trong ngày.
+App **cần HRV rMSSD mỗi đêm**. Không có HRV thì không có điểm và không có lời khuyên, vì HRV là tín hiệu chính của thuật toán (xem [Thiết bị dùng được](#thiết-bị-dùng-được)). Số đi vào tự động theo đường **đồng hồ HUAWEI → Health Sync → Intervals.icu → Nhịp Sống**, hoặc qua **Apple Health** nếu bật nguồn HRV lúc ngủ (xem [Nguồn HRV cho điểm](#nguồn-hrv-cho-điểm)). Nhập tay chỉ để bù một số còn thiếu trong ngày.
 
 > Đây **không phải WHOOP** và **không phải thiết bị y tế**. Điểm 0–100 là chỉ số tham khảo có công thức công khai, tính theo mức nền của chính bạn. Cảm giác của bạn luôn được ưu tiên hơn số đồng hồ.
 
@@ -67,7 +67,7 @@ Mở `http://127.0.0.1:8901`, đăng nhập bằng `admin`, `demo` hoặc `khong
 
 ## Thiết bị dùng được
 
-**Luật: thiết bị phải đo được HRV rMSSD trong lúc ngủ, và số đó phải về được Intervals.icu.** HRV là tín hiệu chính của thuật toán. Nhịp tim nghỉ và giấc ngủ một mình không đủ nhạy để cho phép tập nặng, nên app không đoán khi thiếu HRV.
+**Luật: thiết bị phải đo được HRV rMSSD trong lúc ngủ, và số đó phải về được Intervals.icu hoặc Apple Health.** HRV là tín hiệu chính của thuật toán. Nhịp tim nghỉ và giấc ngủ một mình không đủ nhạy để cho phép tập nặng, nên app không đoán khi thiếu HRV.
 
 | Thiết bị | Dùng được? |
 | --- | --- |
@@ -76,7 +76,7 @@ Mở `http://127.0.0.1:8901`, đăng nhập bằng `admin`, `demo` hoặc `khong
 | Xiaomi Smart Band 10 Pro, Smart Band 11 bản Trung Quốc | **Chưa hỗ trợ.** Có HRV khi ngủ, nhưng Xiaomi không nói là rMSSD hay SDNN, nên không so được với mức nền |
 | Xiaomi Smart Band 11 bản quốc tế | **Chưa hỗ trợ.** Trang sản phẩm quốc tế không ghi HRV |
 
-Về Apple Health: ô HRV của Apple mang nhãn SDNN, là một đại lượng khác rMSSD. Với đồng hồ HUAWEI, Health Sync ghi chính số rMSSD của HUAWEI vào ô đó, nên số khớp với Intervals.icu. App vẫn bỏ qua HRV do Apple Watch đo (đó là SDNN thật) và có bảng **Đối chiếu 14 ngày** để kiểm tra hai nguồn có khớp không trước khi trộn. Xem [Dữ liệu từ Apple Health](#dữ-liệu-từ-apple-health).
+Về Apple Health: ô HRV của Apple mang nhãn SDNN, là một đại lượng khác rMSSD. Với đồng hồ HUAWEI, Health Sync ghi chính số rMSSD của HUAWEI vào ô đó, nên số khớp với Intervals.icu. App vẫn bỏ qua HRV do Apple Watch đo (đó là SDNN thật) và có bảng **Đối chiếu 14 ngày** để kiểm tra hai nguồn có khớp không trước khi chọn nguồn. Xem [Dữ liệu từ Apple Health](#dữ-liệu-từ-apple-health).
 
 Khi chưa có HRV, trang Hôm nay hiện thẻ **Cần HRV** với một trong ba lý do:
 
@@ -260,7 +260,7 @@ Apple Health không có API web, nên iPhone phải tự gửi dữ liệu về 
 
 | Chỉ số | Cách tính theo ngày | Dùng vào đâu |
 | --- | --- | --- |
-| HRV | Trung bình các mẫu trong giấc ngủ đêm đó (không có giấc ngủ thì 21:00 hôm trước – 11:00) | Bù hoặc thay HRV của Intervals, tuỳ chế độ |
+| HRV | Trung vị các lần đo trong các đoạn **ngủ sâu** (ít nhất 3 lần); thiếu thì trung vị cả giấc ngủ; không có giấc ngủ thì 21:00 hôm trước – 11:00 | Nguồn HRV chính của điểm hồi phục khi có ≥ 15 đêm (chế độ "Tự động") |
 | Nhịp tim nghỉ | Mẫu mới nhất trong ngày | Bù hoặc thay |
 | Nhịp tim khi ngủ | Trung bình nhịp tim trong giấc ngủ | Hiển thị, lưu vào nhịp tim lúc ngủ |
 | Nhịp thở | Trung bình trong giấc ngủ | Bù hoặc thay. Bật cờ cảnh báo sắp ốm (trước đây Intervals không có số này) |
@@ -273,7 +273,7 @@ TRIMP (Banister) = phút × HRr × 0,64 × e^(1,92 × HRr), với HRr = (nhịp 
 
 ### Chế độ dùng dữ liệu Apple
 
-Vào **Cài đặt → Apple Health** để chọn một trong ba chế độ:
+Vào **Cài đặt → Apple Health** để chọn một trong ba chế độ. Chế độ này áp dụng cho nhịp tim nghỉ, giờ ngủ, nhịp thở, SpO2, số bước. **HRV đi riêng**, theo mục *Nguồn HRV cho điểm* bên dưới, nên không bao giờ bị trộn hai nguồn:
 
 - **Chỉ so sánh**: điểm chỉ dùng số của Intervals. Số Apple chỉ để đối chiếu.
 - **Bù chỗ Intervals thiếu** (mặc định): trường nào hoặc ngày nào Intervals trống thì lấy số Apple.
@@ -281,7 +281,25 @@ Vào **Cài đặt → Apple Health** để chọn một trong ba chế độ:
 
 Giá trị nhập tay luôn thắng. Ngày đã đánh dấu sai vẫn bị loại.
 
-Bảng **Đối chiếu 14 ngày** trong Cài đặt cho thấy hai nguồn cạnh nhau và độ lệch trung bình. Dùng bảng này để quyết định có chuyển sang **Ưu tiên Apple** hay không.
+Bảng **Đối chiếu 14 ngày** trong Cài đặt cho thấy hai nguồn cạnh nhau và độ lệch trung bình. Dùng bảng này để quyết định có chuyển sang **Ưu tiên Apple** hay không. Cột HRV của hai nguồn lệch nhau là bình thường: Apple là HRV lúc ngủ, Intervals.icu là trung bình cả ngày.
+
+### Nguồn HRV cho điểm
+
+Vào **Cài đặt → Apple Health → Nguồn HRV cho điểm** để chọn một trong ba:
+
+- **Tự động**: dùng HRV lúc ngủ từ Apple khi có ít nhất 15 đêm trong 60 ngày gần nhất (mức nền HRV cần 14 đêm cùng nguồn, cộng đêm qua). Chưa đủ thì dùng Intervals.icu, nên điểm không bị gián đoạn trong lúc nền Apple đang dựng.
+- **HRV lúc ngủ (Apple)**: luôn dùng HRV lúc ngủ từ Apple Health.
+- **Intervals.icu**: luôn dùng HRV từ Intervals.icu. Apple không ảnh hưởng đến điểm.
+
+Dòng **Đang dùng** cho biết nguồn nào đang tính điểm hôm nay. Dòng này cũng ghi số đêm có HRV lúc ngủ trong 60 ngày gần nhất.
+
+**Vì sao không bao giờ trộn hai nguồn:**
+
+- Intervals.icu cho **trung bình cả ngày** của các lần đo rời rạc từ HUAWEI.
+- HRV lúc ngủ từ Apple là **trung vị** các lần đo trong giấc ngủ.
+- Hai đại lượng này khác nhau. Vì vậy một mức nền chỉ dùng một nguồn.
+
+Khi đổi nguồn, app dựng lại mức nền từ **lịch sử của chính nguồn đó**. Số của nguồn kia không được đưa vào.
 
 ### Bước 1: tạo mã trên app
 
@@ -369,6 +387,8 @@ Nên chọn một trong hai:
 
 Chọn **Chạy ngay** (Run Immediately). Nếu muốn, tắt **Thông báo khi chạy**. iPhone phải bật **Tailscale** thì mới tới được máy Mac.
 
+Khi chạy hằng ngày, đặt **Giấc ngủ** và **Độ biến thiên nhịp tim** (HRV) là **2 ngày gần nhất**. Muốn dựng mức nền nhanh hơn, chạy một lần với **30 ngày** trước, rồi đổi về 2 ngày.
+
 ### Điểm ngủ (tuỳ chọn)
 
 Health có thể hiển thị điểm ngủ, nhưng chưa chắc phím tắt đọc được. Nếu trong danh sách loại của **Tìm mẫu sức khỏe** có loại điểm giấc ngủ, thêm một **Tìm mẫu sức khỏe** lấy mẫu mới nhất, rồi thêm trường JSON `sleepScore` kiểu **Số** vào bước gửi. Không có thì bỏ qua.
@@ -382,6 +402,13 @@ Health có thể hiển thị điểm ngủ, nhưng chưa chắc phím tắt đ�
 - Số giờ ngủ hiện cạnh số của Intervals nếu lệch từ 20 phút. Trong giai đoạn chạy song song, **điểm hồi phục vẫn dùng số của Intervals**.
 - Nhận nhãn tiếng Việt và tiếng Anh: Sâu/Deep, Lõi/Core, REM, Thức/Awake, Trên giường/In Bed, Đã ngủ/Asleep; và số HealthKit 0–5.
 - Giai đoạn ngủ từ đồng hồ đeo tay có sai số so với đo đa ký giấc ngủ. Hãy nhìn **xu hướng nhiều đêm**, đừng tin một đêm.
+
+### Cấu trúc giấc ngủ
+
+- **Ngủ phục hồi** = ngủ sâu + REM. Hiện theo phút, theo % và so với mức thường của bạn.
+- **Độ đều giờ ngủ** từ 0–100 = 100 − (độ lệch chuẩn giờ lên giường + độ lệch chuẩn giờ thức dậy của 7 đêm, tính bằng phút) ÷ 1,2. Cần ít nhất 4 đêm.
+- Tab **Quy luật** xét các đêm **ít ngủ sâu**, **ít REM** và **thức nhiều** có làm HRV **đêm kế tiếp** thấp hơn không. App không so cùng đêm, vì HRV và ngủ sâu đo cùng lúc nên luôn đi cùng nhau.
+- Phần này **chỉ hiển thị**. Cấu trúc giấc ngủ chưa được tính vào điểm.
 
 ### Bảo mật
 
@@ -463,7 +490,7 @@ Buổi sáng không phải chờ Intervals.icu. Trang **Hôm nay** có thẻ **S
 
 Dù chọn mục nào, khi Intervals.icu có số thật cho đúng ngày, **số thật thay số tay**.
 
-HRV đi vào tự động qua Health Sync → Intervals.icu. Form nhập tay để bù một ngày còn thiếu số, gồm:
+HRV đi vào tự động qua Health Sync → Intervals.icu, hoặc qua Apple Health khi bật nguồn HRV lúc ngủ. Form nhập tay để bù một ngày còn thiếu số, gồm:
 
 | Chỉ số | Đơn vị, khoảng nhận | App dùng vào |
 | --- | --- | --- |
@@ -512,7 +539,7 @@ Vòng lớn ở giữa là **chỉ số hồi phục tham khảo**, không phả
 | --- | --- | --- |
 | HRV rMSSD (**bắt buộc**) | 45% | **ln(rMSSD)**. 60% đêm qua + 40% trung bình 7 ngày, z so với **trung vị 60 ngày** (độ lệch = 1,4826 × MAD, sàn 0,07 ≈ 7%). Báo vùng **SWC** = nền ± 0,5 độ lệch và **CV 7 ngày** (cảnh báo khi ≥ 1,5 × CV thường lệ). |
 | Nhịp tim nghỉ | 25% | đêm qua so với **trung vị 30 ngày**, độ lệch MAD (sàn 1 bpm); **đảo dấu** vì cao hơn là xấu |
-| Giấc ngủ | 30% | **so với nhu cầu, không so với trung bình của bạn**: % = ngủ / nhu cầu. Nhu cầu = nền (TB 30 đêm, kẹp 7h30–8h30; < 7 đêm thì 8h) + 20% nợ ngủ 7 đêm trước (tối đa 60 phút) + tối đa 45 phút nếu hôm qua tập nhiều hơn TB 28 ngày. 85% nhu cầu = 50 điểm; mỗi 10% ≈ 22 điểm. |
+| Giấc ngủ | 30% | **so với nhu cầu, không so với trung bình của bạn**: % = ngủ / nhu cầu. Nhu cầu = nền (TB 30 đêm, kẹp 7h30–8h30; < 7 đêm thì 8h) + 20% nợ ngủ 7 đêm trước (tối đa 60 phút) + 5 phút cho mỗi điểm strain hôm qua trên 10, tối đa 45 phút. 85% nhu cầu = 50 điểm; mỗi 10% ≈ 22 điểm. |
 | Nhịp thở | **0%** | **Cờ cảnh báo một chiều**, không cộng điểm. Bật khi đêm qua cao hơn trung vị 30 đêm ≥ max(1,5; 2 × độ lệch) lần/phút. Thở chậm hơn **không** được cộng điểm. Chưa có số → hiện "chưa có số", **không** hạ độ tin cậy. Có thể nhập tay từ HUAWEI Health ở thẻ *Số của hôm nay*, mục *Nhập tay*. |
 
 Mỗi phần đổi thành điểm con `50 + z × 22`, kẹp 2–99 (giấc ngủ: `50 + (% − 0,85) × 220`). Điểm cuối là trung bình có trọng số. **Không có HRV thì không có điểm** và không có lời khuyên. Thiếu nhịp tim nghỉ hoặc giấc ngủ thì **chia lại trọng số** và hạ độ tin cậy (3/3 = cao, 2 = vừa, 1 = thấp; HRV còn "sơ bộ" < 28 ngày thì tối đa "vừa"). Dải màu: **67–100 sẵn sàng**, **34–66 trung bình**, **0–33 cần hồi phục**.
@@ -569,7 +596,7 @@ Ba mức thời lượng ngủ cho đêm nay, giống cấu trúc Sleep Planner 
 
 - **Nền** = trung bình ngủ 30 ngày, kẹp trong 7h30–8h30 để không đẩy ai vào mục tiêu phi thực tế.
 - **Nợ ngủ** 7 đêm gần nhất, trả dần — tối đa khoảng 1 giờ cộng thêm cho một đêm.
-- **Điều chỉnh theo tập luyện**: hôm qua tập nhiều hơn trung bình 28 ngày → cộng thêm tối đa 45 phút.
+- **Điều chỉnh theo tập luyện**: strain hôm nay trên 10 thì cộng 5 phút cho mỗi điểm, tối đa 45 phút.
 - **Get By** = tối thiểu để tỉnh táo; **Perform** = hồi phục tốt; **Peak** = đỉnh phong độ.
 - Giờ đi ngủ được tính ngược từ **giờ thức** bạn đặt trên máy (lưu trong `localStorage`), không gửi lên server.
 
@@ -588,6 +615,49 @@ Tải dùng `icu_training_load`; app nói rõ đây không phải thước đo �
 ### 7.5 Cảm giác hằng ngày và bối cảnh
 
 Mỗi buổi sáng ghi cảm giác (bình thường / mệt / bệnh / triệu chứng nặng). Cảm giác luôn thắng số đồng hồ. Thói quen và buổi tập ghi ở thẻ **"Hôm qua bạn đã làm gì?"**, xem [Ghi bối cảnh và đọc quy luật](#ghi-bối-cảnh-và-đọc-quy-luật). Các tag nhật ký cũ (rượu, cà phê sau 14h, căng thẳng, ăn muộn, tập sau 19h) đã ghi trước đây vẫn được tính vào quy luật.
+
+## Strain tập luyện (0–21)
+
+Strain đo mức tải của các buổi tập trong ngày, trên thang 0–21. Số này lấy từ `icu_training_load` của Intervals.icu. Strain tác động đến nhu cầu ngủ của hôm sau (xem mục 7.1) và đặt mục tiêu tập hôm nay.
+
+Công thức:
+
+```
+strain = min(21, 3,73 × ln(1 + load/1,5))
+```
+
+- `load` = tổng `icu_training_load` của các buổi tập trong ngày.
+- Chỉ tính buổi tập dài ít nhất 10 phút.
+
+Ví dụ:
+
+| Load | Strain |
+| --- | --- |
+| 10 | 7,6 |
+| 36 | 12 |
+| 100 | 15,7 |
+| 300 | 19,8 |
+
+Mức strain:
+
+| Strain | Mức |
+| --- | --- |
+| 0–9 | Nhẹ |
+| 10–13 | Vừa |
+| 14–17 | Cao |
+| 18–21 | Rất cao |
+
+Mục tiêu theo vùng hồi phục:
+
+| Vùng hồi phục | Mục tiêu strain hôm nay | Nhãn |
+| --- | --- | --- |
+| Xanh (67–100) | 14–18 | Có thể tập nặng |
+| Vàng (34–66) | 10–14 | Tập vừa |
+| Đỏ (0–33) | 0–10 | Ưu tiên hồi phục |
+
+Khi không có điểm hồi phục, hoặc đang có cảnh báo khẩn cấp, app không đưa ra mục tiêu.
+
+**Giới hạn**: strain chỉ tính các buổi tập có trong Intervals.icu. App không đo vận động cả ngày như WHOOP, nên ngày không tập có strain 0.
 
 ## 8. Mức nền — cách tính thật
 
@@ -704,7 +774,7 @@ server/
 public/
   index.html, styles.css, app.js  — vanilla JS, responsive (sidebar + bottom nav), SVG chart
 test/
-  all.test.mjs, recovery.test.mjs, signals.test.mjs, insights.test.mjs  — 134 unit test (node:test)
+  all, recovery, signals, insights, apple-health, apple-metrics, strain-structure (.test.mjs)  — 186 unit test (node:test)
 scripts/nhip, backup.sh, seed-demo.mjs
 ```
 
@@ -765,7 +835,9 @@ App **không** sao chép thuật toán WHOOP (bí mật độc quyền, không a
 | --- | --- | --- | --- |
 | Điểm phục hồi 0–100 | Có, thuật toán kín, trọng số riêng | **Có, công thức công khai**: 45% HRV / 25% RHR / 30% ngủ so với nhu cầu, nhịp thở chỉ là cờ, hiện từng đóng góp và hạ độ tin cậy khi thiếu | Một chỉ số tổng hợp tiện theo dõi, nhưng trọng số là lựa chọn thiết kế, không phải chân lý sinh lý. Minh bạch quan trọng hơn một con số kín. |
 | Mức nền | 30 ngày cuộn, cập nhật liên tục | 30 ngày **trước** ngày đánh giá, cá nhân hoá | Nền ngắn hạn bắt kịp thay đổi tập luyện; nền phải loại chính ngày đánh giá. |
-| HRV | 1 đêm (giấc ngủ sóng chậm), so nền | **Trung bình cuộn 7 ngày**, so nền 30 ngày | Plews et al.: trung bình 7 ngày (hoặc log 7 ngày) đáng tin hơn 1 đêm — một đêm thấp thường là nhiễu. |
+| HRV | 1 đêm (giấc ngủ sóng chậm), so nền | **HRV lúc ngủ** từ Apple Health: trung vị các lần đo trong **ngủ sâu** (giống WHOOP); trộn 60% đêm qua + 40% trung bình 7 ngày (log), so nền 60 ngày cùng nguồn | Plews et al.: trung bình 7 ngày (hoặc log 7 ngày) đáng tin hơn 1 đêm — một đêm thấp thường là nhiễu. Trung vị chống được các lần đo lẻ quá cao/thấp của đồng hồ. |
+| Strain | 0–21, lôgarit, tính nhịp tim cả ngày, thuật toán kín | **0–21, lôgarit, công thức công khai**, từ load các buổi tập trên Intervals.icu; mục tiêu theo màu hồi phục | Thang lôgarit phản ánh đúng việc tải càng cao càng khó tăng thêm. Không tính vận động ngoài buổi tập nên ngày nghỉ là 0. |
+| Cấu trúc giấc ngủ | Có, dùng trong điểm ngủ | Có (sâu, lõi, REM, thức, ngủ phục hồi, độ đều giờ ngủ). **Chỉ đưa vào điểm khi tab Quy luật chứng minh** nó dự báo HRV đêm kế tiếp của chính bạn | Giai đoạn ngủ đo ở cổ tay khớp đa ký giấc ngủ ở mức vừa phải; tin xu hướng nhiều đêm hơn một đêm. |
 | Số ngày tối thiểu cho HRV | Không công bố | 14 ngày → mức "sơ bộ"; ≥ 28 ngày → mức "ổn định" | Plews et al.: cần ≥ 4 tuần để nền HRV dùng được cho quyết định. |
 | RHR, ngủ | 1 đêm, so nền | 1 đêm, so nền (z-score) | Các chỉ số này ít nhiễu hơn HRV, dùng 1 đêm chấp nhận được. |
 | Nhịp thở | Có, một trong các yếu tố | Có khi dữ liệu có, chỉ là **gợi ý bổ sung**, không quyết định một mình | Nhịp thở tăng là dấu hiệu bệnh nhưng độ ồn cao từ cảm biến đeo tay; chỉ nên là tín hiệu phụ. |
@@ -776,7 +848,7 @@ App **không** sao chép thuật toán WHOOP (bí mật độc quyền, không a
 
 Những gì app **biết là chưa làm được** (giới hạn trung thực):
 
-- Chỉ số hồi phục **không trộn tải tập** vào điểm; tải chỉ dùng cho kế hoạch ngủ và mục tiêu tuần. WHOOP dùng strain theo cách riêng mà họ không công bố.
+- Chỉ số hồi phục **không cộng tải tập** vào điểm (HRV đã phản ánh buổi tập, cộng thêm là tính hai lần). Tải tập đổi thành **strain 0–21**, dùng cho nhu cầu ngủ (strain hôm qua làm tăng nhu cầu ngủ trong điểm giấc ngủ), kế hoạch ngủ tối nay, mục tiêu strain hôm nay và mục tiêu tuần. Công thức strain của WHOOP không công bố; strain của app chỉ tính các buổi tập.
 - Không đo giấc ngủ theo giai đoạn (REM/sâu) — `sleepSecs` tổng là tất cả những gì có.
 - Độ chính xác cảm biến quang học ở cổ tay thấp hơn đai ngực/thiết bị y tế; mọi z-score chỉ có ý nghĩa tương đối với chính người đó.
 - Đồng hồ Huawei gửi dữ liệu qua Huawei Health → Health Sync → Intervals.icu: mỗi khâu có thể làm tròn, đổi đơn vị, bỏ sót. App hiển thị nguồn gốc để bạn tra cứu.

@@ -28,9 +28,11 @@ import { computeBaselines } from './baseline.mjs';
 import { sickDatesFrom, priorValues, BASELINE_NEEDS } from './signals.mjs';
 import { startScheduler, getSchedule, setSchedule } from './scheduler.mjs';
 import { handleExtRoutes } from './routes-ext.mjs';
+import { buildStrain } from './strain.mjs';
+import { sleepConsistency } from './sleep-structure.mjs';
 import { clientIp, viaProxy, isHttps, applySecurityHeaders, createLoginLimiter } from './security.mjs';
 import { restoreNight, issueToken, revokeToken, tokenInfo, userForToken, listNights, sleepDetailView } from './apple-health.mjs';
-import { ingestAll as ingestApple, getAppleMode, setAppleMode, compareSources, workoutsWithIcu, nightExtras, listDaily, saveDaily, saveWorkout } from './apple-metrics.mjs';
+import { ingestAll as ingestApple, hrvSourceInfo, setHrvSourceSetting, getAppleMode, setAppleMode, compareSources, workoutsWithIcu, nightExtras, listDaily, saveDaily, saveWorkout } from './apple-metrics.mjs';
 
 const loginLimiter = createLoginLimiter();
 // Wrong Shortcut tokens: same lockout rule as passwords, per client IP.
@@ -331,6 +333,11 @@ async function route(req, res) {
     const rawToday = db.prepare('SELECT sleep_secs FROM wellness WHERE user_id = ? AND date = ?').get(req.user.id, today);
     const sleepDetail = sleepDetailView(db, req.user.id, today, { intervalsSleepSecs: rawToday?.sleep_secs ?? null });
     sleepDetail.extras = nightExtras(db, req.user.id, today);
+    sleepDetail.consistency = sleepConsistency(listNights(db, req.user.id, addDays(today, -10), today), today);
+    const hrvRow = db.prepare('SELECT hrv, hrv_method, hrv_n FROM apple_daily WHERE user_id = ? AND date = ?').get(req.user.id, today);
+    sleepDetail.hrvNight = hrvRow?.hrv != null ? { value: hrvRow.hrv, method: hrvRow.hrv_method || 'window', n: hrvRow.hrv_n || 0 } : null;
+    const strain = buildStrain({ activities, today, band: recovery.band });
+    const hrvSource = hrvSourceInfo(db, req.user.id, today);
     sleepDetail.appleFields = todayRow?._apple || [];
 
     const userRow = db.prepare('SELECT last_sync_at AS lastSync, last_sync_error AS syncError, icu_key_cipher IS NOT NULL AS hasKey, display_name AS displayName, created_at AS createdAt FROM users WHERE id = ?').get(req.user.id);
@@ -349,6 +356,8 @@ async function route(req, res) {
       history,
       metrics,
       sleepDetail,
+      strain,
+      hrvSource,
       recent: activities.slice(0, 4),
       checkin: checkin || null,
       journalTags: JOURNAL_TAGS,
@@ -564,10 +573,19 @@ async function route(req, res) {
       ...tokenInfo(db, req.user.id),
       endpoint: '/api/ingest/apple-health',
       mode: getAppleMode(db, req.user.id),
+      hrvSource: (({ setting, source, appleNights }) => ({ setting, source, appleNights }))(hrvSourceInfo(db, req.user.id, today)),
       nights: listNights(db, req.user.id, addDays(today, -13), today),
       compare: compareSources(db, req.user.id, today, 14),
       workouts: workoutsWithIcu(db, req.user.id, addDays(today, -13), today),
     });
+  }
+  if (p === '/api/apple-health/hrv-source' && method === 'POST') {
+    if (!requireUser(req, res)) return;
+    const body = await readJson(req);
+    try {
+      setHrvSourceSetting(db, req.user.id, String(body.source || ''));
+      return json(res, 200, { ok: true, hrvSource: hrvSourceInfo(db, req.user.id, localDate()) });
+    } catch (e) { return json(res, 400, { error: e.message }); }
   }
   if (p === '/api/apple-health/mode' && method === 'POST') {
     if (!requireUser(req, res)) return;

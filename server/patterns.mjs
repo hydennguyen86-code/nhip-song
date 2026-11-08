@@ -42,7 +42,7 @@
  *   amount and the ridge penalty stays on the same scale as yes/no factors.
  *   Per-unit effect = b ÷ usual dose (assumes a straight line).
  */
-import { robustStats, plausible, HRV_LN_SPREAD_FLOOR, addDays } from './signals.mjs';
+import { robustStats, plausible, HRV_LN_SPREAD_FLOOR, addDays, hrvSourceOf, sameHrvSource } from './signals.mjs';
 import { FACTORS, buildDayFacts, addBedtimeDeviation, PRIVATE_FIELDS } from './context.mjs';
 
 export const PATTERN_RULES = Object.freeze({
@@ -120,10 +120,13 @@ export function morningOutcomes(wellness, { sickDates = null } = {}) {
   const rows = [...wellness].sort((a, b) => (a.date < b.date ? -1 : 1));
   const prior = (i, field, window) => {
     const start = addDays(rows[i].date, -window);
+    // HRV z is read against the same kind of HRV only (Apple night vs Intervals.icu day mean).
+    const src = field === 'hrv_rmssd' ? hrvSourceOf(rows[i]) : null;
     const out = [];
     for (let j = i - 1; j >= 0 && rows[j].date >= start; j--) {
       const r = rows[j];
       if (sickDates && sickDates.has(r.date)) continue;
+      if (src && src !== 'manual' && !sameHrvSource(r, src)) continue;
       if (plausible(field, r[field])) out.push(r[field]);
     }
     return out;

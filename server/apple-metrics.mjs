@@ -32,6 +32,7 @@
  * (default), or preferred over Intervals.icu. Hand-entered values always win.
  */
 import { localDate, getConfig, setConfig } from './db.mjs';
+import { BASELINE_NEEDS } from './signals.mjs';
 import { parseTime, parseSamples, buildNights, saveNight, listNights } from './apple-health.mjs';
 
 const MIN = 60_000;
@@ -209,6 +210,15 @@ export function parseAutoExport(body) {
 
 const mean = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
 const round1 = (x) => (x == null ? null : Math.round(x * 10) / 10);
+const median = (xs) => {
+  if (!xs.length) return null;
+  const v = [...xs].sort((a, b) => a - b);
+  const m = v.length >> 1;
+  return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
+};
+const NIGHT_METRICS = new Set(['hrv', 'resp', 'spo2']);
+/** Fewest HRV readings inside deep sleep before the deep-sleep median is trusted. */
+export const HRV_DEEP_MIN = 3;
 const dateOf = (ms) => localDate(new Date(ms));
 const dayStart = (date) => Date.parse(`${date}T00:00:00+07:00`);
 
@@ -230,6 +240,8 @@ export function aggregateDaily(samples, windows = new Map()) {
     byMetric.get(s.metric).push(s);
   }
   const dates = new Set(samples.map((s) => dateOf(s.start)));
+  // A night reading after 21:00 belongs to the next morning's night.
+  for (const s of samples) if (NIGHT_METRICS.has(s.metric)) dates.add(dateOf(s.start + 3 * 3600000));
   for (const d of windows.keys()) dates.add(d);
   const out = {};
   const inside = (list, a, b) => list.filter((s) => s.start >= a && s.start < b);
@@ -248,8 +260,28 @@ export function aggregateDaily(samples, windows = new Map()) {
     const list = inside(byMetric.get(metric) || [], dayStart(d), dayStart(d) + DAY);
     return list.length ? list.reduce((a, b) => (b.start >= a.start ? b : a)).value : null;
   };
+  /**
+   * Night HRV, WHOOP-style: HUAWEI writes a spot rMSSD about every 10 minutes
+   * while asleep, and single readings swing widely (21–128 ms in one hour), so
+   * the night is the MEDIAN of the readings inside deep-sleep blocks (≥ 3),
+   * else of the whole sleep, else of 21:00 → 11:00.
+   */
+  const nightHrv = (d) => {
+    const list = byMetric.get('hrv') || [];
+    const w = windows.get(d);
+    if (w?.deep?.length) {
+      const deep = list.filter((s) => w.deep.some(([a, b]) => s.start >= a && s.start < b));
+      if (deep.length >= HRV_DEEP_MIN) return { pick: deep, method: 'deep' };
+    }
+    if (w) {
+      const sleep = inside(list, w.start, w.end);
+      if (sleep.length) return { pick: sleep, method: 'sleep' };
+    }
+    const win = inside(list, dayStart(d) - 3 * 3600000, dayStart(d) + 11 * 3600000);
+    return { pick: win, method: win.length ? 'window' : null };
+  };
   for (const d of dates) {
-    const hrv = nightly('hrv', d);
+    const { pick: hrv, method: hrvMethod } = nightHrv(d);
     const w = windows.get(d);
     const hrDay = inside(byMetric.get('hr') || [], dayStart(d), dayStart(d) + DAY);
     const hrSleep = w ? inside(byMetric.get('hr') || [], w.start, w.end) : [];
@@ -257,21 +289,22 @@ export function aggregateDaily(samples, windows = new Map()) {
     const kcal = inside(byMetric.get('kcal') || [], dayStart(d), dayStart(d) + DAY);
     const row = {
       date: d,
-      hrv: round1(mean(hrv.map((s) => s.value))),
+      hrv: round1(median(hrv.map((s) => s.value))),
       hrv_n: hrv.length || null,
+      hrv_method: hrvMethod,
       rhr: latest('rhr', d),
       sleep_hr: round1(mean(hrSleep.map((s) => s.value))),
       // Whole-day average only when heart rate covers most of the day, not just a workout.
       avg_hr: new Set(hrDay.map((s) => Math.floor((s.start - dayStart(d)) / 3600000))).size >= 18 ? round1(mean(hrDay.map((s) => s.value))) : null,
-      resp: round1(mean(nightly('resp', d).map((s) => s.value))),
-      spo2: round1(mean(nightly('spo2', d).map((s) => s.value))),
+      resp: round1(median(nightly('resp', d).map((s) => s.value))),
+      spo2: round1(median(nightly('spo2', d).map((s) => s.value))),
       steps: steps.length ? Math.round(sumBySource(steps)) : null,
       kcal_active: kcal.length ? Math.round(sumBySource(kcal)) : null,
       walk_hr: latest('walk_hr', d),
       wrist_temp: latest('wrist_temp', d),
       sources: [...new Set([...hrv, ...hrDay].map((s) => s.source).filter(Boolean))],
     };
-    if (Object.entries(row).some(([k, v]) => !['date', 'sources', 'hrv_n'].includes(k) && v != null)) out[d] = row;
+    if (Object.entries(row).some(([k, v]) => !['date', 'sources', 'hrv_n', 'hrv_method'].includes(k) && v != null)) out[d] = row;
   }
   return out;
 }
@@ -314,13 +347,23 @@ export function buildWorkouts(workouts, samples, { restHr = 60, maxHr = 185 } = 
 
 // ---------------- storage ----------------
 
-const DAILY_COLS = ['hrv', 'hrv_n', 'rhr', 'sleep_hr', 'avg_hr', 'resp', 'spo2', 'steps', 'kcal_active', 'walk_hr', 'wrist_temp'];
+const DAILY_COLS = ['hrv', 'hrv_n', 'hrv_method', 'rhr', 'sleep_hr', 'avg_hr', 'resp', 'spo2', 'steps', 'kcal_active', 'walk_hr', 'wrist_temp'];
 const GROWING = new Set(['steps', 'kcal_active']);
+const HRV_COLS = new Set(['hrv', 'hrv_n', 'hrv_method']);
 
 export function saveDaily(db, userId, row) {
+  // Night HRV: a later push whose window cut the night short has fewer readings;
+  // keep the better method, then whichever saw more of the night (ties → newer).
+  // Rank by method first (deep > sleep > window): a later push that adds the
+  // sleep stages must upgrade a window median even though it uses fewer readings.
+  const rank = (t) => `CASE ${t}.hrv_method WHEN 'deep' THEN 3 WHEN 'sleep' THEN 2 WHEN 'window' THEN 1 ELSE 0 END`;
+  const hrvWins = `excluded.hrv IS NOT NULL AND (apple_daily.hrv IS NULL OR ${rank('excluded')} > ${rank('apple_daily')}
+    OR (${rank('excluded')} = ${rank('apple_daily')} AND COALESCE(excluded.hrv_n,0) >= COALESCE(apple_daily.hrv_n,0)))`;
   const sets = DAILY_COLS.map((c) => (GROWING.has(c)
     ? `${c}=CASE WHEN excluded.${c} IS NULL THEN apple_daily.${c} WHEN apple_daily.${c} IS NULL THEN excluded.${c} ELSE MAX(excluded.${c}, apple_daily.${c}) END`
-    : `${c}=COALESCE(excluded.${c}, apple_daily.${c})`)).join(', ');
+    : HRV_COLS.has(c)
+      ? `${c}=CASE WHEN ${hrvWins} THEN excluded.${c} ELSE apple_daily.${c} END`
+      : `${c}=COALESCE(excluded.${c}, apple_daily.${c})`)).join(', ');
   db.prepare(`INSERT INTO apple_daily(user_id,date,${DAILY_COLS.join(',')},sources,updated_at)
       VALUES(?,?,${DAILY_COLS.map(() => '?').join(',')},?,?)
       ON CONFLICT(user_id,date) DO UPDATE SET ${sets}, sources=excluded.sources, updated_at=excluded.updated_at`)
@@ -400,7 +443,7 @@ export function ingestAll(db, userId, body = {}) {
   const newestNight = nights.reduce((a, n) => (!a || n.date > a ? n.date : a), null);
   for (const n of nights) saveNight(db, userId, n, { sleepScore: n.date === newestNight ? score : null });
 
-  const windows = new Map(nights.filter((n) => n.sleepStartMs != null).map((n) => [n.date, { start: n.sleepStartMs, end: n.sleepEndMs }]));
+  const windows = new Map(nights.filter((n) => n.sleepStartMs != null).map((n) => [n.date, { start: n.sleepStartMs, end: n.sleepEndMs, deep: n.deepBlocks || [] }]));
   const daily = aggregateDaily(samples, windows);
   for (const row of Object.values(daily)) saveDaily(db, userId, row);
 
@@ -451,9 +494,51 @@ export function setAppleMode(db, userId, mode) {
   return mode;
 }
 
-/** wellness column ← apple value, and the manual flag that protects it. */
+export const HRV_SOURCES = Object.freeze(['auto', 'apple_night', 'intervals']);
+/**
+ * Nights of Apple night HRV (in the 60 days up to today) before "auto" switches
+ * to it: the HRV baseline needs 14 earlier nights of the SAME source
+ * (BASELINE_NEEDS.hrv_rmssd.minDays) plus last night, so switching earlier
+ * would leave the person with no score while the Apple baseline builds.
+ */
+export const HRV_AUTO_MIN_NIGHTS = BASELINE_NEEDS.hrv_rmssd.minDays + 1;
+
+export function getHrvSourceSetting(db, userId) {
+  const v = getConfig(db, `hrv_source:${userId}`, 'auto');
+  return HRV_SOURCES.includes(v) ? v : 'auto';
+}
+
+export function setHrvSourceSetting(db, userId, value) {
+  if (!HRV_SOURCES.includes(value)) throw new Error('Nguồn HRV không hợp lệ.');
+  setConfig(db, `hrv_source:${userId}`, value);
+  return value;
+}
+
+const shiftDate = (date, days) => localDate(new Date(Date.parse(`${date}T12:00:00+07:00`) + days * DAY));
+
+/**
+ * Which HRV judges the recovery index: Apple night HRV ('apple_night') or the
+ * Intervals.icu daily value ('intervals'). The two are different quantities
+ * (sleep median vs all-day mean of spot readings), so a baseline only ever
+ * uses one of them (signals.mjs hrvModel).
+ */
+export function hrvSourceInfo(db, userId, today = localDate()) {
+  const setting = getHrvSourceSetting(db, userId);
+  const appleNights = db.prepare('SELECT COUNT(*) AS n FROM apple_daily WHERE user_id = ? AND hrv IS NOT NULL AND date >= ? AND date <= ?')
+    .get(userId, shiftDate(today, -60), today).n;
+  const source = setting === 'intervals' ? 'intervals'
+    : setting === 'apple_night' ? 'apple_night'
+      : appleNights >= HRV_AUTO_MIN_NIGHTS ? 'apple_night' : 'intervals';
+  const note = source === 'apple_night'
+    ? 'HRV lúc ngủ từ Apple Health (trung vị các lần đo trong ngủ sâu).'
+    : setting === 'auto'
+      ? `HRV trung bình ngày từ Intervals.icu. Tự chuyển sang HRV lúc ngủ khi có ${HRV_AUTO_MIN_NIGHTS} đêm từ Apple Health (đang có ${appleNights}).`
+      : 'HRV trung bình ngày từ Intervals.icu.';
+  return { setting, source, appleNights, note };
+}
+
+/** wellness column ← apple value, and the manual flag that protects it. HRV is handled apart (source). */
 const MAP = [
-  ['hrv_rmssd', (a) => a.hrv, 'hrv_manual'],
   ['resting_hr', (a) => a.rhr, 'resting_hr_manual'],
   ['respiration', (a) => a.resp, 'respiration_manual'],
   ['spo2', (a) => a.spo2, 'spo2_manual'],
@@ -472,6 +557,8 @@ const MAP = [
  * fields that came from Apple, so the UI can say where a number is from.
  */
 export function mergeAppleIntoWellness(db, userId, rows, oldest, newest, mode = getAppleMode(db, userId)) {
+  const hrvSrc = hrvSourceInfo(db, userId, newest).source;
+  if (hrvSrc === 'apple_night') rows = applyAppleHrv(db, userId, rows, oldest, newest);
   if (mode === 'off') return rows;
   const daily = db.prepare('SELECT * FROM apple_daily WHERE user_id = ? AND date >= ? AND date <= ?').all(userId, oldest, newest);
   const sleep = db.prepare('SELECT date, asleep_min, sleep_score FROM apple_sleep WHERE user_id = ? AND date >= ? AND date <= ?').all(userId, oldest, newest);
@@ -502,10 +589,39 @@ export function mergeAppleIntoWellness(db, userId, rows, oldest, newest, mode = 
       row[col] = v;
       used.push(col);
     }
-    if (used.length) row._apple = used;
+    if (used.length) row._apple = [...(row._apple || []), ...used];
     out.push(row);
   }
   return out;
+}
+
+/**
+ * HRV column from Apple night HRV. From the first Apple night on, every row's
+ * hrv_rmssd is the Apple value or empty (never Intervals.icu); before it the
+ * Intervals.icu history stays, tagged, so trends and the patterns engine keep
+ * their history while each baseline compares like with like. Hand-entered
+ * HRV always wins.
+ */
+function applyAppleHrv(db, userId, rows, oldest, newest) {
+  const apple = db.prepare('SELECT date, hrv FROM apple_daily WHERE user_id = ? AND hrv IS NOT NULL AND date >= ? AND date <= ?').all(userId, oldest, newest);
+  const first = db.prepare('SELECT MIN(date) AS d FROM apple_daily WHERE user_id = ? AND hrv IS NOT NULL').get(userId).d;
+  if (!first) return rows;
+  const byDate = new Map(apple.map((a) => [a.date, a.hrv]));
+  const out = rows.map((r) => {
+    if (r.hrv_manual === 1) return { ...r, _hrv_src: 'manual' };
+    if (r.date < first) return { ...r, _hrv_src: 'icu' };
+    const v = byDate.get(r.date) ?? null;
+    const row = { ...r, hrv_icu: r.hrv_rmssd ?? null, hrv_rmssd: v, _hrv_src: 'apple' };
+    if (v != null) row._apple = [...(r._apple || []), 'hrv_rmssd'];
+    return row;
+  });
+  const have = new Set(rows.map((r) => r.date));
+  const template = rows[0] ? Object.fromEntries(Object.keys(rows[0]).map((k) => [k, null])) : {};
+  for (const [date, v] of byDate) {
+    if (have.has(date)) continue;
+    out.push({ ...template, user_id: userId, date, hrv_rmssd: v, hrv_manual: 0, respiration_manual: 0, source: 'apple', _hrv_src: 'apple', _apple: ['hrv_rmssd'] });
+  }
+  return out.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 }
 
 // ---------------- comparison view ----------------

@@ -147,6 +147,7 @@ export function openDb(dir) {
   try { db.exec('ALTER TABLE checkins ADD COLUMN tags TEXT'); } catch { /* already there */ }
   db.exec(AI_SCHEMA);
   db.exec(APPLE_SCHEMA);
+  try { db.exec('ALTER TABLE apple_daily ADD COLUMN hrv_method TEXT'); } catch { /* already there */ }
   return db;
 }
 

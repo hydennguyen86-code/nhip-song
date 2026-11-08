@@ -102,9 +102,13 @@ describe('sleep is judged against need, not against own average', () => {
     assert.equal(n.repayMin, Math.round(Math.min(n.debtMin * 0.2, 60)));
     const acts = [];
     for (const d of [5, 10, 15, 20]) acts.push({ start_date_local: addDays(TODAY, -d) + 'T07:00', moving_time: 1800 });
-    acts.push({ start_date_local: addDays(TODAY, -1) + 'T18:00', moving_time: 5400 });
+    acts.push({ start_date_local: addDays(TODAY, -1) + 'T18:00', moving_time: 5400, training_load: 300 });
     const heavy = sleepNeed(w, acts, TODAY);
+    assert.equal(heavy.yesterdayStrain, 19.8);
     assert.equal(heavy.strainBumpMin, 45);
+    const medium = sleepNeed(w, [{ start_date_local: addDays(TODAY, -1) + 'T18:00', moving_time: 4200, training_load: 36 }], TODAY);
+    assert.equal(medium.yesterdayStrain, 12);
+    assert.equal(medium.strainBumpMin, 10, 'strain 12 → 2 points above 10 → 10 minutes');
     assert.equal(heavy.needMin, n.needMin + 45);
   });
   test('works from night one (no baseline needed), default base 8h', () => {

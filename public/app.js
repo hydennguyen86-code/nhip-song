@@ -571,7 +571,7 @@ function factorsCard(d) {
     ${d.recovery.factors.map(factorRow).join('')}
     ${d.recovery.capped && d.recovery.rawScore != null ? `<div class="cap-line">Điểm thô ${d.recovery.rawScore} bị giới hạn còn ${d.recovery.score} vì ${esc(d.recovery.capped)}.</div>` : ''}
     ${d.recovery.score == null && d.recovery.factors.length ? `<div class="cap-line note-line">${esc(d.recovery.note)}</div>` : ''}
-    <div class="formula hint">Điểm = trung bình có trọng số: HRV 45%, nhịp tim nghỉ 25%, ngủ so với nhu cầu 30%. Nhịp thở chỉ là cờ cảnh báo, không cộng điểm. Không có HRV thì không có điểm; thiếu nhịp tim nghỉ hoặc giấc ngủ thì chia lại trọng số. Không phải thuật toán WHOOP.</div>
+    <div class="formula hint">Điểm = trung bình có trọng số: HRV 45%, nhịp tim nghỉ 25%, ngủ so với nhu cầu 30%. HRV lấy lúc ngủ từ Apple Health khi có, nếu không thì dùng HRV trung bình ngày từ Intervals.icu (hai nguồn không bao giờ trộn). Nhu cầu ngủ tăng theo strain hôm qua. Nhịp thở chỉ là cờ cảnh báo, không cộng điểm. Không có HRV thì không có điểm; thiếu nhịp tim nghỉ hoặc giấc ngủ thì chia lại trọng số. Không phải thuật toán WHOOP.</div>
   </div>`;
 }
 
@@ -634,6 +634,20 @@ function vsNorm(value, norm, { higherBetter = true, neutral = false, unit = '%',
   return `<span class="sd-vs ${neutral ? '' : good ? 'up' : 'down'}">${diff > 0 ? '+' : '−'}${shown}${unit} so với thường</span>`;
 }
 const APPLE_FIELD_LABEL = { hrv_rmssd: 'HRV', resting_hr: 'nhịp tim nghỉ', respiration: 'nhịp thở', spo2: 'SpO2', steps: 'số bước', avg_sleeping_hr: 'nhịp tim khi ngủ', sleep_secs: 'giờ ngủ', sleep_score: 'điểm ngủ' };
+function consistencyHtml(c) {
+  if (!c || typeof c !== 'object') return '';
+  const has = c.score != null && Number.isFinite(Number(c.score));
+  const hint = has
+    ? `lệch giờ ngủ ±${fmtNum(c.bedSdMin ?? 0)} phút`
+    : `cần ${fmtNum(c.need || 4)} đêm (đang có ${fmtNum(c.nights || 0)})`;
+  return `<div class="stat-row two"><div class="stat"><b>${has ? `${fmtNum(c.score)}<small>/100</small>` : '—'}</b><span>độ đều giờ ngủ · ${esc(hint)}</span></div>${has ? `<div class="stat"><b>${fmtNum(c.nights)}</b><span>đêm dùng để tính</span></div>` : ''}</div>`;
+}
+const HRV_METHOD_TEXT = { deep: 'trong ngủ sâu', sleep: 'cả giấc ngủ', window: '21:00–11:00' };
+function hrvNightHtml(h) {
+  if (!h || h.value == null || !Number.isFinite(Number(h.value))) return '';
+  const m = HRV_METHOD_TEXT[h.method] || '';
+  return `<div class="hint sd-hrv">HRV lúc ngủ: <b>${fmtNum(h.value, 1)} ms</b>${h.n ? ` (trung vị ${fmtNum(h.n)} lần đo${m ? ` ${m}` : ''})` : m ? ` (${m})` : ''}</div>`;
+}
 function sleepDetailCard(sd) {
   if (!sd || (!sd.connected && !sd.lastDate)) return '';
   const n = sd.night;
@@ -659,12 +673,15 @@ function sleepDetailCard(sd) {
     ${n.hasStages ? `
       ${row(STAGE_COLORS.deep, 'Ngủ sâu', n.deepMin, n.deepPct, nm?.deepPct)}
       ${row(STAGE_COLORS.core, 'Ngủ nông (lõi)', n.coreMin, n.corePct, nm?.corePct, true)}
-      ${row(STAGE_COLORS.rem, 'REM', n.remMin, n.remPct, nm?.remPct)}` : '<div class="hint">Đêm này không có giai đoạn ngủ, chỉ có tổng thời gian ngủ.</div>'}
+      ${row(STAGE_COLORS.rem, 'REM', n.remMin, n.remPct, nm?.remPct)}
+      ${n.restorativeMin != null ? row('#8fa7ff', 'Ngủ phục hồi (sâu + REM)', n.restorativeMin, n.restorativePct, nm?.restorativePct) : ''}` : '<div class="hint">Đêm này không có giai đoạn ngủ, chỉ có tổng thời gian ngủ.</div>'}
     <div class="stat-row">
       <div class="stat"><b>${fmtNum(n.awakeMin)}</b><span>phút thức giữa đêm${nm ? ` · thường ${fmtNum(nm.awakeMin)}` : ''}</span></div>
       <div class="stat"><b>${fmtNum(n.awakenings)}</b><span>lần tỉnh ≥ 5 phút${nm ? ` · thường ${fmtNum(nm.awakenings, 1)}` : ''}</span></div>
       <div class="stat"><b>${pctText(n.efficiency)}</b><span>hiệu suất ngủ${nm?.efficiency != null ? ` · thường ${pctText(nm.efficiency)}` : ''}</span></div>
     </div>
+    ${consistencyHtml(sd.consistency)}
+    ${hrvNightHtml(sd.hrvNight)}
     ${sd.extras && [sd.extras.sleep_hr, sd.extras.spo2, sd.extras.resp].some((x) => x != null) ? `<div class="sd-extras">
       ${sd.extras.sleep_hr != null ? `<span><b>${fmtNum(sd.extras.sleep_hr)}</b> nhịp tim khi ngủ</span>` : ''}
       ${sd.extras.spo2 != null ? `<span><b>${fmtNum(sd.extras.spo2, 1)}%</b> SpO2</span>` : ''}
@@ -699,6 +716,54 @@ function loadCard(d) {
       <div class="stat"><b>${fmtNum(l.last7Load)}</b><span>tải / 7 ngày</span></div>
     </div>
     <div class="hint" style="margin-top:10px">${esc(l.note)}</div>
+  </div>`;
+}
+
+/* Strain tập luyện 0–21 (từ load Intervals.icu). */
+function strainLabel(v) {
+  if (v == null) return '';
+  return v < 10 ? 'Nhẹ' : v < 14 ? 'Vừa' : v < 18 ? 'Cao' : 'Rất cao';
+}
+const WEEKDAY_VN = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+function strainCard(d) {
+  const st = d && d.strain;
+  if (!st || typeof st !== 'object') return '';
+  const num = (x) => (x != null && Number.isFinite(Number(x)) ? Number(x) : null);
+  const today = st.today || {};
+  const val = num(today.strain);
+  const tg = st.target && num(st.target.min) != null && num(st.target.max) != null ? st.target : null;
+  const pos = (v) => `${(Math.min(Math.max(v, 0), 21) / 21 * 100).toFixed(2)}%`;
+  const zone = tg ? `<span class="strain-zone" style="left:${pos(tg.min)};width:${(((Math.min(tg.max, 21) - Math.max(tg.min, 0)) / 21) * 100).toFixed(2)}%"></span>` : '';
+  const fill = val == null ? '' : `<span class="strain-fill" style="width:${pos(val)}"></span>`;
+  const marker = val == null ? '' : `<span class="strain-marker" style="left:${pos(val)}"></span>`;
+  const last7 = Array.isArray(st.last7) ? st.last7.slice(-7) : [];
+  const maxBar = Math.max(21, ...last7.map((x) => num(x && x.strain) || 0));
+  const bars = last7.map((x, i) => {
+    const v = num(x && x.strain);
+    const dt = x && x.date ? new Date(`${x.date}T12:00:00`) : null;
+    const wd = dt && !Number.isNaN(+dt) ? WEEKDAY_VN[dt.getDay()] : '';
+    const h = v ? Math.max(4, v / maxBar * 100) : 0;
+    return `<div class="sb ${i === last7.length - 1 ? 'today' : ''}" title="${esc(x && x.date || '')}: ${v == null ? '—' : fmtNum(v, 1)}"><div class="sb-plot">${v ? `<span style="height:${h.toFixed(1)}%"></span>` : '<span class="none"></span>'}</div><div class="sb-d">${esc(wd)}</div></div>`;
+  }).join('');
+  const y = st.yesterday || {};
+  const yv = num(y.strain);
+  const sessions = num(today.sessions);
+  const mins = num(today.minutes);
+  return `<div class="card strain-card">
+    <div class="card-head">
+      <div class="card-title"><span class="ico-chip" style="--chip:#ffb35c">${ICONS.flame}</span><div><div class="eyebrow">Strain tập luyện</div><h3>Hôm nay</h3></div></div>
+      ${val != null ? `<span class="confidence-chip strain-chip">${esc(strainLabel(val))}</span>` : ''}
+    </div>
+    <div class="strain-big">${val == null ? '—' : fmtNum(val, 1)}<small>/21</small></div>
+    <div class="strain-track">${zone}${fill}${marker}</div>
+    <div class="load-legend"><span>0</span><span>${tg ? `vùng mục tiêu ${fmtNum(tg.min)}–${fmtNum(tg.max)}` : ''}</span><span>21</span></div>
+    <div class="strain-target">${tg ? `Mục tiêu hôm nay: <b>${fmtNum(tg.min)}–${fmtNum(tg.max)}</b>${tg.label ? ` · ${esc(tg.label)}` : ''}` : 'Chưa có mục tiêu'}</div>
+    ${last7.length ? `<div class="strain-week">${bars}</div>` : ''}
+    <div class="stat-row two">
+      <div class="stat"><b>${yv == null ? '—' : fmtNum(yv, 1)}</b><span>hôm qua${yv != null ? ` · ${esc(strainLabel(yv))}` : ''}</span></div>
+      <div class="stat"><b>${sessions == null ? '—' : fmtNum(sessions)}</b><span>buổi tập hôm nay${mins ? ` · ${fmtNum(mins)} phút` : ''}</span></div>
+    </div>
+    ${st.note ? `<div class="hint" style="margin-top:10px">${esc(st.note)}</div>` : ''}
   </div>`;
 }
 
@@ -1134,6 +1199,7 @@ async function renderToday(view) {
       ${d.recovery.needsHrv ? '' : sleepCard(d)}
       ${sleepDetailCard(d.sleepDetail)}
       ${d.recovery.needsHrv ? '' : loadCard(d)}
+      ${strainCard(d)}
       ${checkinCard(d)}
       ${recentCard(d)}
     </div>`;
@@ -1534,6 +1600,28 @@ function askRemaining(st) {
   return Math.max(0, (st.limits.userDailyCalls ?? 0) - (st.usage.todayCalls ?? 0));
 }
 
+function sleepStructureCard(ss) {
+  if (!ss || typeof ss !== 'object') return '';
+  const head = '<div class="card-head"><div><div class="eyebrow">Apple Health</div><h3>Cấu trúc giấc ngủ có ảnh hưởng HRV?</h3></div></div>';
+  const note = ss.note ? `<div class="hint" style="margin-top:10px">${esc(ss.note)}</div>` : '';
+  const items = Array.isArray(ss.items) ? ss.items : [];
+  if (!ss.ready || !items.length) {
+    return `<div class="card" id="sleepStructCard">${head}<div class="hint">Cần ${fmtNum(ss.need ?? 21)} đêm có dữ liệu Apple (đang có ${fmtNum(ss.nights ?? 0)}).</div>${note}</div>`;
+  }
+  const signed = (x) => `${x > 0 ? '+' : x < 0 ? '−' : ''}${fmtNum(Math.abs(x), 1)}%`;
+  const row = (it) => {
+    const has = it.pct != null && Number.isFinite(Number(it.pct));
+    const iv = has && it.lo != null && it.hi != null ? `<span class="ss-iv">khoảng 95%: ${signed(Number(it.lo))} đến ${signed(Number(it.hi))}</span>` : '';
+    return `<div class="ss-item">
+      <div class="pat-top"><b>${esc(it.label || it.id)}</b>${confChip(it.confidence)}</div>
+      <div class="ss-num">${has ? `<span class="ss-pct ${Number(it.pct) < 0 ? 'neg' : ''}">${signed(Number(it.pct))}</span>` : '<span class="ss-pct">—</span>'} ${iv}</div>
+      ${it.summary ? `<div class="pat-sum">${esc(it.summary)}</div>` : ''}
+      <div class="small">${fmtNum(it.events ?? 0)} đêm có dấu hiệu · ${fmtNum(it.others ?? 0)} đêm còn lại</div>
+    </div>`;
+  };
+  return `<div class="card" id="sleepStructCard">${head}<div class="hint" style="margin-bottom:6px">Thay đổi HRV đêm kế tiếp, so với các đêm khác.</div>${items.map(row).join('')}${note}</div>`;
+}
+
 async function renderJournal(view) {
   const [st, pat, weekly, hist] = await Promise.all([
     getAiStatus(true),
@@ -1556,6 +1644,7 @@ async function renderJournal(view) {
       ${pat.symptomDays > 0 ? `<p class="hint" style="margin-top:12px">Có cơn tê/run sau tập: ${esc(pat.symptomDays)} ngày trong ${esc(pat.symptomWindowDays)} ngày gần nhất. Ghi lại để báo bác sĩ.</p>` : ''}
       ${pat.note ? `<p class="hint" style="margin-top:10px">${esc(pat.note)}</p>` : ''}`;
 
+  const ssHtml = sleepStructureCard(pat.error ? null : pat.sleepStructure);
   view.innerHTML = `
     <div class="view-head"><div><h1>Quy luật</h1><div class="view-sub">Thói quen nào ảnh hưởng đến hồi phục của riêng bạn.</div></div></div>
     <div class="settings-stack">
@@ -1573,6 +1662,7 @@ async function renderJournal(view) {
       </div>
 
       <div id="patterns">${patHtml}</div>
+      ${ssHtml}
 
       <div class="card" id="quarterCard">
         <div class="card-head"><div><div class="eyebrow">Sâu hơn</div><h3>Cả quý</h3></div></div>
@@ -1703,11 +1793,12 @@ async function renderSettings(view) {
       <div class="card">
         <div class="card-head"><div><div class="eyebrow">Công khai cách tính</div><h3>Chỉ số hồi phục là gì?</h3></div><span class="confidence-chip amber">tham khảo</span></div>
         <div class="formula-list">
-          <div><b>1. HRV (45%)</b>: dùng ln(rMSSD). 60% đêm qua + 40% trung bình 7 ngày, so với trung vị 60 ngày (độ lệch tính bằng MAD, sàn 7%). Hiện vùng SWC = nền ± 0,5 độ lệch và cảnh báo khi dao động 7 ngày (CV) cao gấp 1,5 lần thường lệ.</div>
+          <div><b>1. HRV (45%)</b>: dùng ln(rMSSD). Nguồn là HRV lúc ngủ (ln rMSSD, trung vị các lần đo trong ngủ sâu) từ Apple Health khi có; nếu không, HRV trung bình ngày từ Intervals.icu. Hai nguồn không bao giờ trộn trong một mức nền. 60% đêm qua + 40% trung bình 7 ngày, so với trung vị 60 ngày (độ lệch tính bằng MAD, sàn 7%). Hiện vùng SWC = nền ± 0,5 độ lệch và cảnh báo khi dao động 7 ngày (CV) cao gấp 1,5 lần thường lệ.</div>
           <div><b>2. Nhịp tim nghỉ (25%)</b>: đêm qua so với trung vị 30 ngày; dấu đảo vì cao hơn là xấu.</div>
-          <div><b>3. Giấc ngủ (30%)</b>: so với <i>nhu cầu</i>, không so với trung bình của bạn. Nhu cầu = nền 7,5–8,5h + 20% nợ ngủ 7 đêm (tối đa 60 phút) + tối đa 45 phút nếu hôm qua tập nhiều. Đủ 85% nhu cầu = 50 điểm.</div>
+          <div><b>3. Giấc ngủ (30%)</b>: so với <i>nhu cầu</i>, không so với trung bình của bạn. Nhu cầu = nền 7,5–8,5h + 20% nợ ngủ 7 đêm (tối đa 60 phút) + tối đa 45 phút theo strain hôm qua (strain 10 → 0, mỗi điểm trên 10 thêm 5 phút). Đủ 85% nhu cầu = 50 điểm.</div>
           <div><b>4. Nhịp thở</b>: không cộng điểm. Chỉ là cờ cảnh báo một chiều khi tăng ≥ 1,5 lần/phút so với trung vị. Tăng cùng lúc với nhịp tim nghỉ tăng hoặc HRV giảm → điểm bị chặn ở 50.</div>
           <div><b>5.</b> Mỗi phần đổi thành điểm con 50 + z × 22, chặn 2–99, rồi lấy trung bình có trọng số. HRV là bắt buộc: không có HRV thì không có điểm và không có lời khuyên. Thiếu nhịp tim nghỉ hoặc giấc ngủ thì chia lại trọng số và hạ độ tin cậy. Giá trị vô lý (ngủ &lt; 3h, RHR ngoài 30–110) và ngày bạn báo ốm bị loại khỏi mức nền.</div>
+          <div><b>Strain 0–21</b>: thang logarit tính từ load các buổi tập trên Intervals.icu, nên tập thêm thì điểm tăng chậm dần. 70 phút pickleball khoảng 12. Mục tiêu theo dải hồi phục: xanh 14–18, vàng 10–14, đỏ 0–10.</div>
           <div><b>6.</b> Dải màu: 67–100 xanh, 34–66 vàng, 0–33 đỏ. Đây là mốc hiển thị, không phải ngưỡng y khoa.</div>
           <div><b>Giới hạn:</b> WHOOP không công bố trọng số thật; chỉ số này không sao chép WHOOP. Đồng hồ quang học ở cổ tay có sai số; mọi so sánh chỉ có ý nghĩa với chính bạn. Cảm giác chủ quan luôn thắng.</div>
         </div>
@@ -1805,7 +1896,7 @@ function appleCompareHtml(c) {
       ${c.days.map((d) => `<tr><td class="nowrap">${esc(fmtShort(d.date))}</td>${pairCell(d.hrv)}${pairCell(d.rhr)}${pairCell(d.sleepH, 1)}${pairCell(d.resp, 1)}${pairCell(d.steps, 0, 'col-steps')}</tr>`).join('')}
     </tbody></table></div>
     <div class="compare-stats">${st('hrv', 'HRV', 1, ' ms')}${st('rhr', 'Nhịp tim nghỉ', 1)}${st('sleepH', 'Giờ ngủ', 1, ' h')}${st('resp', 'Nhịp thở', 1)}${st('steps', 'Số bước')}</div>
-    <div class="hint" style="margin-top:6px">Ô tô màu là ngày hai nguồn lệch hơn 10%. HRV lệch đều thì đừng trộn hai nguồn; giữ "Chỉ so sánh" và báo lại.</div>`;
+    <div class="hint" style="margin-top:6px">Ô tô màu là ngày hai nguồn lệch hơn 10%. Cột HRV: Apple là HRV lúc ngủ, Intervals là trung bình cả ngày, nên lệch là bình thường; app không bao giờ trộn hai loại trong một mức nền.</div>`;
 }
 function appleWorkoutsHtml(ws) {
   if (!ws || !ws.length) return '';
@@ -1818,6 +1909,17 @@ function appleWorkoutsHtml(ws) {
     <div class="hint" style="margin-top:6px">TRIMP ước tính từ nhịp tim, khác thang với load của Intervals; dùng để xem hai số có lên xuống cùng nhau không. Tab Quy luật vẫn dùng load Intervals.</div>`;
 }
 
+const HRV_SOURCE_OPTS = [['auto', 'Tự động'], ['apple_night', 'HRV lúc ngủ (Apple)'], ['intervals', 'Intervals.icu']];
+function hrvSourceHtml(h) {
+  if (!h || typeof h !== 'object') return '';
+  const using = h.source === 'apple_night' ? 'HRV lúc ngủ (Apple)' : h.source === 'intervals' ? 'Intervals.icu' : '—';
+  return `<div class="divider"></div>
+    <div class="eyebrow" style="margin-bottom:6px">Nguồn HRV cho điểm</div>
+    <div class="seg" role="radiogroup">
+      ${HRV_SOURCE_OPTS.map(([k, label]) => `<button type="button" class="seg-btn ${h.setting === k ? 'on' : ''}" data-hrv-source="${k}" role="radio" aria-checked="${h.setting === k}">${label}</button>`).join('')}
+    </div>
+    <div class="hint" style="margin-top:6px">Đang dùng: <b>${esc(using)}</b> · ${fmtNum(h.appleNights || 0)} đêm có HRV lúc ngủ. Tự động = dùng HRV lúc ngủ khi có ít nhất 15 đêm trong 60 ngày (đủ mức nền 14 đêm + đêm qua).</div>`;
+}
 async function loadAppleHealth(view, freshToken = null) {
   const box = view.querySelector('#appleBox');
   const chip = view.querySelector('#appleChip');
@@ -1843,11 +1945,12 @@ async function loadAppleHealth(view, freshToken = null) {
       ${a.hasToken ? '<button class="btn danger small" id="appleRevoke">Thu hồi mã</button>' : ''}
     </div>
     <div class="divider"></div>
-    <div class="eyebrow" style="margin-bottom:6px">Dùng dữ liệu Apple cho điểm hồi phục</div>
+    <div class="eyebrow" style="margin-bottom:6px">Dùng dữ liệu Apple cho điểm hồi phục (trừ HRV)</div>
     <div class="seg" role="radiogroup">
       ${[['off', 'Chỉ so sánh'], ['fill', 'Bù chỗ Intervals thiếu'], ['prefer', 'Ưu tiên Apple']].map(([k, label]) => `<button type="button" class="seg-btn ${a.mode === k ? 'on' : ''}" data-apple-mode="${k}" role="radio" aria-checked="${a.mode === k}">${label}</button>`).join('')}
     </div>
     <div class="hint" style="margin-top:6px">${esc(APPLE_MODE_HINT[a.mode] || '')} Giá trị nhập tay luôn được giữ.</div>
+    ${hrvSourceHtml(a.hrvSource)}
     ${appleCompareHtml(a.compare)}
     ${appleWorkoutsHtml(a.workouts)}
     <div class="divider"></div>
@@ -1868,6 +1971,12 @@ async function loadAppleHealth(view, freshToken = null) {
   box.querySelectorAll('[data-apple-mode]').forEach((btn) => {
     btn.onclick = async () => {
       try { await api('/api/apple-health/mode', { method: 'POST', body: { mode: btn.dataset.appleMode } }); toastMsg('Đã đổi cách dùng dữ liệu Apple.'); loadAppleHealth(view); }
+      catch (e) { toastMsg(e.message); }
+    };
+  });
+  box.querySelectorAll('[data-hrv-source]').forEach((btn) => {
+    btn.onclick = async () => {
+      try { await api('/api/apple-health/hrv-source', { method: 'POST', body: { source: btn.dataset.hrvSource } }); toastMsg('Đã đổi nguồn HRV. Điểm sẽ tính lại.'); loadAppleHealth(view); }
       catch (e) { toastMsg(e.message); }
     };
   });

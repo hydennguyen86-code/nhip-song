@@ -23,6 +23,8 @@
  * can say exactly what is known and what is not.
  */
 
+import { strainOn, strainSleepBump } from './strain.mjs';
+
 const PLAUSIBLE = Object.freeze({
   resting_hr: [30, 110],
   hrv_rmssd: [5, 250],
@@ -97,6 +99,33 @@ export function sickDatesFrom(checkins = []) {
 
 function rowOn(wellness, date) { return wellness.find((w) => w.date === date) || null; }
 
+/**
+ * HRV source of a row: 'apple' (night median from Apple Health), 'icu'
+ * (Intervals.icu) or 'manual' (hand-entered; matches either).
+ */
+export function hrvSourceOf(r) {
+  if (!r) return null;
+  if (r.hrv_manual === 1) return 'manual';
+  return r._hrv_src || 'icu';
+}
+
+/** Source of the HRV that judges `today`: today's row, else the newest row with HRV before it. */
+export function hrvSourceAt(wellness, today) {
+  let best = null;
+  for (const r of wellness) {
+    if (r.date > today || !plausible('hrv_rmssd', r.hrv_rmssd)) continue;
+    const s = hrvSourceOf(r);
+    if (s === 'manual') continue;
+    if (!best || r.date > best.date) best = { date: r.date, s };
+  }
+  return best ? best.s : 'icu';
+}
+
+export function sameHrvSource(r, src) {
+  const s = hrvSourceOf(r);
+  return s === 'manual' || s === src;
+}
+
 /* ------------------------------------------------------------------ RHR -- */
 
 /** Last night's resting HR vs robust 30-day baseline (median, MAD, floor 1 bpm). */
@@ -127,10 +156,14 @@ export function rhrModel(wellness, today, { windowDays = BASELINE_NEEDS.resting_
 export function hrvModel(wellness, today, { windowDays = BASELINE_NEEDS.hrv_rmssd.windowDays, minDays = BASELINE_NEEDS.hrv_rmssd.minDays, sickDates = null } = {}) {
   const field = 'hrv_rmssd';
   const name = 'rMSSD';
+  // One baseline = one kind of HRV: Apple night median and Intervals.icu all-day
+  // mean are different quantities (apple-metrics.mjs tags each row's source).
+  const src = hrvSourceAt(wellness, today);
+  wellness = wellness.map((r) => (sameHrvSource(r, src) ? r : { ...r, [field]: null }));
   const lnVals = priorValues(wellness, field, today, { windowDays, sickDates }).map(Math.log);
   const tier = lnVals.length < minDays ? 'không đủ' : lnVals.length < 28 ? 'sơ bộ' : 'ổn định';
   const todayHasHrv = plausible(field, rowOn(wellness, today)?.[field]);
-  const info = { field, name, daysAvailable: lnVals.length, minDays, windowDays, tier, todayHasHrv };
+  const info = { field, name, daysAvailable: lnVals.length, minDays, windowDays, tier, todayHasHrv, src };
   if (lnVals.length < minDays) return { ready: false, state: 'insufficient', ...info };
 
   const st = robustStats(lnVals);
@@ -203,8 +236,7 @@ export function hrvModel(wellness, today, { windowDays = BASELINE_NEEDS.hrv_rmss
  * Sleep need for the night that ENDED on `today` (i.e. what the planner would
  * have asked for the evening before). Base = own 30-night mean clamped to
  * 7.5–8.5h (8h when < 7 nights), + 20% of the 7-night debt (max 60 min),
- * + up to 45 min when yesterday's training minutes were above the 28-day
- * daily average.
+ * + 5 min per point of yesterday's strain above 10, at most 45 (strain.mjs).
  */
 export function sleepNeed(wellness, activities = [], today) {
   const nights = priorValues(wellness, 'sleep_secs', today, { windowDays: 30 }).map((s) => s / 60);
@@ -223,13 +255,9 @@ export function sleepNeed(wellness, activities = [], today) {
   debt = Math.min(debt, 600);
   const repay = Math.min(debt * 0.2, 60);
 
-  const day = (a) => String(a.start_date_local).slice(0, 10);
-  const yesterday = addDays(today, -1);
-  const yMinutes = activities.filter((a) => day(a) === yesterday).reduce((acc, a) => acc + (a.moving_time || 0), 0) / 60;
-  const from = addDays(yesterday, -28);
-  const avgDaily = activities.filter((a) => day(a) >= from && day(a) < yesterday).reduce((acc, a) => acc + (a.moving_time || 0), 0) / 60 / 28;
-  const ratio = avgDaily > 0 ? yMinutes / avgDaily : (yMinutes > 0 ? 2 : 0);
-  const strainBump = clamp((ratio - 1) * 25, 0, 45);
+  // WHOOP-style: the day before the night adds need with its strain (strain.mjs).
+  const yStrain = strainOn(activities, addDays(today, -1)).strain;
+  const strainBump = strainSleepBump(yStrain);
 
   return {
     needMin: Math.round(base + repay + strainBump),
@@ -240,6 +268,7 @@ export function sleepNeed(wellness, activities = [], today) {
     debtNights,
     repayMin: Math.round(repay),
     strainBumpMin: Math.round(strainBump),
+    yesterdayStrain: yStrain,
   };
 }
 

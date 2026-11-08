@@ -253,7 +253,7 @@ describe('sleep planner', () => {
     assert.ok(plan.debtMinutes <= 600);
   });
 
-  test('a heavy day yesterday raises the perform/peak targets', () => {
+  test('a heavy day today raises tonight’s perform/peak targets (strain-based)', () => {
     const activities = [];
     for (const d of [10, 16, 22, 28]) {
       activities.push({ start_date_local: addDays(TODAY, -d) + 'T07:00:00', moving_time: 1800, training_load: 40 });
@@ -261,10 +261,11 @@ describe('sleep planner', () => {
     const light = buildSleepPlan({ wellness: sleepRows(450, 30), activities, today: TODAY });
     const heavy = buildSleepPlan({
       wellness: sleepRows(450, 30),
-      activities: [...activities, { start_date_local: addDays(TODAY, -1) + 'T18:00:00', moving_time: 5400 }],
+      activities: [...activities, { start_date_local: TODAY + 'T18:00:00', moving_time: 5400, training_load: 300 }],
       today: TODAY,
     });
     assert.equal(light.strainBumpMinutes, 0);
+    assert.equal(heavy.todayStrain, 19.8);
     assert.equal(heavy.strainBumpMinutes, 45);
     assert.ok(heavy.tiers.perform >= light.tiers.perform + 40);
     assert.ok(heavy.tiers.peak <= 600);

@@ -273,7 +273,8 @@ input[type="file"] { padding: 9px 10px; font-size: 13px; color: var(--muted); }
     "manual manual factors"
     "context context factors"
     "mini mini factors"
-    "load sleep factors"
+    "strain load factors"
+    "sleep sleep factors"
     "sleepd sleepd factors"
     "history history checkin"
     "recent recent checkin";
@@ -289,6 +290,7 @@ input[type="file"] { padding: 9px 10px; font-size: 13px; color: var(--muted); }
 .history-card { grid-area: history; }
 .sleep-card { grid-area: sleep; }
 .load-card { grid-area: load; }
+.strain-card { grid-area: strain; }
 .sleepd-card { grid-area: sleepd; }
 .sd-bar { display: flex; height: 14px; border-radius: 999px; overflow: hidden; background: rgba(255, 255, 255, 0.05); gap: 2px; }
 .sd-bar span { display: block; height: 100%; min-width: 2px; }
@@ -689,7 +691,8 @@ tr:last-child td { border-bottom: 0; }
       "context context"
       "mini mini"
       "factors load"
-      "factors sleep"
+      "factors strain"
+      "sleep sleep"
       "sleepd sleepd"
       "checkin recent"
       "history history";
@@ -736,7 +739,7 @@ tr:last-child td { border-bottom: 0; }
   }
   .today-grid {
     grid-template-columns: 1fr;
-    grid-template-areas: "hero" "manual" "context" "mini" "factors" "history" "sleep" "sleepd" "load" "checkin" "recent";
+    grid-template-areas: "hero" "manual" "context" "mini" "factors" "history" "sleep" "sleepd" "load" "strain" "checkin" "recent";
     gap: 14px;
   }
   .view-head { margin-bottom: 16px; }
@@ -870,3 +873,33 @@ tr:last-child td { border-bottom: 0; }
 .ask-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; }
 .ask-row .hint { flex: 1; }
 .set-sub { margin-top: 10px; padding-top: 6px; border-top: 1px solid var(--line); }
+
+/* ---------- strain ---------- */
+.strain-big { font-size: 36px; font-weight: 700; letter-spacing: -1.4px; line-height: 1; font-variant-numeric: tabular-nums; color: #ffb35c; }
+.strain-big small { font-size: 14px; font-weight: 500; color: var(--muted); letter-spacing: 0; margin-left: 4px; }
+.strain-chip { color: #ffb35c; background: rgba(255, 179, 92, 0.13); border-color: rgba(255, 179, 92, 0.3); }
+.strain-track { position: relative; height: 14px; border-radius: 999px; background: rgba(255, 255, 255, 0.07); margin: 18px 0 8px; box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.35); }
+.strain-zone { position: absolute; top: 0; bottom: 0; background: rgba(255, 179, 92, 0.18); border-left: 1px dashed rgba(255, 179, 92, 0.6); border-right: 1px dashed rgba(255, 179, 92, 0.6); }
+.strain-fill { position: absolute; top: 0; bottom: 0; left: 0; border-radius: 999px; background: linear-gradient(90deg, #c9742a, #ffb35c 75%, #ffd9a8); box-shadow: 0 0 14px rgba(255, 179, 92, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.4); max-width: 100%; }
+.strain-marker { position: absolute; top: -4px; bottom: -4px; width: 3px; margin-left: -1.5px; border-radius: 2px; background: #fff; box-shadow: 0 0 6px rgba(0, 0, 0, 0.6); }
+.strain-target { margin-top: 10px; font-size: 13.5px; color: var(--ink-2); }
+.strain-target b { color: #ffb35c; }
+.strain-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; margin-top: 14px; }
+.sb { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
+.sb-plot { display: flex; align-items: flex-end; width: 100%; height: 44px; border-bottom: 1px solid var(--line-2); justify-content: center; }
+.sb-plot span { display: block; width: 70%; max-width: 22px; border-radius: 5px 5px 2px 2px; background: rgba(255, 179, 92, 0.45); }
+.sb-plot span.none { height: 2px; background: rgba(255, 255, 255, 0.1); }
+.sb.today .sb-plot span { background: linear-gradient(180deg, #ffd9a8, #ffb35c); box-shadow: 0 0 10px rgba(255, 179, 92, 0.4); }
+.sb-d { font-size: 10.5px; color: var(--muted); }
+.sb.today .sb-d { color: #ffb35c; font-weight: 700; }
+.stat-row.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.stat-row .stat b small { font-size: 11px; font-weight: 500; color: var(--muted); margin-left: 2px; }
+.sd-hrv { margin-top: 10px; }
+.sd-hrv b { color: var(--ink); }
+/* ---------- sleep structure patterns ---------- */
+.ss-item { padding: 12px 0; border-top: 1px solid var(--line); }
+.ss-item:first-of-type { border-top: 0; }
+.ss-num { margin-top: 6px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.ss-pct { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.5px; }
+.ss-pct.neg { color: var(--amber); }
+.ss-iv { font-size: 12px; color: var(--muted); }

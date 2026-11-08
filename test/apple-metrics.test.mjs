@@ -11,8 +11,10 @@ import { openDb } from '../server/db.mjs';
 import { createUser, upsertWellness, upsertActivity, effectiveWellness, saveManualDay } from '../server/store.mjs';
 import {
   metricOf, parseValue, parseShortcutLines, aggregateDaily, trimp, ingestAll, setAppleMode, getAppleMode,
-  compareSources, workoutsWithIcu, listDaily, isAppleWatch,
+  compareSources, workoutsWithIcu, listDaily, isAppleWatch, hrvSourceInfo, setHrvSourceSetting,
 } from '../server/apple-metrics.mjs';
+import { listNights } from '../server/apple-health.mjs';
+import { hrvModel } from '../server/signals.mjs';
 
 const tmpDb = () => openDb(fs.mkdtempSync(path.join(os.tmpdir(), 'nhip-am-')));
 const newUser = (db, name = 'hyden') => createUser(db, { username: name, displayName: name, password: 'matkhau123', role: 'admin' });
@@ -171,35 +173,116 @@ describe('apple metrics: storage and merge', () => {
     assert.equal(listDaily(db, uid, '2026-11-08', '2026-11-08')[0].steps, 9000);
   });
 
-  test('modes: fill takes only what Intervals lacks, prefer replaces, off ignores; manual always wins', () => {
+  test('modes for non-HRV fields: fill takes only what Intervals lacks, prefer replaces, off ignores; manual always wins', () => {
     const db = tmpDb();
     const uid = newUser(db);
+    setHrvSourceSetting(db, uid, 'intervals');
     upsertWellness(db, uid, { date: '2026-11-08', restingHR: 57, hrv: 60, sleepSecs: 7.5 * 3600 });
     ingestAll(db, uid, { samples: [...morning(), ...morning('2026-11-07', '2026-11-06', { hrv: '44', rhr: '55' })].join('\n') });
     assert.equal(getAppleMode(db, uid), 'fill');
 
     let rows = effectiveWellness(db, uid, '2026-11-01', '2026-11-08');
     const d8 = rows.find((r) => r.date === '2026-11-08');
-    assert.equal(d8.hrv_rmssd, 60, 'Intervals value kept in fill mode');
+    assert.equal(d8.hrv_rmssd, 60, 'HRV source = Intervals: Apple HRV never used');
     assert.equal(d8.respiration, 14.6, 'missing field filled');
     assert.deepEqual(d8._apple.sort(), ['respiration', 'spo2']);
     const d7 = rows.find((r) => r.date === '2026-11-07');
-    assert.equal(d7.hrv_rmssd, 44, 'whole missing day filled');
+    assert.equal(d7.hrv_rmssd, null, 'no Apple HRV mixed into an Intervals baseline');
+    assert.equal(d7.resting_hr, 55, 'whole missing day filled');
     assert.equal(d7.sleep_secs, 7 * 3600);
 
     setAppleMode(db, uid, 'prefer');
     rows = effectiveWellness(db, uid, '2026-11-08', '2026-11-08');
-    assert.equal(rows[0].hrv_rmssd, 48);
+    assert.equal(rows[0].resting_hr, 56);
     assert.equal(rows[0].sleep_secs, 7 * 3600);
 
-    saveManualDay(db, uid, { date: '2026-11-08', values: { hrv_rmssd: 70 } });
+    saveManualDay(db, uid, { date: '2026-11-08', values: { resting_hr: 50 } });
     rows = effectiveWellness(db, uid, '2026-11-08', '2026-11-08');
-    assert.equal(rows[0].hrv_rmssd, 70, 'hand-entered HRV beats Apple even in prefer mode');
+    assert.equal(rows[0].resting_hr, 50, 'hand-entered value beats Apple even in prefer mode');
 
     setAppleMode(db, uid, 'off');
     rows = effectiveWellness(db, uid, '2026-11-01', '2026-11-08');
     assert.equal(rows.find((r) => r.date === '2026-11-07'), undefined);
     assert.throws(() => setAppleMode(db, uid, 'all'));
+  });
+
+  test('HRV source: auto switches to Apple night HRV at 15 nights; never mixed; history before kept and tagged', () => {
+    const db = tmpDb();
+    const uid = newUser(db);
+    for (let i = 40; i >= 0; i--) {
+      const d = new Date(Date.UTC(2026, 10, 8 - i)).toISOString().slice(0, 10);
+      upsertWellness(db, uid, { date: d, restingHR: 56, hrv: 70, sleepSecs: 7 * 3600 });
+    }
+    const day = (k) => new Date(Date.UTC(2026, 10, 8 - k)).toISOString().slice(0, 10);
+    const push = (k) => ingestAll(db, uid, { samples: morning(day(k), day(k + 1), { hrv: '45' }).join('\n') });
+    for (let k = 13; k >= 0; k--) push(k);
+    let info = hrvSourceInfo(db, uid, '2026-11-08');
+    assert.equal(info.setting, 'auto');
+    assert.equal(info.appleNights, 14);
+    assert.equal(info.source, 'intervals', '14 nights is not enough: the baseline needs 14 before today');
+    assert.equal(effectiveWellness(db, uid, '2026-10-01', '2026-11-08').find((r) => r.date === '2026-11-08').hrv_rmssd, 70);
+
+    push(14);
+    info = hrvSourceInfo(db, uid, '2026-11-08');
+    assert.equal(info.source, 'apple_night');
+    const model = hrvModel(effectiveWellness(db, uid, '1900-01-01', '2026-11-08'), '2026-11-08');
+    assert.equal(model.state, 'ok', 'score continues the day the source switches');
+    assert.equal(model.src, 'apple');
+    const rows = effectiveWellness(db, uid, '2026-10-01', '2026-11-08');
+    const r8 = rows.find((r) => r.date === '2026-11-08');
+    assert.equal(r8.hrv_rmssd, 45);
+    assert.equal(r8._hrv_src, 'apple');
+    assert.equal(r8.hrv_icu, 70, 'Intervals value kept aside for comparison');
+    const old = rows.find((r) => r.date === day(20));
+    assert.equal(old.hrv_rmssd, 70, 'history before the first Apple night stays');
+    assert.equal(old._hrv_src, 'icu');
+
+    setHrvSourceSetting(db, uid, 'intervals');
+    assert.equal(effectiveWellness(db, uid, '2026-11-08', '2026-11-08')[0].hrv_rmssd, 70);
+    assert.throws(() => setHrvSourceSetting(db, uid, 'both'));
+  });
+
+  test('night HRV = median inside deep sleep (≥ 3 readings), else whole sleep; spikes do not drag it', () => {
+    const lines = [
+      L('Sleep', T('23:00', '2026-11-07'), T('01:00'), 'Core'),
+      L('Sleep', T('01:00'), T('02:00'), 'Deep'),
+      L('Sleep', T('02:00'), T('06:00'), 'Core'),
+    ];
+    const hrv = (t, v) => L('Heart Rate Variability', T(t), T(t), String(v), 'ms');
+    lines.push(hrv('00:30', 20), hrv('01:10', 60), hrv('01:20', 64), hrv('01:30', 128), hrv('01:40', 62), hrv('03:00', 21), hrv('15:00', 30));
+    const db = tmpDb();
+    const uid = newUser(db);
+    ingestAll(db, uid, { samples: lines.join('\n') });
+    const [d] = listDaily(db, uid, '2026-11-08', '2026-11-08');
+    assert.equal(d.hrv_method, 'deep');
+    assert.equal(d.hrv_n, 4);
+    assert.equal(d.hrv, 63, 'median of 60, 62, 64, 128');
+
+    const db2 = tmpDb();
+    const u2 = newUser(db2);
+    ingestAll(db2, u2, { samples: [...lines.slice(0, 3), hrv('00:30', 50), hrv('03:00', 40), hrv('04:00', 44)].join('\n') });
+    const [d2] = listDaily(db2, u2, '2026-11-08', '2026-11-08');
+    assert.equal(d2.hrv_method, 'sleep', 'no readings in deep sleep → whole sleep');
+    assert.equal(d2.hrv, 44);
+  });
+
+  test('a later push that sees only part of the night does not overwrite the full night', () => {
+    const db = tmpDb();
+    const uid = newUser(db);
+    const full = [
+      L('Sleep', T('23:00', '2026-11-07'), T('01:00'), 'Core'),
+      L('Sleep', T('01:00'), T('02:00'), 'Deep'),
+      L('Sleep', T('02:00'), T('06:00'), 'REM'),
+      ...['01:10', '01:20', '01:30', '01:40'].map((t) => L('Heart Rate Variability', T(t), T(t), '60', 'ms')),
+    ];
+    ingestAll(db, uid, { samples: full.join('\n') });
+    const partial = [full[2], L('Heart Rate Variability', T('03:00'), T('03:00'), '30', 'ms')];
+    ingestAll(db, uid, { samples: partial.join('\n') });
+    const [d] = listDaily(db, uid, '2026-11-08', '2026-11-08');
+    assert.equal(d.hrv, 60);
+    assert.equal(d.hrv_n, 4);
+    const [n] = listNights(db, uid, '2026-11-08', '2026-11-08');
+    assert.equal(n.asleep_min, 420, 'full night kept');
   });
 
   test('another user never receives this user’s Apple data', () => {
@@ -231,5 +314,33 @@ describe('apple metrics: storage and merge', () => {
     const bad = ingestAll(db, uid, { samples: L('Mức độ ồn', T('03:00'), T('03:00'), '40', 'dB') });
     assert.equal(bad.ok, false);
     assert.match(bad.message, /Mức độ ồn/);
+  });
+});
+
+describe('apple metrics: review fixes', () => {
+  test('stages arriving later upgrade a window median even with fewer readings', () => {
+    const db = tmpDb();
+    const uid = newUser(db);
+    const hrv = [];
+    for (let m = 0; m < 14 * 60; m += 10) {
+      const t = new Date(Date.parse('2026-11-07T21:00:00+07:00') + m * 60000).toISOString();
+      const deep = m >= 240 && m < 300;
+      hrv.push(L('Heart Rate Variability', t, t, deep ? '80' : '40', 'ms'));
+    }
+    ingestAll(db, uid, { samples: hrv.join('\n') });
+    let [d] = listDaily(db, uid, '2026-11-08', '2026-11-08');
+    assert.equal(d.hrv_method, 'window');
+    ingestAll(db, uid, { samples: [L('Sleep', T('23:00', '2026-11-07'), T('01:00'), 'Core'), L('Sleep', T('01:00'), T('02:00'), 'Deep'), L('Sleep', T('02:00'), T('06:00'), 'Core'), ...hrv].join('\n') });
+    [d] = listDaily(db, uid, '2026-11-08', '2026-11-08');
+    assert.equal(d.hrv_method, 'deep');
+    assert.equal(d.hrv, 80);
+  });
+
+  test('HRV read before midnight with no sleep data still makes the next morning’s night', () => {
+    const db = tmpDb();
+    const uid = newUser(db);
+    ingestAll(db, uid, { samples: L('Heart Rate Variability', T('22:30', '2026-11-07'), T('22:30', '2026-11-07'), '55', 'ms') });
+    const [d] = listDaily(db, uid, '2026-11-08', '2026-11-08');
+    assert.equal(d.hrv, 55);
   });
 });
