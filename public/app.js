@@ -633,12 +633,13 @@ function vsNorm(value, norm, { higherBetter = true, neutral = false, unit = '%',
   const good = higherBetter ? diff > 0 : diff < 0;
   return `<span class="sd-vs ${neutral ? '' : good ? 'up' : 'down'}">${diff > 0 ? '+' : '−'}${shown}${unit} so với thường</span>`;
 }
+const APPLE_FIELD_LABEL = { hrv_rmssd: 'HRV', resting_hr: 'nhịp tim nghỉ', respiration: 'nhịp thở', spo2: 'SpO2', steps: 'số bước', avg_sleeping_hr: 'nhịp tim khi ngủ', sleep_secs: 'giờ ngủ', sleep_score: 'điểm ngủ' };
 function sleepDetailCard(sd) {
   if (!sd || (!sd.connected && !sd.lastDate)) return '';
   const n = sd.night;
   const head = `<div class="card-head">
       <div class="card-title"><span class="ico-chip" style="--chip:#6f7dff">${ICONS.moon}</span><div><div class="eyebrow">Apple Health · đêm qua</div><h3>Cấu trúc giấc ngủ</h3></div></div>
-      ${n?.sleepScore != null ? `<span class="confidence-chip">điểm ngủ ${fmtNum(n.sleepScore)}</span>` : '<span class="confidence-chip">chưa tính vào điểm</span>'}
+      ${n?.sleepScore != null ? `<span class="confidence-chip">điểm ngủ ${fmtNum(n.sleepScore)}</span>` : ''}
     </div>`;
   if (!n) {
     return `<div class="card sleepd-card">${head}
@@ -650,7 +651,7 @@ function sleepDetailCard(sd) {
   const nm = sd.norm && sd.norm.deepPct != null ? sd.norm : null;
   const row = (color, label, min, pct, normPct, neutral = false) => `<div class="sd-row"><span class="sd-dot" style="background:${color}"></span><span class="sd-k">${label}</span><span class="sd-v">${durText(min)}<small>${pctText(pct)}</small></span>${nm ? vsNorm(pct, normPct, { neutral }) : ''}</div>`;
   const cmp = sd.compare && Math.abs(sd.compare.diffMin) >= 20
-    ? `<div class="hint" style="margin-top:8px">Intervals ghi ${durText(sd.compare.intervalsMin)}, Apple Health ghi ${durText(sd.compare.appleMin)} (lệch ${sd.compare.diffMin > 0 ? '+' : '−'}${Math.abs(sd.compare.diffMin)} phút). Điểm hồi phục vẫn dùng số của Intervals trong giai đoạn chạy song song.</div>`
+    ? `<div class="hint" style="margin-top:8px">Intervals ghi ${durText(sd.compare.intervalsMin)}, Apple Health ghi ${durText(sd.compare.appleMin)} (lệch ${sd.compare.diffMin > 0 ? '+' : '−'}${Math.abs(sd.compare.diffMin)} phút).</div>`
     : '';
   return `<div class="card sleepd-card">${head}
     <div class="sd-bar">${seg('deep', n.deepMin)}${seg('core', n.coreMin)}${seg('rem', n.remMin)}${seg('unspecified', n.unspecifiedMin)}${seg('awake', n.awakeMin)}</div>
@@ -664,8 +665,14 @@ function sleepDetailCard(sd) {
       <div class="stat"><b>${fmtNum(n.awakenings)}</b><span>lần tỉnh ≥ 5 phút${nm ? ` · thường ${fmtNum(nm.awakenings, 1)}` : ''}</span></div>
       <div class="stat"><b>${pctText(n.efficiency)}</b><span>hiệu suất ngủ${nm?.efficiency != null ? ` · thường ${pctText(nm.efficiency)}` : ''}</span></div>
     </div>
+    ${sd.extras && [sd.extras.sleep_hr, sd.extras.spo2, sd.extras.resp].some((x) => x != null) ? `<div class="sd-extras">
+      ${sd.extras.sleep_hr != null ? `<span><b>${fmtNum(sd.extras.sleep_hr)}</b> nhịp tim khi ngủ</span>` : ''}
+      ${sd.extras.spo2 != null ? `<span><b>${fmtNum(sd.extras.spo2, 1)}%</b> SpO2</span>` : ''}
+      ${sd.extras.resp != null ? `<span><b>${fmtNum(sd.extras.resp, 1)}</b> nhịp thở/phút</span>` : ''}
+    </div>` : ''}
     ${n.napMin > 0 ? `<div class="hint" style="margin-top:8px">Ngủ trưa ${durText(n.napMin)}.</div>` : ''}
     ${cmp}
+    ${sd.appleFields?.length ? `<div class="hint" style="margin-top:8px">Điểm hôm nay dùng từ Apple Health: ${esc(sd.appleFields.map((f) => APPLE_FIELD_LABEL[f] || f).join(', '))}.</div>` : ''}
     <div class="hint" style="margin-top:10px">${nm ? `So với trung bình ${nm.nights} đêm gần nhất của chính bạn.` : `Cần ${sd.norm?.need || 7} đêm có giai đoạn ngủ để so với thói quen của bạn (đang có ${sd.norm?.nights || 0}).`} Giai đoạn ngủ từ đồng hồ đeo tay có sai số; xem xu hướng nhiều đêm, đừng xét một đêm.</div>
   </div>`;
 }
@@ -1683,7 +1690,7 @@ async function renderSettings(view) {
       </div>
 
       <div class="card" id="appleCard">
-        <div class="card-head"><div><div class="eyebrow">Dữ liệu</div><h3>Apple Health (phím tắt iPhone)</h3></div><span id="appleChip" class="confidence-chip">đang tải</span></div>
+        <div class="card-head"><div><div class="eyebrow">Dữ liệu</div><h3>Apple Health (iPhone)</h3></div><span id="appleChip" class="confidence-chip">đang tải</span></div>
         <div id="appleBox"><div class="hint">Đang tải…</div></div>
       </div>
 
@@ -1773,6 +1780,44 @@ async function renderSettings(view) {
   if (me.role === 'admin') { loadUsers(view); loadSchedule(view); }
 }
 
+const APPLE_MODE_HINT = {
+  off: 'Điểm chỉ dùng Intervals.icu. Dữ liệu Apple chỉ để xem và đối chiếu.',
+  fill: 'Ngày hoặc chỉ số nào Intervals.icu trống thì lấy từ Apple Health.',
+  prefer: 'Có số từ Apple Health là dùng số đó, Intervals.icu chỉ còn để dự phòng.',
+};
+function pairCell(pair, digits = 0, cls = '') {
+  const [i, a] = pair || [];
+  if (i == null && a == null) return `<td class="num muted ${cls}">—</td>`;
+  const f = (x) => (x == null ? '<span class="muted">—</span>' : fmtNum(x, digits));
+  const off = i != null && a != null && Math.abs(i - a) > Math.max(Math.abs(i) * 0.1, digits ? 0.3 : 1);
+  return `<td class="num ${cls} ${off ? 'pair-off' : ''}">${f(i)}<span class="pair-sep">/</span>${f(a)}</td>`;
+}
+function appleCompareHtml(c) {
+  if (!c || !c.days.some((d) => ['hrv', 'rhr', 'sleepH', 'steps', 'resp'].some((k) => d[k][1] != null))) return '';
+  const st = (k, label, digits = 0, unit = '') => {
+    const x = c.stats[k];
+    if (!x.both && !x.onlyApple && !x.onlyIcu) return '';
+    return `<div class="set-row"><span class="k">${label}</span><span class="v">${x.meanAbsDiff == null ? '—' : `lệch TB ±${fmtNum(x.meanAbsDiff, digits)}${unit}`}<span class="type-note">${x.both} ngày cả hai · ${x.onlyApple} chỉ Apple · ${x.onlyIcu} chỉ Intervals</span></span></div>`;
+  };
+  return `<div class="divider"></div>
+    <div class="eyebrow" style="margin-bottom:6px">Đối chiếu 14 ngày · Intervals / Apple</div>
+    <div class="table-wrap"><table class="compare-table"><thead><tr><th>Ngày</th><th class="num">HRV</th><th class="num">Tim nghỉ</th><th class="num">Ngủ (h)</th><th class="num">Thở</th><th class="num col-steps">Bước</th></tr></thead><tbody>
+      ${c.days.map((d) => `<tr><td class="nowrap">${esc(fmtShort(d.date))}</td>${pairCell(d.hrv)}${pairCell(d.rhr)}${pairCell(d.sleepH, 1)}${pairCell(d.resp, 1)}${pairCell(d.steps, 0, 'col-steps')}</tr>`).join('')}
+    </tbody></table></div>
+    <div class="compare-stats">${st('hrv', 'HRV', 1, ' ms')}${st('rhr', 'Nhịp tim nghỉ', 1)}${st('sleepH', 'Giờ ngủ', 1, ' h')}${st('resp', 'Nhịp thở', 1)}${st('steps', 'Số bước')}</div>
+    <div class="hint" style="margin-top:6px">Ô tô màu là ngày hai nguồn lệch hơn 10%. HRV lệch đều thì đừng trộn hai nguồn; giữ "Chỉ so sánh" và báo lại.</div>`;
+}
+function appleWorkoutsHtml(ws) {
+  if (!ws || !ws.length) return '';
+  const t = (ms) => new Date(ms).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', hour12: false });
+  return `<div class="divider"></div>
+    <div class="eyebrow" style="margin-bottom:6px">Buổi tập từ Apple Health · 14 ngày</div>
+    <div class="table-wrap"><table><thead><tr><th>Buổi</th><th class="num">Phút</th><th class="num">Nhịp tim TB / max</th><th class="num">TRIMP</th><th class="num">Load Intervals</th></tr></thead><tbody>
+      ${ws.map((w) => `<tr><td>${esc(w.name || 'Buổi tập')}<span class="type-note">${esc(fmtShort(w.date))} · ${t(w.start_ms)}</span></td><td class="num">${fmtNum(w.minutes)}</td><td class="num">${w.avg_hr == null ? '—' : `${fmtNum(w.avg_hr)} / ${fmtNum(w.max_hr)}`}</td><td class="num">${w.trimp == null ? '—' : fmtNum(w.trimp)}</td><td class="num">${w.icuLoad == null ? '—' : fmtNum(w.icuLoad)}</td></tr>`).join('')}
+    </tbody></table></div>
+    <div class="hint" style="margin-top:6px">TRIMP ước tính từ nhịp tim, khác thang với load của Intervals; dùng để xem hai số có lên xuống cùng nhau không. Tab Quy luật vẫn dùng load Intervals.</div>`;
+}
+
 async function loadAppleHealth(view, freshToken = null) {
   const box = view.querySelector('#appleBox');
   const chip = view.querySelector('#appleChip');
@@ -1784,7 +1829,7 @@ async function loadAppleHealth(view, freshToken = null) {
   chip.textContent = a.hasToken ? 'đã có mã' : 'chưa kết nối';
   const nights = (a.nights || []).slice(0, 7);
   box.innerHTML = `
-    <p class="hint">Phím tắt trên iPhone đọc giấc ngủ đêm qua trong Apple Health (sâu, nông, REM, thức) và gửi về đây. Hiện chỉ để xem, chưa tính vào điểm hồi phục.</p>
+    <p class="hint">Phím tắt trên iPhone (hoặc app Health Auto Export) đọc Apple Health và gửi về đây: giấc ngủ chi tiết, HRV, nhịp tim nghỉ, nhịp tim khi ngủ, nhịp thở, SpO2, số bước, buổi tập.</p>
     <div class="set-row"><span class="k">Địa chỉ nhận</span><span class="v apple-url">${esc(url)}</span></div>
     ${a.hasToken ? `
       <div class="set-row"><span class="k">Mã tạo lúc</span><span class="v">${esc(fmtDateTime(a.createdAt))}</span></div>
@@ -1797,7 +1842,16 @@ async function loadAppleHealth(view, freshToken = null) {
       ${freshToken ? '<button class="btn primary small" id="appleCopyToken">Sao chép mã</button>' : `<button class="btn ${a.hasToken ? 'ghost' : 'primary'} small" id="appleNew">${a.hasToken ? 'Tạo mã mới' : 'Tạo mã cho phím tắt'}</button>`}
       ${a.hasToken ? '<button class="btn danger small" id="appleRevoke">Thu hồi mã</button>' : ''}
     </div>
-    <div class="hint" style="margin-top:8px">iPhone phải bật Tailscale. Nếu đang mở app bằng địa chỉ trong nhà (192.168…), hãy dùng địa chỉ Tailscale của máy Mac trong phím tắt. Hướng dẫn dựng phím tắt: README → "Giấc ngủ từ Apple Health".</div>
+    <div class="divider"></div>
+    <div class="eyebrow" style="margin-bottom:6px">Dùng dữ liệu Apple cho điểm hồi phục</div>
+    <div class="seg" role="radiogroup">
+      ${[['off', 'Chỉ so sánh'], ['fill', 'Bù chỗ Intervals thiếu'], ['prefer', 'Ưu tiên Apple']].map(([k, label]) => `<button type="button" class="seg-btn ${a.mode === k ? 'on' : ''}" data-apple-mode="${k}" role="radio" aria-checked="${a.mode === k}">${label}</button>`).join('')}
+    </div>
+    <div class="hint" style="margin-top:6px">${esc(APPLE_MODE_HINT[a.mode] || '')} Giá trị nhập tay luôn được giữ.</div>
+    ${appleCompareHtml(a.compare)}
+    ${appleWorkoutsHtml(a.workouts)}
+    <div class="divider"></div>
+    <div class="hint" style="margin-top:8px">iPhone phải bật Tailscale. Nếu đang mở app bằng địa chỉ trong nhà (192.168…), hãy dùng địa chỉ Tailscale của máy Mac trong phím tắt. Hướng dẫn: README → "Dữ liệu từ Apple Health".</div>
     ${nights.length ? `<div class="divider"></div>
       <div class="eyebrow" style="margin-bottom:6px">7 đêm gần nhất</div>
       <div class="apple-nights">${nights.map((r) => `<div class="set-row"><span class="k">${esc(fmtShort(r.date))}</span><span class="v">${durText(r.asleep_min)} · sâu ${durText(r.deep_min)} · REM ${durText(r.rem_min)} · thức ${fmtNum(r.awake_min)}′</span></div>`).join('')}</div>` : ''}`;
@@ -1811,6 +1865,12 @@ async function loadAppleHealth(view, freshToken = null) {
     try { const r = await api('/api/apple-health/token', { method: 'POST', body: {} }); loadAppleHealth(view, r.token); }
     catch (e) { toastMsg(e.message); }
   };
+  box.querySelectorAll('[data-apple-mode]').forEach((btn) => {
+    btn.onclick = async () => {
+      try { await api('/api/apple-health/mode', { method: 'POST', body: { mode: btn.dataset.appleMode } }); toastMsg('Đã đổi cách dùng dữ liệu Apple.'); loadAppleHealth(view); }
+      catch (e) { toastMsg(e.message); }
+    };
+  });
   const rv = box.querySelector('#appleRevoke');
   if (rv) rv.onclick = async () => {
     if (!confirm('Thu hồi mã? Phím tắt sẽ không gửi được nữa. Dữ liệu đã nhận vẫn giữ.')) return;

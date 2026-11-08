@@ -34,7 +34,7 @@ const EPISODE_GAP_MIN = 90;
 const AWAKENING_MIN = 5;
 /** Longest episode we accept; anything longer is a broken record. */
 const MAX_EPISODE_MIN = 18 * 60;
-const MAX_SAMPLES = 5000;
+const MAX_SAMPLES = 40000;
 
 // Priority when samples overlap the same minute: higher wins.
 const RANK = { inbed: 1, asleep: 2, awake: 3, core: 4, rem: 4, deep: 4 };
@@ -165,6 +165,8 @@ export function summarizeEpisode(ep) {
     bedStart: bedFrom >= 0 ? hhmm(ep.start + bedFrom * MIN) : null,
     bedEnd: bedTo >= 0 ? hhmm(ep.start + (bedTo + 1) * MIN) : null,
     endMs: ep.start + (bedTo + 1) * MIN,
+    sleepStartMs: first >= 0 ? ep.start + first * MIN : null,
+    sleepEndMs: last >= 0 ? ep.start + (last + 1) * MIN : null,
     inBedMin: inBed,
     asleepMin: asleep,
     deepMin: count.deep,

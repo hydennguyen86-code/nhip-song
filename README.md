@@ -19,7 +19,7 @@ App **cần HRV rMSSD mỗi đêm**. Không có HRV thì không có điểm và 
 | **Nguồn dữ liệu** | Hai mục *Tự động* và *Nhập tay*. Số đồng bộ thật sẽ thay số tay khi về sau |
 | **Nhập tay** | Nhịp tim nghỉ, giờ ngủ, HRV, nhịp thở, điểm ngủ, số bước, SpO2, cân nặng. Quản trị ghi được cho người nhà |
 | **Giấc ngủ** | So với nhu cầu của bạn, có kế hoạch tối nay cần ngủ bao nhiêu |
-| **Giấc ngủ Apple Health** | Đọc các giai đoạn ngủ (sâu, lõi, REM, thức) từ iPhone qua phím tắt. Hiện chỉ để xem. Xem [Giấc ngủ từ Apple Health](#giấc-ngủ-từ-apple-health) |
+| **Apple Health** | Lấy HRV, nhịp tim nghỉ, nhịp tim khi ngủ, nhịp thở, SpO2, số bước, giấc ngủ chi tiết và buổi tập từ iPhone. Xem [Dữ liệu từ Apple Health](#dữ-liệu-từ-apple-health) |
 | **Vận động** | Danh sách buổi tập và mục tiêu tải tuần theo mức hồi phục |
 | **Cần HRV** | Không có HRV rMSSD thì app không chấm điểm, không gợi ý tập, và nói rõ lý do: thiết bị không đo HRV, đang dựng nền, hay thiếu đêm qua |
 | **Cảnh báo** | Nhịp thở tăng cùng nhịp tim nghỉ tăng hoặc HRV giảm thì chặn điểm ở 50. Báo triệu chứng nặng thì ẩn điểm và nhắc gọi 115. HRV cao bất thường (z > 2,5) không được cộng điểm. Số bất thường kéo dài (HRV cao 2 đêm liền, hoặc nhịp tim nghỉ cao 3 ngày liền) chỉ ghi "Nên hỏi bác sĩ" |
@@ -76,7 +76,7 @@ Mở `http://127.0.0.1:8901`, đăng nhập bằng `admin`, `demo` hoặc `khong
 | Xiaomi Smart Band 10 Pro, Smart Band 11 bản Trung Quốc | **Chưa hỗ trợ.** Có HRV khi ngủ, nhưng Xiaomi không nói là rMSSD hay SDNN, nên không so được với mức nền |
 | Xiaomi Smart Band 11 bản quốc tế | **Chưa hỗ trợ.** Trang sản phẩm quốc tế không ghi HRV |
 
-Apple Health **không** nằm trong đường dữ liệu: Apple Health lưu HRV dạng SDNN, là một đại lượng khác rMSSD và không đổi qua lại được. App chỉ dùng rMSSD; nếu nguồn có gửi SDNN thì chỉ lưu, không tính.
+Về Apple Health: ô HRV của Apple mang nhãn SDNN, là một đại lượng khác rMSSD. Với đồng hồ HUAWEI, Health Sync ghi chính số rMSSD của HUAWEI vào ô đó, nên số khớp với Intervals.icu. App vẫn bỏ qua HRV do Apple Watch đo (đó là SDNN thật) và có bảng **Đối chiếu 14 ngày** để kiểm tra hai nguồn có khớp không trước khi trộn. Xem [Dữ liệu từ Apple Health](#dữ-liệu-từ-apple-health).
 
 Khi chưa có HRV, trang Hôm nay hiện thẻ **Cần HRV** với một trong ba lý do:
 
@@ -245,19 +245,47 @@ Node nằm ngoài `PATH` thì đặt `NHIP_NODE` trỏ tới file chạy `node`.
 
 Với HUAWEI Watch, dữ liệu đi theo đường HUAWEI Health → Intervals.icu, và HRV qua Health Sync. App **chỉ đọc**, không bao giờ sửa hoặc xoá dữ liệu trên Intervals.icu.
 
-## Giấc ngủ từ Apple Health
+## Dữ liệu từ Apple Health
 
 ### Vì sao cần
 
-Intervals.icu chỉ có tổng thời gian ngủ, không có các giai đoạn: sâu, nông (lõi), REM, thức. Apple Health trên iPhone thì có các giai đoạn này, vì Health Sync ghi dữ liệu của đồng hồ HUAWEI vào đó.
+Intervals.icu về chậm, hay thiếu ngày, và không có giai đoạn ngủ, nhịp thở, SpO2 hay nhịp tim lúc ngủ. Apple Health trên iPhone thì có đủ, vì Health Sync ghi dữ liệu của đồng hồ HUAWEI vào đó.
 
-Apple Health không có API web, nên app không đọc trực tiếp được. Một **phím tắt** (app Phím tắt/Shortcuts của Apple) trên iPhone sẽ đọc dữ liệu rồi gửi về Nhịp Sống qua Tailscale.
+Apple Health không có API web, nên iPhone phải tự gửi dữ liệu về Nhịp Sống qua Tailscale. Có hai cách:
 
-Hiện phần này **chỉ để xem**. Giấc ngủ từ Apple Health **chưa được tính vào điểm hồi phục**. Sẽ kiểm chứng trước bằng tab **Quy luật**, rồi mới cân nhắc đưa vào điểm.
+- **Phím tắt** (miễn phí): dựng bằng app Phím tắt của Apple. Xem Bước 2, cách A.
+- **Health Auto Export** (trả phí): app bên thứ ba, tự chạy theo lịch. Xem Bước 2, cách B.
+
+### App lấy gì
+
+| Chỉ số | Cách tính theo ngày | Dùng vào đâu |
+| --- | --- | --- |
+| HRV | Trung bình các mẫu trong giấc ngủ đêm đó (không có giấc ngủ thì 21:00 hôm trước – 11:00) | Bù hoặc thay HRV của Intervals, tuỳ chế độ |
+| Nhịp tim nghỉ | Mẫu mới nhất trong ngày | Bù hoặc thay |
+| Nhịp tim khi ngủ | Trung bình nhịp tim trong giấc ngủ | Hiển thị, lưu vào nhịp tim lúc ngủ |
+| Nhịp thở | Trung bình trong giấc ngủ | Bù hoặc thay. Bật cờ cảnh báo sắp ốm (trước đây Intervals không có số này) |
+| SpO2 | Trung bình trong giấc ngủ | Hiển thị |
+| Số bước, năng lượng hoạt động | Cộng theo từng nguồn, lấy nguồn lớn nhất (tránh iPhone và đồng hồ đếm hai lần). Lần gửi sau không làm số giảm | Hiển thị |
+| Giấc ngủ | Sâu, lõi, REM, thức, số lần tỉnh, hiệu suất (như cũ) | Giờ ngủ, bù hoặc thay |
+| Buổi tập | Thời lượng, nhịp tim trung bình và tối đa (có sẵn, hoặc tính từ mẫu nhịp tim trong buổi), TRIMP ước tính | Đặt cạnh load của Intervals để so. Tab Quy luật vẫn dùng load của Intervals |
+
+TRIMP (Banister) = phút × HRr × 0,64 × e^(1,92 × HRr), với HRr = (nhịp tim TB − nhịp tim nghỉ) / (nhịp tim tối đa − nhịp tim nghỉ). **Nhịp tim nghỉ** là trung vị 30 ngày. **Nhịp tim tối đa** là mức cao nhất đã thấy trong 120 ngày, tối thiểu 175. App dùng hệ số của nam vì không lưu giới tính. Thang này khác load của Intervals, chỉ dùng để so xu hướng.
+
+### Chế độ dùng dữ liệu Apple
+
+Vào **Cài đặt → Apple Health** để chọn một trong ba chế độ:
+
+- **Chỉ so sánh**: điểm chỉ dùng số của Intervals. Số Apple chỉ để đối chiếu.
+- **Bù chỗ Intervals thiếu** (mặc định): trường nào hoặc ngày nào Intervals trống thì lấy số Apple.
+- **Ưu tiên Apple**: có số Apple thì dùng số Apple.
+
+Giá trị nhập tay luôn thắng. Ngày đã đánh dấu sai vẫn bị loại.
+
+Bảng **Đối chiếu 14 ngày** trong Cài đặt cho thấy hai nguồn cạnh nhau và độ lệch trung bình. Dùng bảng này để quyết định có chuyển sang **Ưu tiên Apple** hay không.
 
 ### Bước 1: tạo mã trên app
 
-1. Vào **Cài đặt** → thẻ **Apple Health (phím tắt iPhone)**.
+1. Vào **Cài đặt** → thẻ **Apple Health (iPhone)**.
 2. Bấm **Tạo mã cho phím tắt**.
 3. Sao chép **Địa chỉ nhận** và **Mã**. Mã chỉ hiện một lần, có dạng `Bearer ns_...`.
 
@@ -269,41 +297,64 @@ http://<tên-máy>.<tailnet>.ts.net:8899/api/ingest/apple-health
 
 Port mặc định là 8899. **Không dùng địa chỉ 192.168…**: địa chỉ đó chỉ tới được khi iPhone ở cùng Wi-Fi với nhà, ra ngoài sẽ không tới.
 
-### Bước 2: dựng phím tắt
+### Bước 2 (cách A, miễn phí): dựng phím tắt
 
-Tạo phím tắt mới tên **Nhịp Sống – Giấc ngủ**. Thêm các hành động theo đúng thứ tự dưới đây. Ghi tên tiếng Việt, tên tiếng Anh trong ngoặc.
+Tạo phím tắt mới tên **Nhịp Sống – Sức khỏe**. Thêm các hành động theo đúng thứ tự dưới đây. Ghi tên tiếng Việt, tên tiếng Anh trong ngoặc.
 
 1. **Tìm mẫu sức khỏe** (Find Health Samples)
    - Loại: **Phân tích giấc ngủ** (Sleep Analysis)
    - Bộ lọc: **Ngày bắt đầu** (Start Date) **trong 2 ngày gần nhất** (is in the last 2 days)
-   - Sắp xếp theo **Ngày bắt đầu**, tăng dần
-   - Giới hạn: **tắt**
-2. **Lặp lại với từng mục** (Repeat with Each), dùng kết quả của bước 1. Bên trong vòng lặp:
-   - a. **Định dạng ngày** (Format Date): ngày = **Mục lặp lại → Ngày bắt đầu** (Repeat Item → Start Date); Định dạng = **ISO 8601**; bật **Bao gồm thời gian** (Include Time).
-   - b. **Định dạng ngày** lần nữa cho **Ngày kết thúc** (End Date), cũng là ISO 8601 có thời gian.
+   - Sắp xếp theo **Ngày bắt đầu**, tăng dần. Giới hạn: **tắt**
+   - Ngay sau đó: **Thêm vào biến** (Add to Variable), tên biến `Mẫu`
+2. Lặp lại cặp **Tìm mẫu sức khỏe** + **Thêm vào biến `Mẫu`** cho từng loại dưới đây. Mỗi loại lọc **trong 2 ngày gần nhất**:
+   - **Độ biến thiên nhịp tim** (Heart Rate Variability)
+   - **Nhịp tim lúc nghỉ** (Resting Heart Rate)
+   - **Nhịp thở** (Respiratory Rate)
+   - **Độ bão hòa oxy trong máu** (Blood Oxygen)
+   - **Số bước** (Steps)
+   - **Nhịp tim** (Heart Rate), chỉ **trong 1 ngày gần nhất**. Đây là loại có nhiều mẫu nhất, làm phím tắt chạy lâu hơn. Cần cho nhịp tim khi ngủ và nhịp tim buổi tập. Chạy quá chậm thì bỏ loại này.
+3. **Buổi tập**: nếu danh sách loại có **Bài tập** (Workouts), thêm cặp đó, **trong 2 ngày gần nhất**. Nếu không có, buổi tập vẫn lấy từ Intervals như cũ.
+4. **Lặp lại với từng mục** (Repeat with Each) trên biến `Mẫu`. Bên trong vòng lặp:
+   - a. **Định dạng ngày** (Format Date) cho Ngày bắt đầu: Mục lặp lại → Ngày bắt đầu; Định dạng = **ISO 8601**; bật **Bao gồm thời gian** (Include Time).
+   - b. **Định dạng ngày** lần nữa cho Ngày kết thúc: Mục lặp lại → Ngày kết thúc; cũng ISO 8601 có thời gian.
    - c. **Văn bản** (Text):
-     `[Ngày bắt đầu đã định dạng]|[Ngày kết thúc đã định dạng]|[Giá trị]|[Nguồn]`
-     Giá trị = **Mục lặp lại → Value**; Nguồn = **Mục lặp lại → Source**. Dùng dấu gạch đứng `|` giữa các phần.
-3. **Kết hợp văn bản** (Combine Text): **Kết quả lặp lại**, ngăn cách bằng **Dòng mới** (New Lines).
-4. **Lấy nội dung của URL** (Get Contents of URL):
+     `[Loại]|[Ngày bắt đầu]|[Ngày kết thúc]|[Giá trị]|[Đơn vị]|[Nguồn]`
+     Loại = Mục lặp lại → Type; Giá trị = Value; Đơn vị = Unit; Nguồn = Source. Ở hai chỗ ngày, dùng kết quả của hai bước định dạng ngày.
+5. **Kết hợp văn bản** (Combine Text): **Kết quả lặp lại** (Repeat Results), ngăn cách bằng **Dòng mới** (New Lines).
+6. **Lấy nội dung của URL** (Get Contents of URL):
    - URL = địa chỉ nhận.
    - Phương thức = **POST**.
    - Đầu trang (Headers): khoá `Authorization`, giá trị = mã đã sao chép, gồm cả chữ `Bearer `.
-   - Nội dung yêu cầu (Request Body) = **JSON**, thêm một trường khoá `samples`, kiểu **Văn bản**, giá trị = văn bản đã kết hợp ở bước 3.
-5. **Lấy giá trị từ điển** (Get Dictionary Value): khoá `message`.
-6. **Hiện thông báo** (Show Notification): giá trị lấy được ở bước 5.
+   - Nội dung yêu cầu (Request Body) = **JSON**, thêm trường `samples`, kiểu **Văn bản**, giá trị = văn bản đã kết hợp ở bước 5.
+7. **Lấy giá trị từ điển** (Get Dictionary Value): khoá `message`. Rồi **Hiện thông báo** (Show Notification) với giá trị đó.
 
-Máy chủ cũng nhận văn bản gửi thẳng làm nội dung yêu cầu, nhưng nên dùng JSON như trên.
+Phím tắt giấc ngủ cũ (chỉ 4 cột, không có Loại) vẫn chạy được.
 
-### Bước 3: chạy thử bằng tay
+### Bước 2 (cách B, trả phí): Health Auto Export
 
-Bấm phím tắt trên iPhone. Lần đầu, iPhone sẽ hỏi quyền đọc **Sức khỏe** và quyền kết nối tới địa chỉ nhận. Chọn **Cho phép**.
+App **Health Auto Export** trên App Store. Cần bản trả phí để dùng tự động hoá REST API. Trong app:
+
+- Vào **Automations** → tạo **REST API**.
+- URL = địa chỉ nhận.
+- Headers: `Authorization` = mã (gồm `Bearer `).
+- Export Format: **JSON**. Nếu có lựa chọn **Version**, chọn **2**.
+- Health Metrics: heart rate variability, resting heart rate, heart rate, respiratory rate, blood oxygen saturation, step count, active energy, sleep analysis. Nên tắt **Aggregate sleep** để có từng giai đoạn.
+- Bật **Workouts**.
+- Lịch đồng bộ: mỗi giờ.
+
+Ưu: tự chạy theo lịch, ít phải canh lúc mở khoá. Nhược: tốn phí, phụ thuộc thêm một app.
+
+Định dạng JSON của app này được hỗ trợ theo tài liệu công khai. Lần đầu, bấm **Export now** rồi xem thông báo hoặc bảng đối chiếu để chắc dữ liệu vào đúng.
+
+### Bước 3: chạy thử
+
+Bấm phím tắt trên iPhone. Lần đầu, iPhone hỏi quyền đọc **Sức khỏe** cho từng loại và quyền kết nối tới địa chỉ nhận. Chọn **Cho phép** hết.
 
 Khi thành công, thông báo có dạng:
 
-> Đêm 08/11: ngủ 6h53 (sâu 1h05, REM 1h45), thức 12 phút, 1 lần tỉnh.
+> Ngày 08/11: ngủ 6h50 (sâu 1h05, REM 1h42), HRV 48,2, nhịp tim nghỉ 56, nhịp tim khi ngủ 58,3, nhịp thở 14,6, SpO2 96,5, 1 buổi tập.
 
-Sau đó mở trang **Hôm nay** của app. Sẽ thấy thẻ **Cấu trúc giấc ngủ**.
+Sau đó mở **Cài đặt → Apple Health** và xem bảng **Đối chiếu 14 ngày**. Trang **Hôm nay** sẽ có thẻ **Cấu trúc giấc ngủ**.
 
 ### Bước 4: cho chạy tự động
 
@@ -322,14 +373,12 @@ Chọn **Chạy ngay** (Run Immediately). Nếu muốn, tắt **Thông báo khi 
 
 Health có thể hiển thị điểm ngủ, nhưng chưa chắc phím tắt đọc được. Nếu trong danh sách loại của **Tìm mẫu sức khỏe** có loại điểm giấc ngủ, thêm một **Tìm mẫu sức khỏe** lấy mẫu mới nhất, rồi thêm trường JSON `sleepScore` kiểu **Số** vào bước gửi. Không có thì bỏ qua.
 
-### App tính gì
+### Giấc ngủ: app tính gì
 
-- Gom các mẫu theo đêm. Đêm thuộc về **ngày thức dậy**. Khoảng trống hơn 90 phút là một giai đoạn ngủ khác. Giấc dài nhất trong đêm là giấc ngủ chính; giấc kết thúc trong khoảng 10:00–21:00 được tính là **ngủ trưa**.
-- Mẫu chồng nhau (iPhone ghi "Trên giường", đồng hồ ghi các giai đoạn) được xử lý từng phút: giai đoạn ngủ thắng "Đã ngủ", "Đã ngủ" thắng "Trên giường". Nhờ vậy không bị cộng hai lần.
-- **Thời gian thức giữa đêm** = số phút không ngủ giữa lúc bắt đầu ngủ và lúc ngủ lần cuối.
-- **Lần tỉnh** = một đoạn thức dài ít nhất 5 phút.
-- **Hiệu suất ngủ** = thời gian ngủ / thời gian trên giường.
-- **So với thói quen**: so với trung bình 30 đêm trước của chính bạn. Cần ít nhất 7 đêm có giai đoạn ngủ.
+- Gom các mẫu theo đêm. Đêm thuộc về **ngày thức dậy**. Khoảng trống hơn 90 phút là một giấc khác. Giấc dài nhất trong đêm là giấc chính. Giấc kết thúc trong 10:00–21:00 là **ngủ trưa**.
+- Mẫu chồng nhau được xử lý từng phút: "Đã ngủ" thắng "Trên giường", giai đoạn ngủ thắng "Đã ngủ". Nhờ vậy không bị cộng hai lần.
+- **Thức giữa đêm** = số phút không ngủ giữa lúc bắt đầu ngủ và lúc ngủ lần cuối. **Lần tỉnh** = đoạn thức ít nhất 5 phút. **Hiệu suất** = thời gian ngủ / thời gian trên giường.
+- **So với thói quen**: so với trung bình 30 đêm trước của bạn. Cần ít nhất 7 đêm có giai đoạn ngủ.
 - Số giờ ngủ hiện cạnh số của Intervals nếu lệch từ 20 phút. Trong giai đoạn chạy song song, **điểm hồi phục vẫn dùng số của Intervals**.
 - Nhận nhãn tiếng Việt và tiếng Anh: Sâu/Deep, Lõi/Core, REM, Thức/Awake, Trên giường/In Bed, Đã ngủ/Asleep; và số HealthKit 0–5.
 - Giai đoạn ngủ từ đồng hồ đeo tay có sai số so với đo đa ký giấc ngủ. Hãy nhìn **xu hướng nhiều đêm**, đừng tin một đêm.
@@ -340,7 +389,7 @@ Health có thể hiển thị điểm ngủ, nhưng chưa chắc phím tắt đ�
 - Máy chủ chỉ lưu bản băm SHA-256 của mã, không lưu mã gốc.
 - Sai mã 8 lần trong 15 phút thì bị khoá 15 phút.
 - **Thu hồi mã** hoặc **Tạo mã mới** làm mã cũ hết hiệu lực.
-- Dữ liệu nằm trong backup JSON, ở trường `appleSleep`.
+- Dữ liệu nằm trong backup JSON, ở các trường `appleSleep`, `appleDaily` và `appleWorkouts`.
 
 ### Sửa lỗi
 
@@ -348,9 +397,11 @@ Health có thể hiển thị điểm ngủ, nhưng chưa chắc phím tắt đ�
 | --- | --- |
 | "Mã không đúng hoặc đã bị thu hồi" | Tạo mã mới, dán lại cả chữ `Bearer `. |
 | "dòng sai định dạng ngày" | Ở bước **Định dạng ngày** chọn ISO 8601 và bật **Bao gồm thời gian**. |
-| "Không nhận ra nhãn giai đoạn ngủ: …" | Gửi nhãn đó cho người quản trị app để bổ sung. |
+| "Không nhận ra loại dữ liệu: …" | Gửi tên loại đó cho người quản trị app để bổ sung. |
 | "Không có mẫu giấc ngủ nào" | Kiểm tra Health Sync đã ghi giấc ngủ vào Apple Health chưa, và máy có đang khoá không. |
 | Phím tắt chạy mãi không xong, hoặc không kết nối | Bật Tailscale trên iPhone. Kiểm tra máy Mac đang chạy app. |
+| Phím tắt chạy rất lâu | Bỏ loại **Nhịp tim** hoặc rút còn "1 ngày gần nhất". |
+| Bảng đối chiếu lệch nhiều ở HRV | Giữ chế độ **Bù chỗ Intervals thiếu** hoặc **Chỉ so sánh**, báo người quản trị. |
 
 ## 2. Lệnh vận hành
 

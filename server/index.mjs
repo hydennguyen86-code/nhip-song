@@ -29,7 +29,8 @@ import { sickDatesFrom, priorValues, BASELINE_NEEDS } from './signals.mjs';
 import { startScheduler, getSchedule, setSchedule } from './scheduler.mjs';
 import { handleExtRoutes } from './routes-ext.mjs';
 import { clientIp, viaProxy, isHttps, applySecurityHeaders, createLoginLimiter } from './security.mjs';
-import { ingest as ingestApple, restoreNight, issueToken, revokeToken, tokenInfo, userForToken, listNights, sleepDetailView } from './apple-health.mjs';
+import { restoreNight, issueToken, revokeToken, tokenInfo, userForToken, listNights, sleepDetailView } from './apple-health.mjs';
+import { ingestAll as ingestApple, getAppleMode, setAppleMode, compareSources, workoutsWithIcu, nightExtras, listDaily, saveDaily, saveWorkout } from './apple-metrics.mjs';
 
 const loginLimiter = createLoginLimiter();
 // Wrong Shortcut tokens: same lockout rule as passwords, per client IP.
@@ -182,7 +183,7 @@ async function route(req, res) {
       body = { samples: raw };
     }
     const out = ingestApple(db, userId, body);
-    log('apple-health ingest', userId, out.ok ? `${out.nights.length} đêm` : out.error);
+    log('apple-health ingest', userId, out.ok ? `${out.format}: ${out.nights.length} đêm, ${out.days.length} ngày, ${out.workouts.length} buổi` : out.error);
     const { status, ...rest } = out;
     return json(res, status, rest);
   }
@@ -327,7 +328,10 @@ async function route(req, res) {
     const history = recoveryHistory({ wellness, today, days: histDays, settings, checkins: recentCheckins, activities });
     const metrics = buildMetrics({ wellness, today, activities, sickDates });
     const todayRow = wellness.find((w) => w.date === today);
-    const sleepDetail = sleepDetailView(db, req.user.id, today, { intervalsSleepSecs: todayRow?.sleep_secs ?? null });
+    const rawToday = db.prepare('SELECT sleep_secs FROM wellness WHERE user_id = ? AND date = ?').get(req.user.id, today);
+    const sleepDetail = sleepDetailView(db, req.user.id, today, { intervalsSleepSecs: rawToday?.sleep_secs ?? null });
+    sleepDetail.extras = nightExtras(db, req.user.id, today);
+    sleepDetail.appleFields = todayRow?._apple || [];
 
     const userRow = db.prepare('SELECT last_sync_at AS lastSync, last_sync_error AS syncError, icu_key_cipher IS NOT NULL AS hasKey, display_name AS displayName, created_at AS createdAt FROM users WHERE id = ?').get(req.user.id);
     const first = db.prepare('SELECT MIN(date) AS first, COUNT(*) AS days FROM wellness WHERE user_id = ?').get(req.user.id);
@@ -521,6 +525,8 @@ async function route(req, res) {
       checkins: db.prepare('SELECT * FROM checkins WHERE user_id = ?').all(req.user.id),
       exclusions: db.prepare('SELECT * FROM exclusions WHERE user_id = ?').all(req.user.id),
       appleSleep: db.prepare('SELECT * FROM apple_sleep WHERE user_id = ?').all(req.user.id),
+      appleDaily: db.prepare('SELECT * FROM apple_daily WHERE user_id = ?').all(req.user.id),
+      appleWorkouts: db.prepare('SELECT * FROM apple_workouts WHERE user_id = ?').all(req.user.id),
     };
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Content-Disposition': `attachment; filename="nhip-song-backup-${req.user.username}-${localDate()}.json"` });
     res.end(JSON.stringify(dump, null, 2));
@@ -534,6 +540,18 @@ async function route(req, res) {
     for (const a of body.activities || []) { if (upsertActivity(db, req.user.id, { id: a.activity_id, start_date_local: a.start_date_local, name: a.name, type: a.type, moving_time: a.moving_time, elapsed_time: a.elapsed_time, distance: a.distance, total_elevation_gain: a.elevation, average_heartrate: a.avg_hr, max_heartrate: a.max_hr, average_watts: a.avg_watts, icu_training_load: a.training_load, rpe: a.rpe, icu_intensity: a.intensity }, a.source || 'restore')) counts.activities++; }
     counts.appleSleep = 0;
     for (const r of body.appleSleep || []) { if (restoreNight(db, req.user.id, r)) counts.appleSleep++; }
+    counts.appleDaily = 0;
+    for (const r of body.appleDaily || []) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(String(r?.date || ''))) continue;
+      let sources = []; try { sources = JSON.parse(r.sources || '[]'); } catch { /* keep empty */ }
+      saveDaily(db, req.user.id, { ...r, sources }); counts.appleDaily++;
+    }
+    counts.appleWorkouts = 0;
+    for (const r of body.appleWorkouts || []) {
+      if (!r?.workout_key || !Number.isFinite(Number(r.start_ms))) continue;
+      saveWorkout(db, req.user.id, { key: r.workout_key, date: r.date, start: Number(r.start_ms), end: Number(r.end_ms), name: r.name, minutes: r.minutes, avgHr: r.avg_hr, maxHr: r.max_hr, kcal: r.kcal, trimp: r.trimp, source: r.source });
+      counts.appleWorkouts++;
+    }
     for (const c of body.checkins || []) { if (c.local_date === localDate() || true) { /* historical checkins allowed */ } }
     return json(res, 200, { ok: true, counts });
   }
@@ -542,7 +560,20 @@ async function route(req, res) {
   if (p === '/api/apple-health' && method === 'GET') {
     if (!requireUser(req, res)) return;
     const today = localDate();
-    return json(res, 200, { ...tokenInfo(db, req.user.id), endpoint: '/api/ingest/apple-health', nights: listNights(db, req.user.id, addDays(today, -13), today) });
+    return json(res, 200, {
+      ...tokenInfo(db, req.user.id),
+      endpoint: '/api/ingest/apple-health',
+      mode: getAppleMode(db, req.user.id),
+      nights: listNights(db, req.user.id, addDays(today, -13), today),
+      compare: compareSources(db, req.user.id, today, 14),
+      workouts: workoutsWithIcu(db, req.user.id, addDays(today, -13), today),
+    });
+  }
+  if (p === '/api/apple-health/mode' && method === 'POST') {
+    if (!requireUser(req, res)) return;
+    const body = await readJson(req);
+    try { return json(res, 200, { ok: true, mode: setAppleMode(db, req.user.id, String(body.mode || '')) }); }
+    catch (e) { return json(res, 400, { error: e.message }); }
   }
   if (p === '/api/apple-health/token' && method === 'POST') {
     if (!requireUser(req, res)) return;

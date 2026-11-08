@@ -4,6 +4,7 @@
  * authenticated account.
  */
 import { localDate, localIso, encrypt, decrypt, MANUAL_COLUMNS } from './db.mjs';
+import { mergeAppleIntoWellness } from './apple-metrics.mjs';
 import { hashPassword } from './auth.mjs';
 import { plausible } from './signals.mjs';
 
@@ -479,7 +480,8 @@ export function setAdviceSettings(db, userId, patch) {
 
 /** Wellness rows with the excluded fields nulled out so baselines ignore them. */
 export function effectiveWellness(db, userId, oldest, newest) {
-  const rows = listWellnessRange(db, userId, oldest, newest);
+  // Apple Health fills or replaces fields per the person's chosen mode (apple-metrics.mjs).
+  const rows = mergeAppleIntoWellness(db, userId, listWellnessRange(db, userId, oldest, newest), oldest, newest);
   const excluded = listExclusions(db, userId, 'wellness');
   if (!excluded.length) return rows;
   const byDate = new Map();
