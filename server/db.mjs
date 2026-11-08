@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { AI_SCHEMA } from './ai-schema.mjs';
+import { APPLE_SCHEMA } from './apple-schema.mjs';
 
 export const APP_TZ = 'Asia/Ho_Chi_Minh';
 
@@ -145,6 +146,7 @@ export function openDb(dir) {
   }
   try { db.exec('ALTER TABLE checkins ADD COLUMN tags TEXT'); } catch { /* already there */ }
   db.exec(AI_SCHEMA);
+  db.exec(APPLE_SCHEMA);
   return db;
 }
 

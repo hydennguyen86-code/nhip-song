@@ -617,6 +617,59 @@ function sleepCard(d) {
   </div>`;
 }
 
+/* Sleep structure pushed from Apple Health by the iPhone Shortcut. Shown, not scored. */
+const STAGE_COLORS = { deep: '#6f7dff', core: '#a99bff', rem: '#7cc4ff', awake: '#ff8577' };
+function durText(min) {
+  if (min == null || !Number.isFinite(Number(min))) return '—';
+  const m = Math.round(min);
+  return m >= 60 ? `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}` : `${m} phút`;
+}
+function pctText(x) { return x == null ? '—' : `${Math.round(x * 100)}%`; }
+function vsNorm(value, norm, { higherBetter = true, neutral = false, unit = '%', scale = 100, digits = 0 } = {}) {
+  if (value == null || norm == null) return '';
+  const diff = (value - norm) * scale;
+  const shown = Math.abs(diff).toFixed(digits);
+  if (Number(shown) === 0) return '<span class="sd-vs flat">như thường</span>';
+  const good = higherBetter ? diff > 0 : diff < 0;
+  return `<span class="sd-vs ${neutral ? '' : good ? 'up' : 'down'}">${diff > 0 ? '+' : '−'}${shown}${unit} so với thường</span>`;
+}
+function sleepDetailCard(sd) {
+  if (!sd || (!sd.connected && !sd.lastDate)) return '';
+  const n = sd.night;
+  const head = `<div class="card-head">
+      <div class="card-title"><span class="ico-chip" style="--chip:#6f7dff">${ICONS.moon}</span><div><div class="eyebrow">Apple Health · đêm qua</div><h3>Cấu trúc giấc ngủ</h3></div></div>
+      ${n?.sleepScore != null ? `<span class="confidence-chip">điểm ngủ ${fmtNum(n.sleepScore)}</span>` : '<span class="confidence-chip">chưa tính vào điểm</span>'}
+    </div>`;
+  if (!n) {
+    return `<div class="card sleepd-card">${head}
+      <div class="hint">${sd.lastDate ? `Chưa nhận đêm qua. Lần gần nhất: ${esc(fmtDate(sd.lastDate))}. Mở khoá iPhone để phím tắt chạy, hoặc chạy tay phím tắt "Nhịp Sống – Giấc ngủ".` : 'Đã tạo mã nhưng chưa nhận đêm nào. Chạy thử phím tắt "Nhịp Sống – Giấc ngủ" trên iPhone.'}</div>
+    </div>`;
+  }
+  const total = n.deepMin + n.coreMin + n.remMin + n.awakeMin + (n.unspecifiedMin || 0);
+  const seg = (k, v) => (v > 0 && total > 0 ? `<span style="width:${(v / total * 100).toFixed(2)}%;background:${STAGE_COLORS[k] || '#5d6b63'}" title="${esc(k)}"></span>` : '');
+  const nm = sd.norm && sd.norm.deepPct != null ? sd.norm : null;
+  const row = (color, label, min, pct, normPct, neutral = false) => `<div class="sd-row"><span class="sd-dot" style="background:${color}"></span><span class="sd-k">${label}</span><span class="sd-v">${durText(min)}<small>${pctText(pct)}</small></span>${nm ? vsNorm(pct, normPct, { neutral }) : ''}</div>`;
+  const cmp = sd.compare && Math.abs(sd.compare.diffMin) >= 20
+    ? `<div class="hint" style="margin-top:8px">Intervals ghi ${durText(sd.compare.intervalsMin)}, Apple Health ghi ${durText(sd.compare.appleMin)} (lệch ${sd.compare.diffMin > 0 ? '+' : '−'}${Math.abs(sd.compare.diffMin)} phút). Điểm hồi phục vẫn dùng số của Intervals trong giai đoạn chạy song song.</div>`
+    : '';
+  return `<div class="card sleepd-card">${head}
+    <div class="sd-bar">${seg('deep', n.deepMin)}${seg('core', n.coreMin)}${seg('rem', n.remMin)}${seg('unspecified', n.unspecifiedMin)}${seg('awake', n.awakeMin)}</div>
+    <div class="sd-times"><span>${esc(n.bedStart || '—')}</span><span>ngủ ${durText(n.asleepMin)}</span><span>${esc(n.bedEnd || '—')}</span></div>
+    ${n.hasStages ? `
+      ${row(STAGE_COLORS.deep, 'Ngủ sâu', n.deepMin, n.deepPct, nm?.deepPct)}
+      ${row(STAGE_COLORS.core, 'Ngủ nông (lõi)', n.coreMin, n.corePct, nm?.corePct, true)}
+      ${row(STAGE_COLORS.rem, 'REM', n.remMin, n.remPct, nm?.remPct)}` : '<div class="hint">Đêm này không có giai đoạn ngủ, chỉ có tổng thời gian ngủ.</div>'}
+    <div class="stat-row">
+      <div class="stat"><b>${fmtNum(n.awakeMin)}</b><span>phút thức giữa đêm${nm ? ` · thường ${fmtNum(nm.awakeMin)}` : ''}</span></div>
+      <div class="stat"><b>${fmtNum(n.awakenings)}</b><span>lần tỉnh ≥ 5 phút${nm ? ` · thường ${fmtNum(nm.awakenings, 1)}` : ''}</span></div>
+      <div class="stat"><b>${pctText(n.efficiency)}</b><span>hiệu suất ngủ${nm?.efficiency != null ? ` · thường ${pctText(nm.efficiency)}` : ''}</span></div>
+    </div>
+    ${n.napMin > 0 ? `<div class="hint" style="margin-top:8px">Ngủ trưa ${durText(n.napMin)}.</div>` : ''}
+    ${cmp}
+    <div class="hint" style="margin-top:10px">${nm ? `So với trung bình ${nm.nights} đêm gần nhất của chính bạn.` : `Cần ${sd.norm?.need || 7} đêm có giai đoạn ngủ để so với thói quen của bạn (đang có ${sd.norm?.nights || 0}).`} Giai đoạn ngủ từ đồng hồ đeo tay có sai số; xem xu hướng nhiều đêm, đừng xét một đêm.</div>
+  </div>`;
+}
+
 function loadCard(d) {
   const l = d.load;
   const target = l.target;
@@ -1072,6 +1125,7 @@ async function renderToday(view) {
       ${d.recovery.needsHrv ? '' : factorsCard(d)}
       ${historyCard(d)}
       ${d.recovery.needsHrv ? '' : sleepCard(d)}
+      ${sleepDetailCard(d.sleepDetail)}
       ${d.recovery.needsHrv ? '' : loadCard(d)}
       ${checkinCard(d)}
       ${recentCard(d)}
@@ -1628,6 +1682,11 @@ async function renderSettings(view) {
           <button class="btn primary small" id="saveKey">Lưu và thử kết nối</button>`}
       </div>
 
+      <div class="card" id="appleCard">
+        <div class="card-head"><div><div class="eyebrow">Dữ liệu</div><h3>Apple Health (phím tắt iPhone)</h3></div><span id="appleChip" class="confidence-chip">đang tải</span></div>
+        <div id="appleBox"><div class="hint">Đang tải…</div></div>
+      </div>
+
       <div class="card">
         <div class="card-head"><div><div class="eyebrow">Quy tắc</div><h3>Ngưỡng gợi ý buổi sáng</h3></div></div>
         <div id="adviceSettingsBox"><div class="hint">Đang tải…</div></div>
@@ -1710,7 +1769,54 @@ async function renderSettings(view) {
   };
 
   loadAdviceSettings(view);
+  loadAppleHealth(view);
   if (me.role === 'admin') { loadUsers(view); loadSchedule(view); }
+}
+
+async function loadAppleHealth(view, freshToken = null) {
+  const box = view.querySelector('#appleBox');
+  const chip = view.querySelector('#appleChip');
+  if (!box) return;
+  let a;
+  try { a = await api('/api/apple-health'); } catch (e) { box.innerHTML = `<div class="notice">${esc(e.message)}</div>`; return; }
+  const url = `${location.origin}${a.endpoint}`;
+  chip.className = `confidence-chip ${a.hasToken ? 'green' : ''}`;
+  chip.textContent = a.hasToken ? 'đã có mã' : 'chưa kết nối';
+  const nights = (a.nights || []).slice(0, 7);
+  box.innerHTML = `
+    <p class="hint">Phím tắt trên iPhone đọc giấc ngủ đêm qua trong Apple Health (sâu, nông, REM, thức) và gửi về đây. Hiện chỉ để xem, chưa tính vào điểm hồi phục.</p>
+    <div class="set-row"><span class="k">Địa chỉ nhận</span><span class="v apple-url">${esc(url)}</span></div>
+    ${a.hasToken ? `
+      <div class="set-row"><span class="k">Mã tạo lúc</span><span class="v">${esc(fmtDateTime(a.createdAt))}</span></div>
+      <div class="set-row"><span class="k">Phím tắt gửi gần nhất</span><span class="v">${a.lastUsedAt ? esc(fmtDateTime(a.lastUsedAt)) : 'chưa lần nào'}</span></div>` : ''}
+    ${freshToken ? `
+      <div class="notice">Mã chỉ hiện <b>một lần</b>. Sao chép và dán vào phím tắt ngay, ở dòng <b>Authorization</b> với dạng <code>Bearer ${esc(freshToken.slice(0, 6))}…</code></div>
+      <label class="field"><span>Mã cho phím tắt</span><input id="appleToken" type="text" readonly value="Bearer ${esc(freshToken)}"></label>` : ''}
+    <div class="actions">
+      <button class="btn ghost small" id="appleCopyUrl">Sao chép địa chỉ</button>
+      ${freshToken ? '<button class="btn primary small" id="appleCopyToken">Sao chép mã</button>' : `<button class="btn ${a.hasToken ? 'ghost' : 'primary'} small" id="appleNew">${a.hasToken ? 'Tạo mã mới' : 'Tạo mã cho phím tắt'}</button>`}
+      ${a.hasToken ? '<button class="btn danger small" id="appleRevoke">Thu hồi mã</button>' : ''}
+    </div>
+    <div class="hint" style="margin-top:8px">iPhone phải bật Tailscale. Nếu đang mở app bằng địa chỉ trong nhà (192.168…), hãy dùng địa chỉ Tailscale của máy Mac trong phím tắt. Hướng dẫn dựng phím tắt: README → "Giấc ngủ từ Apple Health".</div>
+    ${nights.length ? `<div class="divider"></div>
+      <div class="eyebrow" style="margin-bottom:6px">7 đêm gần nhất</div>
+      <div class="apple-nights">${nights.map((r) => `<div class="set-row"><span class="k">${esc(fmtShort(r.date))}</span><span class="v">${durText(r.asleep_min)} · sâu ${durText(r.deep_min)} · REM ${durText(r.rem_min)} · thức ${fmtNum(r.awake_min)}′</span></div>`).join('')}</div>` : ''}`;
+  const copy = async (txt, ok) => { try { await navigator.clipboard.writeText(txt); toastMsg(ok); } catch { toastMsg('Không sao chép được, hãy chọn và sao chép tay.'); } };
+  box.querySelector('#appleCopyUrl').onclick = () => copy(url, 'Đã sao chép địa chỉ.');
+  const ct = box.querySelector('#appleCopyToken');
+  if (ct) ct.onclick = () => copy(`Bearer ${freshToken}`, 'Đã sao chép mã.');
+  const nb = box.querySelector('#appleNew');
+  if (nb) nb.onclick = async () => {
+    if (a.hasToken && !confirm('Tạo mã mới? Mã cũ trong phím tắt sẽ ngừng hoạt động, phải dán mã mới vào.')) return;
+    try { const r = await api('/api/apple-health/token', { method: 'POST', body: {} }); loadAppleHealth(view, r.token); }
+    catch (e) { toastMsg(e.message); }
+  };
+  const rv = box.querySelector('#appleRevoke');
+  if (rv) rv.onclick = async () => {
+    if (!confirm('Thu hồi mã? Phím tắt sẽ không gửi được nữa. Dữ liệu đã nhận vẫn giữ.')) return;
+    await api('/api/apple-health/token', { method: 'DELETE' });
+    loadAppleHealth(view);
+  };
 }
 
 async function loadAdviceSettings(view) {

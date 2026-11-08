@@ -29,8 +29,11 @@ import { sickDatesFrom, priorValues, BASELINE_NEEDS } from './signals.mjs';
 import { startScheduler, getSchedule, setSchedule } from './scheduler.mjs';
 import { handleExtRoutes } from './routes-ext.mjs';
 import { clientIp, viaProxy, isHttps, applySecurityHeaders, createLoginLimiter } from './security.mjs';
+import { ingest as ingestApple, restoreNight, issueToken, revokeToken, tokenInfo, userForToken, listNights, sleepDetailView } from './apple-health.mjs';
 
 const loginLimiter = createLoginLimiter();
+// Wrong Shortcut tokens: same lockout rule as passwords, per client IP.
+const ingestLimiter = createLoginLimiter();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -156,6 +159,33 @@ async function route(req, res) {
   const p = u.pathname;
   const method = req.method;
   attachUser(req, res);
+
+  // --- Apple Health push from the iPhone Shortcut (token auth, no session) ---
+  if (p === '/api/ingest/apple-health' && method === 'POST') {
+    const limitKeys = [`ingest:${clientIp(req)}`];
+    if (ingestLimiter.blocked(limitKeys)) {
+      res.setHeader('Retry-After', String(ingestLimiter.retryAfterSec(limitKeys)));
+      return json(res, 429, { ok: false, error: 'Sai mã quá nhiều lần. Đợi 15 phút.', message: 'Sai mã quá nhiều lần. Đợi 15 phút.' });
+    }
+    const userId = userForToken(db, req.headers.authorization);
+    if (!userId) {
+      ingestLimiter.fail(limitKeys);
+      const msg = 'Mã không đúng hoặc đã bị thu hồi. Vào Cài đặt → Apple Health để tạo mã mới.';
+      return json(res, 401, { ok: false, error: msg, message: msg });
+    }
+    ingestLimiter.reset(limitKeys);
+    const raw = await readBody(req);
+    let body;
+    if (/json/i.test(String(req.headers['content-type'] || ''))) {
+      try { body = raw ? JSON.parse(raw) : {}; } catch { return json(res, 400, { ok: false, error: 'JSON không hợp lệ.', message: 'JSON không hợp lệ.' }); }
+    } else {
+      body = { samples: raw };
+    }
+    const out = ingestApple(db, userId, body);
+    log('apple-health ingest', userId, out.ok ? `${out.nights.length} đêm` : out.error);
+    const { status, ...rest } = out;
+    return json(res, status, rest);
+  }
 
   // --- auth ---
   if (p === '/api/login' && method === 'POST') {
@@ -296,6 +326,8 @@ async function route(req, res) {
     const load = buildLoadTarget({ activities, today, band: recovery.band });
     const history = recoveryHistory({ wellness, today, days: histDays, settings, checkins: recentCheckins, activities });
     const metrics = buildMetrics({ wellness, today, activities, sickDates });
+    const todayRow = wellness.find((w) => w.date === today);
+    const sleepDetail = sleepDetailView(db, req.user.id, today, { intervalsSleepSecs: todayRow?.sleep_secs ?? null });
 
     const userRow = db.prepare('SELECT last_sync_at AS lastSync, last_sync_error AS syncError, icu_key_cipher IS NOT NULL AS hasKey, display_name AS displayName, created_at AS createdAt FROM users WHERE id = ?').get(req.user.id);
     const first = db.prepare('SELECT MIN(date) AS first, COUNT(*) AS days FROM wellness WHERE user_id = ?').get(req.user.id);
@@ -312,6 +344,7 @@ async function route(req, res) {
       load,
       history,
       metrics,
+      sleepDetail,
       recent: activities.slice(0, 4),
       checkin: checkin || null,
       journalTags: JOURNAL_TAGS,
@@ -487,6 +520,7 @@ async function route(req, res) {
       activities: db.prepare('SELECT * FROM activities WHERE user_id = ?').all(req.user.id),
       checkins: db.prepare('SELECT * FROM checkins WHERE user_id = ?').all(req.user.id),
       exclusions: db.prepare('SELECT * FROM exclusions WHERE user_id = ?').all(req.user.id),
+      appleSleep: db.prepare('SELECT * FROM apple_sleep WHERE user_id = ?').all(req.user.id),
     };
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Content-Disposition': `attachment; filename="nhip-song-backup-${req.user.username}-${localDate()}.json"` });
     res.end(JSON.stringify(dump, null, 2));
@@ -498,8 +532,28 @@ async function route(req, res) {
     let counts = { wellness: 0, activities: 0, checkins: 0 };
     for (const w of body.wellness || []) { if (upsertWellness(db, req.user.id, { date: w.date, restingHR: w.resting_hr, hrv: w.hrv_rmssd, hrvSDNN: w.hrv_sdnn, sleepSecs: w.sleep_secs, sleepScore: w.sleep_score, steps: w.steps, weight: w.weight, avgSleepingHR: w.avg_sleeping_hr, kcalConsumed: w.kcal_consumed, readiness: w.readiness, spO2: w.spo2, respiration: w.respiration, hrvManual: w.hrv_manual, hrvManualAt: w.hrv_manual_at, respirationManual: w.respiration_manual, respirationManualAt: w.respiration_manual_at, manualFields: Object.fromEntries(MANUAL_COLUMNS.map((c) => [c, { manual: w[`${c}_manual`], at: w[`${c}_manual_at`] }])) })) counts.wellness++; }
     for (const a of body.activities || []) { if (upsertActivity(db, req.user.id, { id: a.activity_id, start_date_local: a.start_date_local, name: a.name, type: a.type, moving_time: a.moving_time, elapsed_time: a.elapsed_time, distance: a.distance, total_elevation_gain: a.elevation, average_heartrate: a.avg_hr, max_heartrate: a.max_hr, average_watts: a.avg_watts, icu_training_load: a.training_load, rpe: a.rpe, icu_intensity: a.intensity }, a.source || 'restore')) counts.activities++; }
+    counts.appleSleep = 0;
+    for (const r of body.appleSleep || []) { if (restoreNight(db, req.user.id, r)) counts.appleSleep++; }
     for (const c of body.checkins || []) { if (c.local_date === localDate() || true) { /* historical checkins allowed */ } }
     return json(res, 200, { ok: true, counts });
+  }
+
+  // --- Apple Health: Shortcut token and recent nights ---
+  if (p === '/api/apple-health' && method === 'GET') {
+    if (!requireUser(req, res)) return;
+    const today = localDate();
+    return json(res, 200, { ...tokenInfo(db, req.user.id), endpoint: '/api/ingest/apple-health', nights: listNights(db, req.user.id, addDays(today, -13), today) });
+  }
+  if (p === '/api/apple-health/token' && method === 'POST') {
+    if (!requireUser(req, res)) return;
+    const token = issueToken(db, req.user.id);
+    log('apple-health token issued', req.user.id);
+    return json(res, 200, { ok: true, token, note: 'Mã chỉ hiện một lần. Dán vào phím tắt ngay.' });
+  }
+  if (p === '/api/apple-health/token' && method === 'DELETE') {
+    if (!requireUser(req, res)) return;
+    revokeToken(db, req.user.id);
+    return json(res, 200, { ok: true });
   }
 
   // --- status page (data freshness) ---
