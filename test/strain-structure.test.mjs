@@ -100,3 +100,18 @@ describe('sleep structure', () => {
     assert.ok(few.items.every((x) => x.confidence === 'insufficient' && x.pct == null));
   });
 });
+
+describe('naps', () => {
+  test('a nap the afternoon before credits tonight’s need; Intervals nights (naps inside) get no credit', async () => {
+    const { sleepNeed } = await import('../server/signals.mjs');
+    const w = [];
+    for (let i = 30; i >= 0; i--) w.push({ date: addDays(TODAY, -i), sleep_secs: 450 * 60, _sleep_src: 'apple', _nap_min: 0 });
+    const base = sleepNeed(w, [], TODAY);
+    w.find((r) => r.date === addDays(TODAY, -1))._nap_min = 34;
+    const napped = sleepNeed(w, [], TODAY);
+    assert.equal(napped.napCreditMin, 34);
+    assert.equal(napped.needMin, base.needMin - 34);
+    const icu = w.map((r) => ({ ...r, _sleep_src: undefined }));
+    assert.equal(sleepNeed(icu, [], TODAY).napCreditMin, 0);
+  });
+});

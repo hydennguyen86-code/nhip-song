@@ -5,6 +5,8 @@ CREATE TABLE IF NOT EXISTS apple_sleep (
   date TEXT NOT NULL,
   bed_start TEXT,
   bed_end TEXT,
+  sleep_start TEXT,
+  sleep_end TEXT,
   in_bed_min REAL,
   asleep_min REAL,
   deep_min REAL,

@@ -246,10 +246,11 @@ export function sleepNeed(wellness, activities = [], today) {
   let debt = 0;
   let debtNights = 0;
   for (let i = 1; i <= 7; i++) {
-    const r = rowOn(wellness, addDays(today, -i));
+    const d = addDays(today, -i);
+    const r = rowOn(wellness, d);
     if (r && plausible('sleep_secs', r.sleep_secs)) {
       debtNights++;
-      debt += Math.max(0, base - r.sleep_secs / 60);
+      debt += Math.max(0, base - r.sleep_secs / 60 - napBefore(wellness, d));
     }
   }
   debt = Math.min(debt, 600);
@@ -258,9 +259,12 @@ export function sleepNeed(wellness, activities = [], today) {
   // WHOOP-style: the day before the night adds need with its strain (strain.mjs).
   const yStrain = strainOn(activities, addDays(today, -1)).strain;
   const strainBump = strainSleepBump(yStrain);
+  // …and a nap that afternoon already paid part of it.
+  const napCredit = Math.min(napBefore(wellness, today), NAP_MAX_CREDIT_MIN);
 
   return {
-    needMin: Math.round(base + repay + strainBump),
+    needMin: Math.round(Math.max(NEED_FLOOR_MIN, base + repay + strainBump - napCredit)),
+    napCreditMin: Math.round(napCredit),
     baseMin: Math.round(base),
     personalMeanMin: Math.round(personalMean),
     nights: nights.length,
@@ -270,6 +274,24 @@ export function sleepNeed(wellness, activities = [], today) {
     strainBumpMin: Math.round(strainBump),
     yesterdayStrain: yStrain,
   };
+}
+
+/** Naps credit at most this much need, and need never drops below the floor. */
+export const NAP_MAX_CREDIT_MIN = 90;
+export const NEED_FLOOR_MIN = 360;
+
+/**
+ * Nap minutes of the afternoon before the night that ended on `date`.
+ * Only for nights measured by Apple Health, where the night and the naps are
+ * separate (apple_sleep.nap_min, carried as row._nap_min). Intervals.icu's
+ * HUAWEI total already includes that day's naps, so crediting them again
+ * would count them twice.
+ */
+export function napBefore(wellness, date) {
+  const night = rowOn(wellness, date);
+  if (!night || night._sleep_src !== 'apple') return 0;
+  const prev = rowOn(wellness, addDays(date, -1));
+  return prev && prev._nap_min > 0 ? prev._nap_min : 0;
 }
 
 /** Obtained / need for last night, with a 0–100 sub-score (85% → 50). */

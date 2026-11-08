@@ -10,7 +10,7 @@ import { openDb } from '../server/db.mjs';
 import { createUser } from '../server/store.mjs';
 import {
   stageOf, parseTime, parseSamples, buildNights, ingest, issueToken, revokeToken, tokenInfo,
-  userForToken, listNights, restoreNight, sleepDetailView,
+  userForToken, listNights, restoreNight, sleepDetailView, appleBedtimes,
 } from '../server/apple-health.mjs';
 
 const tmpDb = () => openDb(fs.mkdtempSync(path.join(os.tmpdir(), 'nhip-apple-')));
@@ -192,5 +192,25 @@ describe('apple health: tokens and ingest', () => {
     assert.equal(v.norm.nights, 8);
     assert.ok(Math.abs(v.norm.deepPct - 65 / 410) < 1e-9);
     assert.deepEqual(v.compare, { intervalsMin: 454, appleMin: 410, diffMin: -44 });
+  });
+});
+
+describe('apple health: bedtime from the watch', () => {
+  test('sleep onset stored; bedtime keyed by the evening (context date); fills context only when not typed', async () => {
+    const { buildDayFacts } = await import('../server/context.mjs');
+    const db = tmpDb();
+    const uid = createUser(db, { username: 'hyden', displayName: 'H', password: 'matkhau123', role: 'admin' });
+    ingest(db, uid, { samples: night });
+    const [row] = listNights(db, uid, '2026-11-08', '2026-11-08');
+    assert.equal(row.bed_start, '22:50', 'iPhone in-bed');
+    assert.equal(row.sleep_start, '23:05', 'watch sleep onset');
+    assert.equal(row.sleep_end, '06:10');
+    const map = appleBedtimes(db, uid, '2026-11-07', '2026-11-07');
+    assert.deepEqual(map.get('2026-11-07'), { bedtime: '23:05', wake: '06:10', inBed: '22:50' });
+    const days = buildDayFacts({ contexts: new Map([['2026-11-06', { bedtime: '22:00' }]]), bedtimes: new Map([['2026-11-06', { bedtime: '23:30' }], ['2026-11-07', { bedtime: '23:05' }]]) });
+    assert.equal(days.get('2026-11-06').bedtime, '22:00', 'typed bedtime wins');
+    assert.equal(days.get('2026-11-07').bedtime, '23:05');
+    assert.equal(days.get('2026-11-07')._bed_auto, true);
+    assert.equal(days.get('2026-11-07')._logged, false, 'an Apple bedtime does not make other context factors "known"');
   });
 });

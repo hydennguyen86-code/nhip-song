@@ -185,7 +185,8 @@ describe('apple metrics: storage and merge', () => {
     const d8 = rows.find((r) => r.date === '2026-11-08');
     assert.equal(d8.hrv_rmssd, 60, 'HRV source = Intervals: Apple HRV never used');
     assert.equal(d8.respiration, 14.6, 'missing field filled');
-    assert.deepEqual(d8._apple.sort(), ['respiration', 'spo2']);
+    assert.deepEqual(d8._apple.sort(), ['respiration', 'sleep_secs', 'spo2'], 'sleep from Apple even in fill mode: Intervals adds naps to the night');
+    assert.equal(d8.sleep_secs, 7 * 3600);
     const d7 = rows.find((r) => r.date === '2026-11-07');
     assert.equal(d7.hrv_rmssd, null, 'no Apple HRV mixed into an Intervals baseline');
     assert.equal(d7.resting_hr, 55, 'whole missing day filled');

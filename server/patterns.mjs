@@ -205,14 +205,19 @@ function summarize(f) {
 /**
  * @returns {{ factors: object[], rules: object, loggedDays: number, observations: number, symptomDays: number, note: string }}
  */
-export function computePatterns({ wellness, contexts, checkins = [], activities = [], sickDates = null, today, symptomWindowDays = 90 }) {
+export function computePatterns({ wellness, contexts, checkins = [], activities = [], bedtimes = new Map(), sickDates = null, today, symptomWindowDays = 90 }) {
   const R = PATTERN_RULES;
   const outcomes = morningOutcomes(wellness, { sickDates });
-  const days = addBedtimeDeviation(buildDayFacts({ contexts, checkins, activities }));
+  const days = addBedtimeDeviation(buildDayFacts({ contexts, checkins, activities, bedtimes }));
   const spreads = [...outcomes.values()].map((o) => o.hrvSpread).filter(Boolean);
   const typicalSpread = spreads.length ? mean(spreads) : HRV_LN_SPREAD_FLOOR;
 
-  const known = (f, d) => { const x = days.get(d); return f.source === 'activity' ? true : Boolean(x && x._logged); };
+  const known = (f, d) => {
+    const x = days.get(d);
+    if (f.source === 'activity') return true;
+    if (f.source === 'bedtime') return Boolean(x && (x._logged || x._bed_auto));
+    return Boolean(x && x._logged);
+  };
   const has = (f, d) => { const x = days.get(d); return Boolean(x && f.test(x)); };
   const eventDays = new Map(FACTORS.map((f) => [f.id, [...days.keys()].filter((d) => known(f, d) && has(f, d)).sort()]));
   const fitted = FACTORS.filter((f) => eventDays.get(f.id).length >= R.minEvents);

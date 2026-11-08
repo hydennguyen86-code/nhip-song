@@ -31,7 +31,7 @@
 
 import { computeBaselines, rollingMean } from './baseline.mjs';
 import { unusualReadings, ALERT_RULES } from './alerts.mjs';
-import { hrvModel, rhrModel, sleepPerformance, sleepNeed, respiratorySignal, sickDatesFrom, plausible, SLEEP_PERF } from './signals.mjs';
+import { hrvModel, rhrModel, sleepPerformance, sleepNeed, respiratorySignal, sickDatesFrom, plausible, SLEEP_PERF, napBefore, NAP_MAX_CREDIT_MIN, NEED_FLOOR_MIN } from './signals.mjs';
 import { strainOn, strainSleepBump } from './strain.mjs';
 
 /** Respiration is no longer scored (one-sided illness flag, see signals.mjs). */
@@ -236,6 +236,7 @@ export function computeRecovery({ wellness, today, checkin, settings = DEFAULT_S
       const extras = [];
       if (sp.repayMin) extras.push(`+${sp.repayMin} phút trả nợ ngủ (nợ 7 đêm ${hhmm(sp.debtMin)})`);
       if (sp.strainBumpMin) extras.push(`+${sp.strainBumpMin} phút vì strain hôm qua ${String(sp.yesterdayStrain).replace('.', ',')}`);
+      if (sp.napCreditMin) extras.push(`−${sp.napCreditMin} phút vì đã ngủ trưa hôm qua`);
       let text = `Ngủ ${hhmm(sp.actualMin)} / nhu cầu ${hhmm(sp.needMin)} = ${pctTxt}. Nhu cầu = nền ${hhmm(sp.baseMin)}${extras.length ? ' ' + extras.join(', ') : ''}.`;
       if (sp.nights < 7) text += ' Chưa đủ 7 đêm lịch sử nên nền tạm là 8h.';
       if (sp.suspect) text += ' Dưới 3 giờ — nếu là lỗi đồng bộ, hãy đánh dấu sai.';
@@ -384,12 +385,15 @@ export function buildSleepPlan({ wellness, activities, today }) {
   let debt = 0;
   let nights = 0;
   for (let i = 0; i < 7; i++) {
-    const w = byDate.get(addDays(today, -i));
+    const d = addDays(today, -i);
+    const w = byDate.get(d);
     if (w && plausible('sleep_secs', w.sleep_secs)) {
       nights++;
-      debt += Math.max(0, base - w.sleep_secs / 60);
+      debt += Math.max(0, base - w.sleep_secs / 60 - napBefore(wellness, d));
     }
   }
+  // Today's nap (Apple Health, seen once the Shortcut has run after it) pays part of tonight.
+  const napToday = byDate.get(today)?._sleep_src === 'apple' ? Math.min(byDate.get(today)._nap_min || 0, NAP_MAX_CREDIT_MIN) : 0;
   debt = Math.round(Math.min(debt, 600));
 
   // Tonight's need follows TODAY's strain so far (the day before this night).
@@ -397,13 +401,13 @@ export function buildSleepPlan({ wellness, activities, today }) {
   const strainBump = strainSleepBump(todayStrain.strain);
 
   const repay = Math.min(debt, 300);
-  let getBy = base - 15 + Math.min(repay * 0.08, 20);
-  let perform = base + Math.min(repay * 0.2, 60) + strainBump;
+  let getBy = base - 15 + Math.min(repay * 0.08, 20) - napToday;
+  let perform = base + Math.min(repay * 0.2, 60) + strainBump - napToday;
   let peak = perform + 30;
 
-  getBy = clamp(getBy, 420, 570);
-  perform = clamp(Math.max(perform, getBy + 15), 435, 580);
-  peak = clamp(Math.max(peak, perform + 20), 455, 600);
+  getBy = clamp(getBy, NEED_FLOOR_MIN, 570);
+  perform = clamp(Math.max(perform, getBy + 15), NEED_FLOOR_MIN + 15, 580);
+  peak = clamp(Math.max(peak, perform + 20), NEED_FLOOR_MIN + 35, 600);
 
   return {
     baseMinutes: base,
@@ -412,6 +416,7 @@ export function buildSleepPlan({ wellness, activities, today }) {
     debtNights: nights,
     repayMinutes: Math.round(repay * 0.2 + Math.min(repay * 0.08, 20)),
     strainBumpMinutes: strainBump,
+    napCreditMinutes: Math.round(napToday),
     todayStrain: todayStrain.strain,
     todayMinutes: todayStrain.minutes,
     tiers: {
@@ -424,7 +429,7 @@ export function buildSleepPlan({ wellness, activities, today }) {
       perform: 'Hồi phục tốt',
       peak: 'Đỉnh phong độ',
     },
-    note: 'Nền = trung bình ngủ của bạn (sàn 7,5h) + một phần nợ ngủ 7 ngày + 5 phút cho mỗi điểm strain hôm nay trên 10 (tối đa 45 phút). Tập sức mạnh/bơi/yoga có thể bị đếm thiếu.',
+    note: 'Nền = trung bình ngủ của bạn (sàn 7,5h) + một phần nợ ngủ 7 ngày + 5 phút cho mỗi điểm strain hôm nay trên 10 (tối đa 45 phút) − ngủ trưa hôm nay (khi phím tắt đã gửi sau giấc trưa). Tập sức mạnh/bơi/yoga có thể bị đếm thiếu.',
   };
 }
 

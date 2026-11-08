@@ -40,13 +40,14 @@ export function restorative(row) {
 export function sleepConsistency(nights, today) {
   const R = SLEEP_STRUCTURE_RULES;
   const use = nights
-    .filter((n) => n.date <= today && n.date > addDays(today, -R.consistencyNights) && clock(n.bed_start) != null && clock(n.bed_end) != null && n.asleep_min >= R.minAsleepMin)
+    .filter((n) => n.date <= today && n.date > addDays(today, -R.consistencyNights) && clock(n.sleep_start || n.bed_start) != null && clock(n.sleep_end || n.bed_end) != null && n.asleep_min >= R.minAsleepMin)
     .sort((a, b) => (a.date < b.date ? 1 : -1))
     .slice(0, R.consistencyNights);
   if (use.length < R.consistencyMin) return { score: null, nights: use.length, need: R.consistencyMin };
   // Bedtime before 18:00 belongs to the next day's clock (00:30 → 24:30).
-  const bed = use.map((n) => { const m = clock(n.bed_start); return m < 18 * 60 ? m + 1440 : m; });
-  const wake = use.map((n) => clock(n.bed_end));
+  // Watch-measured sleep onset / last sleep, not the iPhone "in bed" schedule.
+  const bed = use.map((n) => { const m = clock(n.sleep_start || n.bed_start); return m < 18 * 60 ? m + 1440 : m; });
+  const wake = use.map((n) => clock(n.sleep_end || n.bed_end));
   const bedSd = sd(bed);
   const wakeSd = sd(wake);
   const score = Math.round(Math.min(100, Math.max(0, 100 - (bedSd + wakeSd) / R.consistencyDivisor)));

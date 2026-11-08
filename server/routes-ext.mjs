@@ -12,7 +12,7 @@ import { sickDatesFrom } from './signals.mjs';
 import { CONTEXT_FIELDS, saveContext, getContext, listContexts, contextLabels } from './context.mjs';
 import { computePatterns } from './patterns.mjs';
 import { analyzeSleepStructure } from './sleep-structure.mjs';
-import { listNights } from './apple-health.mjs';
+import { listNights, appleBedtimes } from './apple-health.mjs';
 import { aiConfig, buildPacket, runAi, hashPacket, usageSummary, weeklyWindow, cached, AiError } from './ai.mjs';
 
 const isDate = (d) => /^\d{4}-\d{2}-\d{2}$/.test(String(d || ''));
@@ -29,7 +29,8 @@ export function userBundle(db, userId, today = localDate(), { historyDays = 30, 
   const recovery = computeRecovery({ wellness, today, checkin, settings, activities, sickDates });
   const advice = buildAdvice({ today, wellness, activities, checkin, settings, sickDates });
   const history = recoveryHistory({ wellness, today, days: historyDays, settings, checkins, activities });
-  const patterns = computePatterns({ wellness, contexts, checkins, activities, sickDates, today });
+  const bedtimes = appleBedtimes(db, userId, addDays(today, -contextDays), today);
+  const patterns = computePatterns({ wellness, contexts, checkins, activities, bedtimes, sickDates, today });
   return { today, wellness, activities, checkins, sickDates, contexts, recovery, advice, history, patterns };
 }
 
@@ -69,6 +70,7 @@ export async function handleExtRoutes({ p, method, u, req, res, db, json, readJs
       date,
       today,
       data: getContext(db, req.user.id, date) || {},
+      apple: appleBedtimes(db, req.user.id, date, date).get(date) || null,
       activities: activitySummary(listActivitiesRange(db, req.user.id, date, date), date),
       fields: CONTEXT_FIELDS,
       recent,

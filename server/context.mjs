@@ -156,7 +156,8 @@ const watchSport = (id, label, kind, unit = 'load') => ({
  * Factors the pattern engine compares. `test` says whether the factor happened
  * on a day; `source` says where a day counts as "known": 'context' = only days
  * with a saved context (or legacy journal tags); 'activity' = every day,
- * because Intervals.icu activities are synced.
+ * because Intervals.icu activities are synced; 'bedtime' = days with a saved
+ * context or a bedtime measured by the watch (Apple Health).
  *
  * Optional `dose(c)` makes the factor "how much", not just "yes/no": the
  * regression then uses the dose relative to the person's usual dose, so the
@@ -184,8 +185,8 @@ export const FACTORS = Object.freeze([
   { id: 'coffee_late', label: 'Cà phê sau 14h', source: 'context', test: (c) => c.coffee_late === true },
   { id: 'alcohol', label: 'Rượu bia', source: 'context', test: (c) => (c.alcohol || 0) >= 1, dose: (c) => Math.min(c.alcohol || 0, 12) || null, unit: 'ly', perUnit: true },
   { id: 'late_meal', label: 'Ăn tối muộn', source: 'context', test: (c) => c.late_meal === true },
-  { id: 'late_bed', label: 'Lên giường trễ hơn thường lệ', source: 'context', test: (c) => c._bed_dev_h >= BEDTIME_RULES.minShiftH, dose: (c) => c._bed_dev_h, unit: 'giờ', perUnit: true },
-  { id: 'early_bed', label: 'Lên giường sớm hơn thường lệ', source: 'context', test: (c) => c._bed_dev_h <= -BEDTIME_RULES.minShiftH, dose: (c) => -c._bed_dev_h, unit: 'giờ', perUnit: true },
+  { id: 'late_bed', label: 'Lên giường trễ hơn thường lệ', source: 'bedtime', test: (c) => c._bed_dev_h >= BEDTIME_RULES.minShiftH, dose: (c) => c._bed_dev_h, unit: 'giờ', perUnit: true },
+  { id: 'early_bed', label: 'Lên giường sớm hơn thường lệ', source: 'bedtime', test: (c) => c._bed_dev_h <= -BEDTIME_RULES.minShiftH, dose: (c) => -c._bed_dev_h, unit: 'giờ', perUnit: true },
   { id: 'stress_high', label: 'Làm việc căng thẳng', source: 'context', test: (c) => c.work_stress === 2 },
   { id: 'late_workout', label: 'Tập sau 19h', source: 'activity', test: (c) => c._late_workout === true },
 ]);
@@ -251,10 +252,17 @@ const LEGACY_TAG = {
  * date → { ...context, _logged: bool }.
  * A checkin dated D with tags describes day D (as the old journal did).
  */
-export function buildDayFacts({ contexts = new Map(), checkins = [], activities = [] }) {
+export function buildDayFacts({ contexts = new Map(), checkins = [], activities = [], bedtimes = new Map() }) {
   const days = new Map();
   const get = (d) => { if (!days.has(d)) days.set(d, { _logged: false }); return days.get(d); };
   for (const [date, c] of contexts) Object.assign(get(date), c, { _logged: true });
+  // Bedtime measured by the watch (Apple Health) when not typed in: no more hand entry.
+  for (const [date, b] of bedtimes) {
+    const t = typeof b === 'string' ? b : b?.bedtime;
+    if (!t) continue;
+    const d = get(date);
+    if (d.bedtime == null) { d.bedtime = t; d._bed_auto = true; }
+  }
   for (const ck of checkins) {
     const tags = Array.isArray(ck.tags) ? ck.tags : [];
     if (!tags.length) continue;

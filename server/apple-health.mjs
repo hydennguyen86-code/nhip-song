@@ -255,19 +255,42 @@ export function saveNight(db, userId, n, { sleepScore = null } = {}) {
   const old = db.prepare('SELECT samples, asleep_min, sleep_score FROM apple_sleep WHERE user_id = ? AND date = ?').get(userId, n.date);
   if (old && (n.samples || 0) < (old.samples || 0) && (n.asleepMin || 0) < (old.asleep_min || 0)) {
     if (sleepScore != null && old.sleep_score == null) db.prepare('UPDATE apple_sleep SET sleep_score = ? WHERE user_id = ? AND date = ?').run(sleepScore, userId, n.date);
+    // The afternoon nap is usually seen only by the next morning's push, whose window cut this night.
+    if ((n.napMin || 0) > 0) db.prepare('UPDATE apple_sleep SET nap_min = MAX(COALESCE(nap_min, 0), ?) WHERE user_id = ? AND date = ?').run(n.napMin, userId, n.date);
     return false;
   }
-  db.prepare(`INSERT INTO apple_sleep(user_id,date,bed_start,bed_end,in_bed_min,asleep_min,deep_min,core_min,rem_min,unspecified_min,
+  const clockOf = (ms) => (Number.isFinite(ms) ? hhmm(ms) : null);
+  db.prepare(`INSERT INTO apple_sleep(user_id,date,bed_start,bed_end,sleep_start,sleep_end,in_bed_min,asleep_min,deep_min,core_min,rem_min,unspecified_min,
       awake_min,awakenings,efficiency,nap_min,sleep_score,sources,samples,updated_at)
-    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-    ON CONFLICT(user_id,date) DO UPDATE SET bed_start=excluded.bed_start, bed_end=excluded.bed_end, in_bed_min=excluded.in_bed_min,
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    ON CONFLICT(user_id,date) DO UPDATE SET bed_start=excluded.bed_start, bed_end=excluded.bed_end,
+      sleep_start=COALESCE(excluded.sleep_start, apple_sleep.sleep_start), sleep_end=COALESCE(excluded.sleep_end, apple_sleep.sleep_end), in_bed_min=excluded.in_bed_min,
       asleep_min=excluded.asleep_min, deep_min=excluded.deep_min, core_min=excluded.core_min, rem_min=excluded.rem_min,
       unspecified_min=excluded.unspecified_min, awake_min=excluded.awake_min, awakenings=excluded.awakenings,
-      efficiency=excluded.efficiency, nap_min=excluded.nap_min,
+      efficiency=excluded.efficiency, nap_min=MAX(excluded.nap_min, COALESCE(apple_sleep.nap_min, 0)),
       sleep_score=COALESCE(excluded.sleep_score, apple_sleep.sleep_score),
       sources=excluded.sources, samples=excluded.samples, updated_at=excluded.updated_at`)
-    .run(userId, n.date, n.bedStart, n.bedEnd, n.inBedMin, n.asleepMin, n.deepMin, n.coreMin, n.remMin, n.unspecifiedMin,
+    .run(userId, n.date, n.bedStart, n.bedEnd, n.sleepStart ?? clockOf(n.sleepStartMs), n.sleepEnd ?? clockOf(n.sleepEndMs), n.inBedMin, n.asleepMin, n.deepMin, n.coreMin, n.remMin, n.unspecifiedMin,
       n.awakeMin, n.awakenings, n.efficiency, n.napMin || 0, sleepScore, JSON.stringify(n.sources || []), n.samples || 0, new Date().toISOString());
+}
+
+/**
+ * Bedtimes for the context engine, keyed by the CONTEXT date: the evening of
+ * day D is the night stored under D + 1 (wake date). The watch's sleep onset
+ * is used, not the iPhone "in bed" time, which often just follows the sleep
+ * schedule. Falls back to the in-bed start for nights stored before sleep
+ * onset was recorded.
+ */
+export function appleBedtimes(db, userId, fromContextDate, toContextDate) {
+  const shift = (d, k) => new Date(Date.parse(`${d}T12:00:00Z`) + k * 86400000).toISOString().slice(0, 10);
+  const rows = db.prepare('SELECT date, sleep_start, bed_start, sleep_end, bed_end FROM apple_sleep WHERE user_id = ? AND date >= ? AND date <= ?')
+    .all(userId, shift(fromContextDate, 1), shift(toContextDate, 1));
+  const out = new Map();
+  for (const r of rows) {
+    const bedtime = r.sleep_start || r.bed_start;
+    if (bedtime) out.set(shift(r.date, -1), { bedtime, wake: r.sleep_end || r.bed_end || null, inBed: r.bed_start || null });
+  }
+  return out;
 }
 
 /** Backup row (apple_sleep columns) → stored night. Returns true when written. */
@@ -387,7 +410,8 @@ export function sleepDetailView(db, userId, today = localDate(), { intervalsSlee
       }
     : null;
   const compare = night && Number.isFinite(intervalsSleepSecs)
-    ? { intervalsMin: Math.round(intervalsSleepSecs / 60), appleMin: Math.round(night.asleepMin), diffMin: Math.round(night.asleepMin - intervalsSleepSecs / 60) }
+    // Intervals.icu (HUAWEI) counts the day's naps into the night; compare like with like.
+    ? { intervalsMin: Math.round(intervalsSleepSecs / 60), appleMin: Math.round(night.asleepMin + (night.napMin || 0)), diffMin: Math.round(night.asleepMin + (night.napMin || 0) - intervalsSleepSecs / 60) }
     : null;
   return { connected: tokenInfo(db, userId).hasToken, night, lastDate: rows[0]?.date || null, staleSince: recentStale, norm, compare };
 }

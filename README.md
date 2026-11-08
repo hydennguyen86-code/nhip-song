@@ -403,6 +403,14 @@ Health có thể hiển thị điểm ngủ, nhưng chưa chắc phím tắt đ�
 - Nhận nhãn tiếng Việt và tiếng Anh: Sâu/Deep, Lõi/Core, REM, Thức/Awake, Trên giường/In Bed, Đã ngủ/Asleep; và số HealthKit 0–5.
 - Giai đoạn ngủ từ đồng hồ đeo tay có sai số so với đo đa ký giấc ngủ. Hãy nhìn **xu hướng nhiều đêm**, đừng tin một đêm.
 
+### Ngủ trưa và giờ đi ngủ
+
+- **Intervals.icu (HUAWEI) cộng ngủ trưa vào giờ ngủ của ngày.** Apple Health tách riêng. Vì vậy khi có dữ liệu Apple, giờ ngủ trong điểm lấy từ Apple (chỉ đêm chính), kể cả ở chế độ "Bù chỗ Intervals thiếu".
+- **Ngủ trưa được ghi công vào nhu cầu ngủ:** ngủ trưa hôm qua trừ thẳng vào nhu cầu của đêm qua (tối đa 90 phút, nhu cầu không dưới 6 giờ), và cũng trừ vào nợ ngủ. Ngủ trưa hôm nay trừ vào kế hoạch ngủ tối nay khi phím tắt đã chạy sau giấc trưa.
+- HRV lúc ngủ, giai đoạn ngủ, độ đều giờ ngủ chỉ dùng **đêm chính**.
+- Bảng đối chiếu cộng ngủ trưa vào cột Apple để so đúng với Intervals.
+- **Giờ đi ngủ tự điền từ đồng hồ:** app dùng giờ bắt đầu ngủ do đồng hồ đo (không dùng giờ "lên giường" của iPhone, thường chỉ theo lịch ngủ). Thẻ bối cảnh hiện sẵn giờ này, không cần nhập tay; giờ bạn tự nhập vẫn được ưu tiên. Tab Quy luật dùng giờ này cho "lên giường trễ/sớm hơn thường lệ" cả những ngày không ghi bối cảnh.
+
 ### Cấu trúc giấc ngủ
 
 - **Ngủ phục hồi** = ngủ sâu + REM. Hiện theo phút, theo % và so với mức thường của bạn.
@@ -774,7 +782,7 @@ server/
 public/
   index.html, styles.css, app.js  — vanilla JS, responsive (sidebar + bottom nav), SVG chart
 test/
-  all, recovery, signals, insights, apple-health, apple-metrics, strain-structure (.test.mjs)  — 186 unit test (node:test)
+  all, recovery, signals, insights, apple-health, apple-metrics, strain-structure (.test.mjs)  — 188 unit test (node:test)
 scripts/nhip, backup.sh, seed-demo.mjs
 ```
 

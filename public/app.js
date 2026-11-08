@@ -1465,7 +1465,9 @@ function attachContext(view) {
       body = `<div class="ctx-chips"><button type="button" class="ctx-chip ${v ? 'selected' : ''}" data-f="${esc(f.id)}" data-bool="1" aria-pressed="${!!v}">${esc(f.label)}</button></div>`;
       return `<div class="ctx-field ${f.private ? 'ctx-private' : ''}">${body}</div>`;
     } else if (f.type === 'time') {
-      body = `<input type="time" data-f="${esc(f.id)}" data-time="1" value="${esc(v || '')}">`;
+      const auto = f.id === 'bedtime' && !v && S.apple?.bedtime ? S.apple.bedtime : '';
+      body = `<input type="time" data-f="${esc(f.id)}" data-time="1" value="${esc(v || auto)}">`;
+      if (auto) body += `<div class="hint" style="margin-top:6px">Tự lấy từ đồng hồ (Apple Health): ngủ lúc ${esc(auto)}${S.apple.wake ? `, thức ${esc(S.apple.wake)}` : ''}. Không cần nhập tay; sửa nếu sai.</div>`;
     } else if (f.type === 'scale') {
       body = `<div class="ctx-chips">${(f.labels || []).map((l, i) => `<button type="button" class="ctx-chip ${v === i ? 'selected' : ''}" data-f="${esc(f.id)}" data-scale="${i}" aria-pressed="${v === i}">${esc(l)}</button>`).join('')}</div>`;
     }
@@ -1500,7 +1502,7 @@ function attachContext(view) {
     try {
       const r = await api('/api/context' + (date ? `?date=${encodeURIComponent(date)}` : ''));
       if (tok !== S.tok || !root.isConnected) return;
-      Object.assign(S, { date: r.date, today: r.today, fields: r.fields || [], recent: r.recent || [], activities: r.activities || [], draft: JSON.parse(JSON.stringify(r.data || {})), labels: null, error: null });
+      Object.assign(S, { date: r.date, today: r.today, fields: r.fields || [], recent: r.recent || [], activities: r.activities || [], apple: r.apple || null, draft: JSON.parse(JSON.stringify(r.data || {})), labels: null, error: null });
     } catch (e) {
       if (tok !== S.tok || !root.isConnected) return;
       S.error = e.message;
@@ -1896,7 +1898,7 @@ function appleCompareHtml(c) {
       ${c.days.map((d) => `<tr><td class="nowrap">${esc(fmtShort(d.date))}</td>${pairCell(d.hrv)}${pairCell(d.rhr)}${pairCell(d.sleepH, 1)}${pairCell(d.resp, 1)}${pairCell(d.steps, 0, 'col-steps')}</tr>`).join('')}
     </tbody></table></div>
     <div class="compare-stats">${st('hrv', 'HRV', 1, ' ms')}${st('rhr', 'Nhịp tim nghỉ', 1)}${st('sleepH', 'Giờ ngủ', 1, ' h')}${st('resp', 'Nhịp thở', 1)}${st('steps', 'Số bước')}</div>
-    <div class="hint" style="margin-top:6px">Ô tô màu là ngày hai nguồn lệch hơn 10%. Cột HRV: Apple là HRV lúc ngủ, Intervals là trung bình cả ngày, nên lệch là bình thường; app không bao giờ trộn hai loại trong một mức nền.</div>`;
+    <div class="hint" style="margin-top:6px">Ô tô màu là ngày hai nguồn lệch hơn 10%. Cột Ngủ: Apple = đêm chính + ngủ trưa cùng ngày, đúng cách HUAWEI/Intervals cộng. Cột HRV: Apple là HRV lúc ngủ, Intervals là trung bình cả ngày, nên lệch là bình thường; app không bao giờ trộn hai loại trong một mức nền.</div>`;
 }
 function appleWorkoutsHtml(ws) {
   if (!ws || !ws.length) return '';

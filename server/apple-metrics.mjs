@@ -537,6 +537,13 @@ export function hrvSourceInfo(db, userId, today = localDate()) {
   return { setting, source, appleNights, note };
 }
 
+/**
+ * Taken from Apple even in "fill" mode: Intervals.icu's HUAWEI sleep total
+ * adds that day's naps to the night, a different quantity from Apple's main
+ * night (naps kept apart and credited to the next night's need in signals.mjs).
+ */
+const APPLE_FIRST = new Set(['sleep_secs']);
+
 /** wellness column ← apple value, and the manual flag that protects it. HRV is handled apart (source). */
 const MAP = [
   ['resting_hr', (a) => a.rhr, 'resting_hr_manual'],
@@ -561,7 +568,7 @@ export function mergeAppleIntoWellness(db, userId, rows, oldest, newest, mode = 
   if (hrvSrc === 'apple_night') rows = applyAppleHrv(db, userId, rows, oldest, newest);
   if (mode === 'off') return rows;
   const daily = db.prepare('SELECT * FROM apple_daily WHERE user_id = ? AND date >= ? AND date <= ?').all(userId, oldest, newest);
-  const sleep = db.prepare('SELECT date, asleep_min, sleep_score FROM apple_sleep WHERE user_id = ? AND date >= ? AND date <= ?').all(userId, oldest, newest);
+  const sleep = db.prepare('SELECT date, asleep_min, sleep_score, nap_min FROM apple_sleep WHERE user_id = ? AND date >= ? AND date <= ?').all(userId, oldest, newest);
   if (!daily.length && !sleep.length) return rows;
   const apple = new Map();
   for (const a of daily) apple.set(a.date, { ...a });
@@ -569,6 +576,7 @@ export function mergeAppleIntoWellness(db, userId, rows, oldest, newest, mode = 
     const a = apple.get(s.date) || { date: s.date };
     a._asleep_min = s.asleep_min;
     a._sleep_score = s.sleep_score;
+    a._nap_min = s.nap_min || 0;
     apple.set(s.date, a);
   }
   const byDate = new Map(rows.map((r) => [r.date, r]));
@@ -585,9 +593,13 @@ export function mergeAppleIntoWellness(db, userId, rows, oldest, newest, mode = 
       const v = get(a);
       if (v == null) continue;
       if (manualCol && row[manualCol] === 1) continue;
-      if (mode === 'fill' && row[col] != null) continue;
+      if (mode === 'fill' && row[col] != null && !APPLE_FIRST.has(col)) continue;
       row[col] = v;
       used.push(col);
+    }
+    if (used.includes('sleep_secs')) {
+      row._sleep_src = 'apple';
+      row._nap_min = a._nap_min || 0;
     }
     if (used.length) row._apple = [...(row._apple || []), ...used];
     out.push(row);
@@ -646,7 +658,9 @@ export function compareSources(db, userId, today = localDate(), days = 14) {
       date,
       hrv: [I.hrv_rmssd ?? null, A.hrv ?? null],
       rhr: [I.resting_hr ?? null, A.rhr ?? null],
-      sleepH: [I.sleep_secs != null ? Math.round(I.sleep_secs / 360) / 10 : null, S.asleep_min != null ? Math.round(S.asleep_min / 6) / 10 : null],
+      // Apple night + that day's naps = how Intervals.icu (HUAWEI) counts a day's sleep.
+      sleepH: [I.sleep_secs != null ? Math.round(I.sleep_secs / 360) / 10 : null, S.asleep_min != null ? Math.round((S.asleep_min + (S.nap_min || 0)) / 6) / 10 : null],
+      napMin: S.nap_min || 0,
       steps: [I.steps ?? null, A.steps ?? null],
       resp: [I.respiration ?? null, A.resp ?? null],
     });

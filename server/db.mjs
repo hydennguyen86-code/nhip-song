@@ -148,6 +148,8 @@ export function openDb(dir) {
   db.exec(AI_SCHEMA);
   db.exec(APPLE_SCHEMA);
   try { db.exec('ALTER TABLE apple_daily ADD COLUMN hrv_method TEXT'); } catch { /* already there */ }
+  try { db.exec('ALTER TABLE apple_sleep ADD COLUMN sleep_start TEXT'); } catch { /* already there */ }
+  try { db.exec('ALTER TABLE apple_sleep ADD COLUMN sleep_end TEXT'); } catch { /* already there */ }
   return db;
 }
 
