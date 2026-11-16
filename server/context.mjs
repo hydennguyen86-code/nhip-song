@@ -14,14 +14,20 @@ export const CONTEXT_FIELDS = Object.freeze([
   {
     id: 'workout', label: 'Buổi tập', type: 'multi',
     options: [
-      { id: 'leg', label: 'Chân' },
-      { id: 'chest_back', label: 'Ngực / Lưng' },
-      { id: 'shoulder_arm', label: 'Vai / Tay' },
-      { id: 'gym_full', label: 'Gym toàn thân' },
+      { id: 'chest_tri', label: 'Ngực / Tay sau', group: 'gym' },
+      { id: 'shoulder_bi', label: 'Vai / Tay trước', group: 'gym' },
+      { id: 'leg', label: 'Chân / Đùi', group: 'gym' },
+      { id: 'gym_full', label: 'Gym toàn thân', group: 'gym' },
+      // Old gym split (before Nov 2026): still valid so saved days keep working,
+      // hidden from the picker unless that day already has it.
+      { id: 'chest_back', label: 'Ngực / Lưng', group: 'gym', legacy: true },
+      { id: 'shoulder_arm', label: 'Vai / Tay', group: 'gym', legacy: true },
       { id: 'pickleball', label: 'Pickleball' },
+      { id: 'badminton', label: 'Cầu lông' },
       { id: 'run', label: 'Chạy bộ' },
+      { id: 'walk', label: 'Đi bộ nhẹ' },
+      { id: 'swim', label: 'Bơi lội' },
       { id: 'ride', label: 'Đạp xe' },
-      { id: 'walk', label: 'Đi bộ' },
       { id: 'yoga', label: 'Yoga' },
       { id: 'hiit', label: 'Lớp HIIT' },
       { id: 'cardio', label: 'Cardio khác' },
@@ -124,7 +130,10 @@ export function listContexts(db, userId, oldest, newest) {
 
 const bedMinutes = (t) => { const [h, m] = String(t).split(':').map(Number); const mins = h * 60 + m; return mins < 5 * 60 ? mins + 24 * 60 : mins; };
 const hasWorkout = (c, id) => Array.isArray(c.workout) && c.workout.includes(id);
-const GYM_PARTS = ['leg', 'chest_back', 'shoulder_arm', 'gym_full'];
+const GYM_PARTS = ['chest_tri', 'shoulder_bi', 'leg', 'gym_full', 'chest_back', 'shoulder_arm'];
+/** Old split days count toward the new split's pattern: a "ngực / lưng" day is a chest day, a "vai / tay" day a shoulder day. */
+const LEGACY_PART = { chest_tri: 'chest_back', shoulder_bi: 'shoulder_arm' };
+const hasPart = (c, id) => hasWorkout(c, id) || (LEGACY_PART[id] != null && hasWorkout(c, LEGACY_PART[id]));
 /** Watch load of a gym day, shared between the body parts ticked that day. */
 const gymShare = (c) => {
   if (!(c._gym_load > 0)) return null;
@@ -138,8 +147,8 @@ const gymMinShare = (c) => {
 };
 
 /**
- * A sport the watch records when the person starts it (run, ride, walk, yoga,
- * pickleball): found from Intervals.icu even without a tag, so every day is
+ * A sport the watch records when the person starts it (run, ride, walk, swim,
+ * yoga, pickleball, badminton): found from Intervals.icu even without a tag, so every day is
  * "known" (no recording and no tag = did not do it). Tagging it covers days
  * without the watch. Load is the dose for hard sports; minutes for gentle ones
  * (walking, yoga), where heart-rate load is near zero and tells little.
@@ -166,14 +175,17 @@ const watchSport = (id, label, kind, unit = 'load') => ({
  * counts at the usual dose. `minutes(c)` is only for the summary text.
  */
 export const FACTORS = Object.freeze([
-  { id: 'leg', label: 'Tập chân', source: 'context', test: (c) => hasWorkout(c, 'leg'), dose: gymShare, minutes: gymMinShare, unit: 'load' },
-  { id: 'chest_back', label: 'Tập ngực / lưng', source: 'context', test: (c) => hasWorkout(c, 'chest_back'), dose: gymShare, minutes: gymMinShare, unit: 'load' },
-  { id: 'shoulder_arm', label: 'Tập vai / tay', source: 'context', test: (c) => hasWorkout(c, 'shoulder_arm'), dose: gymShare, minutes: gymMinShare, unit: 'load' },
+  { id: 'chest_tri', label: 'Tập ngực / tay sau', source: 'context', test: (c) => hasPart(c, 'chest_tri'), dose: gymShare, minutes: gymMinShare, unit: 'load' },
+  { id: 'shoulder_bi', label: 'Tập vai / tay trước', source: 'context', test: (c) => hasPart(c, 'shoulder_bi'), dose: gymShare, minutes: gymMinShare, unit: 'load' },
+  { id: 'leg', label: 'Tập chân / đùi', source: 'context', test: (c) => hasWorkout(c, 'leg'), dose: gymShare, minutes: gymMinShare, unit: 'load' },
   { id: 'gym_full', label: 'Gym toàn thân', source: 'context', test: (c) => hasWorkout(c, 'gym_full'), dose: gymShare, minutes: gymMinShare, unit: 'load' },
   watchSport('pickleball', 'Pickleball', 'racket'),
+  watchSport('badminton', 'Cầu lông', 'badminton'),
   watchSport('run', 'Chạy bộ', 'run'),
   watchSport('ride', 'Đạp xe', 'ride'),
-  watchSport('walk', 'Đi bộ', 'walk', 'phút'),
+  // Wrist heart rate is unreliable in water, so swimming is dosed by minutes.
+  watchSport('swim', 'Bơi lội', 'swim', 'phút'),
+  watchSport('walk', 'Đi bộ nhẹ', 'walk', 'phút'),
   watchSport('yoga', 'Yoga', 'yoga', 'phút'),
   // HIIT needs the tag: HUAWEI labels many ordinary moments "HIIT" on its own.
   { id: 'hiit', label: 'Lớp HIIT', source: 'context', test: (c) => hasWorkout(c, 'hiit'), dose: (c) => (c._hiit_load > 0 ? c._hiit_load : null), minutes: (c) => (c._hiit_min > 0 ? c._hiit_min : null), unit: 'load' },
@@ -223,18 +235,20 @@ export function addBedtimeDeviation(days, rules = BEDTIME_RULES) {
 
 /** Intervals.icu activity types. Huawei has no pickleball mode, so pickleball arrives as Padel. */
 export const ACTIVITY_KIND = Object.freeze({
-  racket: /padel|pickle|tennis|badminton|squash|racquet/i,
+  badminton: /badminton/i,
+  racket: /padel|pickle|tennis|squash|racquet/i,
   gym: /weight|strength|crossfit/i,
   yoga: /yoga|pilates/i,
   hiit: /hiit|highintensity|interval/i,
   run: /run$/i,
   ride: /ride$|bike|cycl/i,
   walk: /walk|hike/i,
-  cardio: /swim|row|elliptic|stair|cardio|workout/i,
+  swim: /swim/i,
+  cardio: /row|elliptic|stair|cardio|workout/i,
 });
 const KINDS = Object.keys(ACTIVITY_KIND);
-const KIND_LABEL = { racket: 'Pickleball', run: 'Chạy bộ', ride: 'Đạp xe', walk: 'Đi bộ', yoga: 'Yoga' };
-const KIND_TAG = { racket: 'pickleball', run: 'run', ride: 'ride', walk: 'walk', yoga: 'yoga' };
+const KIND_LABEL = { racket: 'Pickleball', badminton: 'Cầu lông', run: 'Chạy bộ', ride: 'Đạp xe', swim: 'Bơi lội', walk: 'Đi bộ', yoga: 'Yoga' };
+const KIND_TAG = { racket: 'pickleball', badminton: 'badminton', run: 'run', ride: 'ride', swim: 'swim', walk: 'walk', yoga: 'yoga' };
 /** Recordings shorter than this are ignored (stray starts on the watch). */
 export const MIN_ACTIVITY_SECS = 600;
 
@@ -304,6 +318,7 @@ export function contextLabels(c) {
   const wf = FIELD.get('workout');
   if (Array.isArray(c.workout)) for (const id of c.workout) {
     const label = wf.options.find((o) => o.id === id)?.label;
+    if (!label) continue;
     out.push(id === 'rest' ? 'Nghỉ tập' : GYM_PARTS.includes(id) && id !== 'gym_full' ? `Tập ${label.toLowerCase()}` : label);
   }
   if (c.load) out.push(`Tạ ${FIELD.get('load').options.find((o) => o.id === c.load)?.label}`);

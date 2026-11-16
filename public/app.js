@@ -1152,6 +1152,7 @@ function recentCard(d) {
 function actType(a) {
   const t = String(a.type || '');
   if (/padel|pickle/i.test(t)) return 'PB';
+  if (/badminton/i.test(t)) return 'BMT';
   if (/yoga|pilates/i.test(t)) return 'YOGA';
   if (/hiit|highintensity/i.test(t)) return 'HIIT';
   if (/run/i.test(t)) return 'RUN';
@@ -1456,7 +1457,12 @@ function attachContext(view) {
     let body = '';
     if (f.type === 'multi' || f.type === 'choice') {
       const sel = f.type === 'multi' ? (Array.isArray(v) ? v : []) : (v == null ? [] : [v]);
-      body = `<div class="ctx-chips">${(f.options || []).map((o) => `<button type="button" class="ctx-chip ${sel.includes(o.id) ? 'selected' : ''}" data-f="${esc(f.id)}" data-opt="${esc(o.id)}" aria-pressed="${sel.includes(o.id)}">${esc(o.label)}</button>`).join('')}</div>`;
+      const chip = (o) => `<button type="button" class="ctx-chip ${sel.includes(o.id) ? 'selected' : ''}" data-f="${esc(f.id)}" data-opt="${esc(o.id)}" aria-pressed="${sel.includes(o.id)}">${esc(o.label)}</button>`;
+      const opts = (f.options || []).filter((o) => !o.legacy || sel.includes(o.id));
+      const gym = opts.filter((o) => o.group === 'gym');
+      body = gym.length
+        ? `<div class="ctx-sub">Gym</div><div class="ctx-chips">${gym.map(chip).join('')}</div><div class="ctx-sub">Môn khác</div><div class="ctx-chips">${opts.filter((o) => o.group !== 'gym').map(chip).join('')}</div>`
+        : `<div class="ctx-chips">${opts.map(chip).join('')}</div>`;
     } else if (f.type === 'count') {
       const min = f.min ?? 0, max = f.max ?? 99;
       body = `<div class="ctx-stepper"><button type="button" data-f="${esc(f.id)}" data-step="-1" aria-label="Giảm">−</button><output>${v ?? min}</output><button type="button" data-f="${esc(f.id)}" data-step="1" aria-label="Tăng">+</button></div>`;

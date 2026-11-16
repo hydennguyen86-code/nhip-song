@@ -187,14 +187,16 @@ Bối cảnh là những việc xảy ra trong ngày: buổi tập, mức tạ, 
 
 | Môn | Đồng hồ ghi là | App tự nhận? | Liều dùng để so |
 | --- | --- | --- | --- |
-| Pickleball | **Padel** (HUAWEI không có chế độ pickleball), tennis, cầu lông, squash | Có | Load |
+| Pickleball | **Padel** (HUAWEI không có chế độ pickleball), tennis, squash | Có | Load |
+| Cầu lông | Badminton | Có | Load |
 | Chạy bộ | Run, TrailRun, VirtualRun | Có | Load |
 | Đạp xe | Ride, VirtualRide, EBikeRide… | Có | Load |
-| Đi bộ | Walk, Hike | Có | **Số phút** (load đi bộ gần như bằng 0) |
+| Đi bộ nhẹ | Walk, Hike | Có | **Số phút** (load đi bộ gần như bằng 0) |
+| Bơi lội | Swim, OpenWaterSwim | Có | **Số phút** (nhịp tim cổ tay dưới nước không đáng tin) |
 | Yoga | Yoga, Pilates | Có | **Số phút** |
 | Lớp HIIT | HIIT | **Chỉ khi chạm "Lớp HIIT"**: HUAWEI hay tự gắn nhãn HIIT cho cả lúc không tập. Đã chạm thì lấy load của buổi HIIT cùng ngày | Load |
-| Gym (chân, ngực/lưng, vai/tay, toàn thân) | WeightTraining | Chỉ khi chạm tập gì; load và phút lấy từ đồng hồ, tập nhiều nhóm thì chia đều | Load |
-| Cardio khác | Bơi, chèo, máy elliptical… | Chỉ khi chạm | Load |
+| Gym (ngực/tay sau, vai/tay trước, chân/đùi, toàn thân) | WeightTraining | Chỉ khi chạm tập gì; load và phút lấy từ đồng hồ, tập nhiều nhóm thì chia đều. Ngày đã ghi theo cách chia cũ (ngực/lưng, vai/tay) vẫn được tính vào ngực/tay sau và vai/tay trước | Load |
+| Cardio khác | Chèo, máy elliptical, leo cầu thang… | Chỉ khi chạm | Load |
 
 Hôm không đeo đồng hồ thì chạm môn đó trong thẻ bối cảnh, app tính ở mức tập thường của người đó.
 

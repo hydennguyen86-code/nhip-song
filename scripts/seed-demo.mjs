@@ -46,8 +46,8 @@ const u01 = (i, salt) => (jitter(i, salt) + 1) / 2;
 const plan = (i) => {
   const r = u01(i, 19);
   const c = r < 0.16 ? { workout: ['leg'], load: 'le50' }
-    : r < 0.36 ? { workout: ['chest_back'], load: '50_70' }
-    : r < 0.5 ? { workout: ['shoulder_arm'], load: 'le50' }
+    : r < 0.36 ? { workout: ['chest_tri'], load: '50_70' }
+    : r < 0.5 ? { workout: ['shoulder_bi'], load: 'le50' }
     : r < 0.64 ? { workout: ['pickleball'] }
     : { workout: ['rest'] };
   c.sauna = u01(i, 23) > 0.55 ? 'evening' : 'none';
