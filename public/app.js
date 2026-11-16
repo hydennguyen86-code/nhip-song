@@ -100,48 +100,35 @@ const ICONS = {
   flame: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21a6 6 0 0 0 6-6c0-4-3-6-4-9-1 2.5-2.5 3.5-3.5 3.5C10 7.5 9 6 9 6c-2 2.5-3 5-3 9a6 6 0 0 0 6 6z"/></svg>',
   leaf: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19c0-8 5-13 15-14-1 10-6 15-14 15"/><path d="M5 19c3-4 6-7 10-9"/></svg>',
   chart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l5-6 4 3 7-9"/><path d="M4 21h16"/></svg>',
+  dumbbell: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 7v10M17.5 7v10M3.5 9.5v5M20.5 9.5v5M6.5 12h11"/></svg>',
+  layers: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 4.8-9 4.8-9-4.8L12 3z"/><path d="M3 12.2l9 4.8 9-4.8"/><path d="M3 16.4l9 4.8 9-4.8"/></svg>',
+  info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.6v.2"/></svg>',
+  clock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>',
+  alarm: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="7.5"/><path d="M12 9.5V13l2.4 1.6M4 5.5L6.8 3M20 5.5L17.2 3"/></svg>',
+  target: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="13" r="7.5"/><circle cx="11" cy="13" r="3.5"/><path d="M11 13l8-8M16 5h3v3"/></svg>',
+  sparkle: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 3l1.6 4.6L16 9.2l-4.4 1.6L10 15.4 8.4 10.8 4 9.2l4.4-1.6L10 3zM17.5 13l.9 2.5 2.6.9-2.6.9-.9 2.6-.9-2.6-2.6-.9 2.6-.9.9-2.5z"/></svg>',
+  bike: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="16" r="3.6"/><circle cx="18" cy="16" r="3.6"/><path d="M6 16l4-7h5l3 7M10 9l3 7h-3M14 5.5h2.5"/></svg>',
+  swim: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="16.5" cy="6.5" r="1.8"/><path d="M5 12l4-3 3 2.5 2.5-1.5M2.5 16.5c1.6 0 1.6 1.2 3.2 1.2s1.6-1.2 3.2-1.2 1.6 1.2 3.2 1.2 1.6-1.2 3.2-1.2 1.6 1.2 3.2 1.2 1.6-1.2 3-1.2"/></svg>',
+  racket: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="14" cy="9" rx="6" ry="6.5" transform="rotate(35 14 9)"/><path d="M9.6 13.6L4 20M17.5 19.5a1.6 1.6 0 1 0 0-.1"/></svg>',
+  yoga: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1.9"/><path d="M12 8v6M6 10.5l6 1.5 6-1.5M7 19.5c1.5-2.5 3-3.5 5-3.5s3.5 1 5 3.5M4 19.5h16"/></svg>',
   sun: '<svg class="pill-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4"/></svg>',
 };
 let logoN = 0;
-function logo() { const n = ++logoN; return `<svg class="logo-mark" viewBox="0 0 40 40" aria-hidden="true"><defs><linearGradient id="lfA${n}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#b8f5cf"/><stop offset="1" stop-color="#2fae6a"/></linearGradient><linearGradient id="lfB${n}" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8ff0b6"/><stop offset="1" stop-color="#22995a"/></linearGradient></defs><path d="M19.5 36c0-9 .5-15 3-20" fill="none" stroke="#3fcf84" stroke-width="2.4" stroke-linecap="round"/><path d="M20.5 22C9 23 4 15 5 4c10 0 16.5 6 15.5 18z" fill="url(#lfA${n})"/><path d="M21.5 19c-.5-9 4.5-15 14-15 .5 10-4.5 15.5-14 15z" fill="url(#lfB${n})"/></svg>`; }
+function logo() {
+  const n = ++logoN;
+  return `<svg class="logo-mark" viewBox="0 0 40 40" aria-hidden="true"><defs><linearGradient id="lgH${n}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#d9a8ff"/><stop offset=".55" stop-color="#a45cff"/><stop offset="1" stop-color="#ff5fa8"/></linearGradient></defs><path d="M20 35S4.5 25.6 4.5 14.6A8.2 8.2 0 0 1 20 10a8.2 8.2 0 0 1 15.5 4.6C35.5 25.6 20 35 20 35z" fill="url(#lgH${n})"/><path d="M7.5 19.5h6l2.6-5.2 3.8 10 3.3-7.2 1.9 2.4h7.4" fill="none" stroke="#fff" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" opacity=".95"/></svg>`;
+}
 
 const NAV = [
-  { id: 'today', label: 'Hôm nay', icon: 'today' },
-  { id: 'trends', label: 'Xu hướng', icon: 'trends' },
-  { id: 'activities', label: 'Tập', icon: 'activities' },
-  { id: 'journal', label: 'Quy luật', icon: 'journal' },
-  { id: 'settings', label: 'Cài đặt', icon: 'settings' },
+  { id: 'today', label: 'Hôm nay', icon: 'today', color: '#a46bff' },
+  { id: 'trends', label: 'Xu hướng', icon: 'trends', color: '#4f8dff' },
+  { id: 'activities', label: 'Tập', icon: 'dumbbell', color: '#ff8a3d' },
+  { id: 'journal', label: 'Quy luật', icon: 'layers', color: '#ff5fa8' },
+  { id: 'settings', label: 'Cài đặt', icon: 'settings', color: '#25d0c4' },
 ];
 
 /* ---------------- charts ---------------- */
-function sparkline(values, hex) {
-  const iv = ++uid;
-  const pts = values.map((v, i) => ({ i, v })).filter((p) => p.v != null && Number.isFinite(p.v));
-  if (pts.length < 2) return `<svg class="spark" viewBox="0 0 120 38" aria-hidden="true"></svg>`;
-  const min = Math.min(...pts.map((p) => p.v));
-  const max = Math.max(...pts.map((p) => p.v));
-  const range = max - min || 1;
-  const x = (i) => 3 + (i / Math.max(1, values.length - 1)) * 114;
-  const y = (v) => 34 - ((v - min) / range) * 29;
-  let d = '';
-  let pen = false;
-  values.forEach((v, i) => {
-    if (v == null || !Number.isFinite(v)) { pen = false; return; }
-    d += `${pen ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)} `;
-    pen = true;
-  });
-  const first = pts[0];
-  const last = pts[pts.length - 1];
-  const area = `${d}L${x(last.i).toFixed(1)},38 L${x(first.i).toFixed(1)},38 Z`;
-  return `<svg class="spark" viewBox="0 0 120 38" preserveAspectRatio="none" aria-hidden="true">
-    <defs><linearGradient id="sg${iv}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${hex}" stop-opacity=".3"/><stop offset="1" stop-color="${hex}" stop-opacity="0"/></linearGradient></defs>
-    <path d="${area}" fill="url(#sg${iv})"/>
-    <path d="${d}" fill="none" stroke="${hex}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
-    <circle cx="${x(last.i).toFixed(1)}" cy="${y(last.v).toFixed(1)}" r="2.4" fill="${hex}"/>
-  </svg>`;
-}
-
-function lineChart(series, { color = '#5fe39a', digits = 1, unit = '' } = {}) {
+function lineChart(series, { color = '#b48cff', digits = 1, unit = '' } = {}) {
   const valid = series.filter((s) => s.value != null && Number.isFinite(s.value));
   if (!valid.length) return '<div class="empty">Chưa có dữ liệu trong khoảng này.</div>';
   const W = 720, H = 220, P = { l: 44, r: 14, t: 18, b: 28 };
@@ -185,7 +172,7 @@ function lineChart(series, { color = '#5fe39a', digits = 1, unit = '' } = {}) {
     <circle cx="${lastX.toFixed(1)}" cy="${lastY.toFixed(1)}" r="2.4" fill="${color}"/>
     <text x="${P.l}" y="${H - 8}" fill="#7d9187" font-size="10">${esc(fmtShort(series[0].date))}</text>
     <text x="${W - P.r}" y="${H - 8}" text-anchor="end" fill="#7d9187" font-size="10">${esc(fmtShort(series[n - 1].date))}</text>
-    <text x="${W - P.r}" y="${P.t - 5}" text-anchor="end" fill="#9bb0a4" font-size="10">TB ${fmtNum(mean, digits)}${unit ? ' ' + esc(unit) : ''}</text>
+    <text x="${W - P.r}" y="${P.t - 5}" text-anchor="end" fill="#a69cc9" font-size="10">TB ${fmtNum(mean, digits)}${unit ? ' ' + esc(unit) : ''}</text>
   </svg>`;
 }
 
@@ -196,7 +183,7 @@ function recoveryBars(history) {
   const n = history.length;
   const gap = n > 45 ? 1 : n > 20 ? 2 : 4;
   const bw = Math.max(1.5, (innerW - gap * (n - 1)) / n);
-  const colors = { green: '#5fe39a', yellow: '#f6c445', red: '#ff7a6e', unknown: '#26372e' };
+  const colors = { green: '#3fe0a8', yellow: '#ffc04d', red: '#ff6b8f', unknown: '#2a2350' };
   const bars = history.map((h, i) => {
     const bx = P.l + i * (bw + gap);
     const score = h.score == null ? 0 : h.score;
@@ -213,7 +200,7 @@ function recoveryBars(history) {
   }).join('');
   return `<svg class="bar-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Lịch sử điểm hồi phục">
     ${yLabels}
-    ${avgY != null ? `<line x1="${P.l}" y1="${avgY.toFixed(1)}" x2="${W - P.r}" y2="${avgY.toFixed(1)}" stroke="rgba(255,255,255,.26)" stroke-width="1" stroke-dasharray="4 5"/><text x="${W - P.r}" y="${(avgY - 5).toFixed(1)}" text-anchor="end" fill="#9bb0a4" font-size="9.5">TB ${Math.round(avg)}</text>` : ''}
+    ${avgY != null ? `<line x1="${P.l}" y1="${avgY.toFixed(1)}" x2="${W - P.r}" y2="${avgY.toFixed(1)}" stroke="rgba(255,255,255,.26)" stroke-width="1" stroke-dasharray="4 5"/><text x="${W - P.r}" y="${(avgY - 5).toFixed(1)}" text-anchor="end" fill="#a69cc9" font-size="9.5">TB ${Math.round(avg)}</text>` : ''}
     ${bars}
     <text x="${P.l}" y="${H - 6}" fill="#7d9187" font-size="9.5">${esc(fmtShort(history[0]?.date))}</text>
     <text x="${W - P.r}" y="${H - 6}" text-anchor="end" fill="#7d9187" font-size="9.5">${esc(fmtShort(history[n - 1]?.date))}</text>
@@ -328,8 +315,8 @@ async function logout() {
 }
 
 /* ---------------- shell ---------------- */
-function navButton(n, mobile = false) {
-  return `<button class="nav-item ${state.view === n.id ? 'active' : ''}" data-view="${n.id}">${ICONS[n.icon]}<span>${n.label}</span></button>`;
+function navButton(n) {
+  return `<button class="nav-item ${state.view === n.id ? 'active' : ''}" data-view="${n.id}" style="--nc:${n.color}">${ICONS[n.icon]}<span>${n.label}</span></button>`;
 }
 
 function renderShell() {
@@ -337,7 +324,7 @@ function renderShell() {
   const todayTxt = new Date().toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit', month: '2-digit' });
   app.innerHTML = `<div class="shell">
     <aside class="sidebar">
-      <div class="brand">${logo()}<div><div class="brand-name">Nhịp Sống</div><div class="brand-sub">Sống khỏe mỗi ngày</div></div></div>
+      <div class="brand brand-side">${logo()}<div class="brand-name">Nhịp Sống</div><div class="brand-sub">Sức khỏe · Vận động · Giấc ngủ</div></div>
       <nav class="side-nav">${NAV.map((n) => navButton(n)).join('')}</nav>
       <div class="sidebar-foot">
         <div class="avatar">${esc(initials(me.displayName))}</div>
@@ -347,20 +334,41 @@ function renderShell() {
     </aside>
     <div class="main-wrap">
       <header class="mobile-head">
-        <div class="brand">${logo()}<div><div class="brand-name">Nhịp Sống</div><div class="brand-sub">Sống khỏe mỗi ngày</div></div></div>
-        <div style="display:flex;align-items:center;gap:10px">
+        <div class="brand">${logo()}<div><div class="brand-name">Nhịp Sống</div><div class="brand-sub">Sức khỏe hôm nay, phong độ ngày mai</div></div></div>
+        <div class="mobile-head-right">
           <span class="mobile-date">${esc(todayTxt)}</span>
+          <button class="icon-btn" id="syncMobile" title="Đồng bộ" aria-label="Đồng bộ">${ICONS.sync}</button>
           <div class="avatar">${esc(initials(me.displayName))}</div>
         </div>
       </header>
+      <nav class="tile-nav" id="tileNav">${NAV.map((n) => navButton(n)).join('')}</nav>
       <main class="view" id="view"></main>
     </div>
-    <nav class="bottom-nav">${NAV.map((n) => navButton(n, true)).join('')}</nav>
+    <nav class="bottom-nav" aria-label="Điều hướng nhanh">${NAV.map((n) => navButton(n)).join('')}</nav>
   </div>`;
   app.querySelectorAll('.nav-item').forEach((b) => b.addEventListener('click', () => go(b.dataset.view)));
+  // Phone: the coloured tile row sits at the top (as in the design); once it scrolls away,
+  // a compact bar slides in at the bottom so navigation is always one tap away.
+  const tiles = document.getElementById('tileNav');
+  if (tiles && 'IntersectionObserver' in window) {
+    new IntersectionObserver(([e]) => document.body.classList.toggle('tiles-away', !e.isIntersecting), { threshold: 0 }).observe(tiles);
+  }
   const out = document.getElementById('logout');
   if (out) out.onclick = logout;
+  const syncM = document.getElementById('syncMobile');
+  if (syncM) syncM.onclick = () => runSync(syncM);
   renderView();
+}
+
+async function runSync(btn) {
+  if (btn) btn.classList.add('spin');
+  toastMsg('Đang đồng bộ…');
+  try {
+    const r = await api('/api/sync', { method: 'POST', body: {} });
+    toastMsg(`Xong: ${r.stats.wellness.written} ngày wellness, ${r.stats.activities.written} buổi tập.`);
+    await renderView();
+  } catch (e) { toastMsg('Đồng bộ lỗi: ' + e.message); }
+  if (btn) btn.classList.remove('spin');
 }
 
 function go(view) {
@@ -390,27 +398,6 @@ async function renderView() {
 }
 
 /* ---------------- today ---------------- */
-function deltaChip(value, mean, { digits = 0, higherBetter = true, unit = '' } = {}) {
-  if (value == null || mean == null) return '<span class="mini-delta flat"><span class="arrow">–</span>—</span>';
-  const diff = value - mean;
-  const abs = Math.abs(diff);
-  const threshold = digits > 0 ? 0.15 : 0.6;
-  const kind = abs < threshold ? 'flat' : (diff > 0) === higherBetter ? 'good' : 'bad';
-  const sign = kind === 'flat' ? '' : diff > 0 ? '+' : '−';
-  const arrow = kind === 'flat' ? '–' : diff > 0 ? '↑' : '↓';
-  const txt = digits > 0 ? abs.toFixed(digits) : String(Math.round(abs));
-  return `<span class="mini-delta ${kind}"><span class="arrow">${arrow}</span>${sign}${txt}${unit}</span>`;
-}
-
-function miniCard({ label, value, unit, basis, delta, spark, color, icon }) {
-  return `<div class="mini" data-go="trends" role="button" tabindex="0" style="--chip:${color}">
-    <div class="mini-top"><span class="ico-chip">${ICONS[icon] || ''}</span><span class="mini-label">${esc(label)}</span>${ICONS.chev}</div>
-    <div class="mini-value">${value == null ? '—' : esc(value)}<small>${esc(unit || '')}</small></div>
-    <div class="mini-delta-row"><div>${delta}<div class="mini-basis">${esc(basis || '')}</div></div></div>
-    ${sparkline(spark, color)}
-  </div>`;
-}
-
 function factorRow(f) {
   if (f.flag) {
     return `<div class="factor ${f.status === 'bad' ? '' : 'missing'}">
@@ -435,25 +422,6 @@ function factorRow(f) {
     <div class="factor-mid"><span>${esc(f.basis)} · nền ${esc(f.meanText)}</span><span class="z-chip ${f.status}">${esc(z)}</span></div>
     <div class="zbar"><span class="zbar-zero"></span><span class="zbar-fill ${f.status}" style="left:${left.toFixed(1)}%;width:${fill.toFixed(1)}%"></span></div>
     <div class="factor-bottom"><span>${esc(f.text)}</span>${hasPts ? `<span class="pts ${f.contribution >= 0 ? 'up' : 'down'}">${esc(pts)}</span>` : '<span class="pts muted">bổ sung</span>'}</div>
-  </div>`;
-}
-
-function weekStrip(history) {
-  const last = (history || []).slice(-7);
-  const DOW = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
-  const day = (iso) => { const t = new Date(String(iso) + 'T12:00:00'); return Number.isNaN(+t) ? '' : DOW[t.getDay()]; };
-  const bars = last.map((h, i) => {
-    const today = i === last.length - 1;
-    const hgt = h.score == null ? 6 : Math.max(8, h.score);
-    return `<div class="wb ${today ? 'today' : ''}" title="${esc(fmtDate(h.date))}: ${h.score == null ? 'chưa đủ dữ liệu' : h.score}">
-      <span class="wb-val">${h.score == null ? '–' : h.score}</span>
-      <span class="wb-bar ${h.score == null ? 'none' : ''}" style="height:${hgt}%"></span>
-    </div>`;
-  }).join('');
-  return `<div class="week">
-    <div class="week-label">7 ngày qua</div>
-    <div class="week-bars">${bars}</div>
-    <div class="week-days">${last.map((h) => `<span>${day(h.date)}</span>`).join('')}</div>
   </div>`;
 }
 
@@ -487,13 +455,237 @@ function hrvGateBody(d) {
   </div>`;
 }
 
+/* ---------------- today: aurora dashboard (v4) ---------------- */
+function smoothD(pts) {
+  if (pts.length < 2) return '';
+  let d = `M${pts[0].x.toFixed(1)},${pts[0].y.toFixed(1)}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] || pts[i];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2] || p2;
+    const c1x = p1.x + (p2.x - p0.x) / 6;
+    const c1y = p1.y + (p2.y - p0.y) / 6;
+    const c2x = p2.x - (p3.x - p1.x) / 6;
+    const c2y = p2.y - (p3.y - p1.y) / 6;
+    d += ` C${c1x.toFixed(1)},${c1y.toFixed(1)} ${c2x.toFixed(1)},${c2y.toFixed(1)} ${p2.x.toFixed(1)},${p2.y.toFixed(1)}`;
+  }
+  return d;
+}
+
+/** Glowing smooth line of real values (nulls skipped), soft fill under it, dot on the last value. */
+function waveChart(values, hex, { w = 260, h = 74, fill = true, dot = true } = {}) {
+  const iv = ++uid;
+  const pts = values.map((v, i) => ({ i, v })).filter((p) => p.v != null && Number.isFinite(p.v));
+  if (pts.length < 2) return `<svg class="wave" viewBox="0 0 ${w} ${h}" aria-hidden="true"></svg>`;
+  const min = Math.min(...pts.map((p) => p.v));
+  const max = Math.max(...pts.map((p) => p.v));
+  const range = max - min || 1;
+  const n = Math.max(1, values.length - 1);
+  const xy = pts.map((p) => ({ x: 6 + (p.i / n) * (w - 14), y: h - 8 - ((p.v - min) / range) * (h - 22) }));
+  const d = smoothD(xy);
+  const last = xy[xy.length - 1];
+  const area = `${d} L${last.x.toFixed(1)},${h} L${xy[0].x.toFixed(1)},${h} Z`;
+  return `<svg class="wave" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">
+    <defs>
+      <linearGradient id="wf${iv}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${hex}" stop-opacity=".42"/><stop offset="1" stop-color="${hex}" stop-opacity="0"/></linearGradient>
+      <filter id="wg${iv}" x="-10%" y="-40%" width="120%" height="180%"><feGaussianBlur stdDeviation="3.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    </defs>
+    ${fill ? `<path d="${area}" fill="url(#wf${iv})"/>` : ''}
+    <path d="${d}" fill="none" stroke="${hex}" stroke-width="2.4" stroke-linecap="round" vector-effect="non-scaling-stroke" filter="url(#wg${iv})"/>
+    ${dot ? `<circle class="wave-dot" cx="${last.x.toFixed(1)}" cy="${last.y.toFixed(1)}" r="4" fill="#fff" stroke="${hex}" stroke-width="2.5" filter="url(#wg${iv})"/>` : ''}
+  </svg>`;
+}
+
+/** 7-day recovery line inside the hero: fixed 40–100 scale (lower if a day fell below 40). */
+function trend7(history) {
+  const last = (history || []).slice(-7);
+  if (!last.length) return '';
+  const DOW = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+  const day = (iso) => { const t = new Date(String(iso) + 'T12:00:00'); return Number.isNaN(+t) ? '' : DOW[t.getDay()]; };
+  const scores = last.map((h) => h.score).filter((v) => v != null);
+  const lo = Math.min(40, ...scores.map((v) => Math.floor(v / 20) * 20));
+  const W = 320, H = 150, L = 30, R = 14, T = 18, B = 26;
+  const x = (i) => L + (last.length === 1 ? 0 : (i / (last.length - 1)) * (W - L - R));
+  const y = (v) => T + (1 - (v - lo) / (100 - lo)) * (H - T - B);
+  const grid = [];
+  for (let g = lo; g <= 100; g += 20) grid.push(`<line x1="${L}" x2="${W - R}" y1="${y(g).toFixed(1)}" y2="${y(g).toFixed(1)}"/><text x="${L - 8}" y="${(y(g) + 4).toFixed(1)}" text-anchor="end">${g}</text>`);
+  const pts = last.map((h, i) => (h.score == null ? null : { x: x(i), y: y(h.score), v: h.score, i })).filter(Boolean);
+  const d = smoothD(pts);
+  const iv = ++uid;
+  const lp = pts[pts.length - 1];
+  const todayLast = lp && lp.i === last.length - 1;
+  return `<div class="trend7">
+    <div class="trend7-head"><span>Xu hướng 7 ngày</span><button class="chip-btn" data-go="trends">7 ngày ${ICONS.chev}</button></div>
+    <svg viewBox="0 0 ${W} ${H}" class="trend7-svg" role="img" aria-label="Điểm hồi phục 7 ngày">
+      <defs>
+        <linearGradient id="tf${iv}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b98cff" stop-opacity=".38"/><stop offset="1" stop-color="#b98cff" stop-opacity="0"/></linearGradient>
+        <filter id="tg${iv}" x="-10%" y="-40%" width="120%" height="180%"><feGaussianBlur stdDeviation="2.6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      </defs>
+      <g class="trend7-grid">${grid.join('')}</g>
+      ${pts.length > 1 ? `<path d="${d} L${lp.x.toFixed(1)},${H - B} L${pts[0].x.toFixed(1)},${H - B} Z" fill="url(#tf${iv})"/><path d="${d}" fill="none" stroke="#c9a2ff" stroke-width="2.4" filter="url(#tg${iv})"/>` : ''}
+      ${pts.map((p) => `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${p === lp ? 5 : 3.6}" class="${p === lp ? 'last' : ''}"/>`).join('')}
+      ${lp ? `<g class="trend7-pill" transform="translate(${Math.min(lp.x, W - 24).toFixed(1)},${Math.max(lp.y - 24, 4).toFixed(1)})"><rect x="-17" y="-12" width="34" height="22" rx="8"/><text y="4" text-anchor="middle">${lp.v}</text></g>` : ''}
+      ${last.map((h, i) => `<text class="dow ${i === last.length - 1 && todayLast ? 'on' : ''}" x="${x(i).toFixed(1)}" y="${H - 6}" text-anchor="middle">${day(h.date)}</text>`).join('')}
+    </svg>
+  </div>`;
+}
+
+function deltaPill(diff, { higherBetter = true, text, flatBelow = 0 } = {}) {
+  if (diff == null || !Number.isFinite(diff)) return '<span class="dpill flat">—</span>';
+  const kind = Math.abs(diff) <= flatBelow ? 'flat' : (diff > 0) === higherBetter ? 'good' : 'bad';
+  const arrow = kind === 'flat' ? '' : diff > 0 ? '<i class="tri up"></i>' : '<i class="tri down"></i>';
+  return `<span class="dpill ${kind}">${arrow}${esc(text)}</span>`;
+}
+const signed = (v, digits = 0) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toFixed(digits)}`;
+
+function tileHead(icon, title, tip) {
+  return `<div class="tile-head"><span class="tile-ico">${ICONS[icon] || ''}</span><h3>${esc(title)}</h3>${tip ? `<span class="tip" title="${esc(tip)}">${ICONS.info}</span>` : ''}</div>`;
+}
+function hmParts(min) {
+  if (min == null || !Number.isFinite(min)) return '<b>—</b>';
+  const m = Math.max(0, Math.round(min));
+  const h = Math.floor(m / 60);
+  const mm = String(m % 60).padStart(2, '0');
+  return `<span class="hm-long"><b>${h}</b><small>giờ</small> <b>${mm}</b><small>phút</small></span><span class="hm-short"><b>${h}<i>h</i>${mm}</b></span>`;
+}
+
+function hrvTile(d) {
+  const m = d.metrics.hrv;
+  const pct = m.value != null && m.mean ? ((m.value - m.mean) / m.mean) * 100 : null;
+  return `<article class="tile c-teal hrv-tile" data-go="trends" role="button" tabindex="0">
+    ${tileHead('hrv', 'HRV', `${m.basis || ''}${m.mean != null ? ` · nền ${fmtNum(m.mean, 1)} ms` : ''}`)}
+    <div class="tile-row"><div class="tile-val">${m.value == null ? '—' : fmtNum(m.value, m.value < 100 ? 0 : 0)}<small>ms</small></div>
+    ${deltaPill(pct, { higherBetter: true, text: pct == null ? '' : `${signed(pct)}%`, flatBelow: 1 })}</div>
+    <div class="tile-sub">${esc(m.tier ? `Xu hướng ${m.tier}` : (m.basis || ''))}</div>
+    ${waveChart(d.metrics.spark.map((p) => p.hrv), '#3ff3e0')}
+  </article>`;
+}
+function rhrTile(d) {
+  const m = d.metrics.rhr;
+  const r = d.metrics.resp;
+  const diff = m.value != null && m.mean != null ? m.value - m.mean : null;
+  return `<article class="tile c-pink rhr-tile" data-go="trends" role="button" tabindex="0">
+    ${tileHead('heart', 'Nhịp tim nghỉ', `${m.basis || ''}${m.mean != null ? ` · nền ${fmtNum(m.mean)} bpm` : ''}`)}
+    <div class="tile-row"><div class="tile-val">${m.value == null ? '—' : fmtNum(m.value)}<small>bpm</small></div>
+    ${deltaPill(diff, { higherBetter: false, text: diff == null ? '' : `${signed(diff)} bpm`, flatBelow: 0.6 })}</div>
+    <div class="tile-sub">${r.value == null ? '&nbsp;' : `Nhịp thở ${fmtNum(r.value, 1)}/ph · <span class="${r.state === 'elevated' ? 'warn' : ''}">${r.state === 'elevated' ? 'tăng' : 'ổn'}</span>`}</div>
+    ${waveChart(d.metrics.spark.map((p) => p.rhr), '#ff6b8f')}
+  </article>`;
+}
+function sleepTile(d) {
+  const m = d.metrics.sleep;
+  const n = d.sleepDetail?.night;
+  const mins = m.value == null ? null : m.value * 60;
+  const diff = m.value != null && m.mean != null ? (m.value - m.mean) * 60 : null;
+  let body;
+  if (n && n.hasStages) {
+    const total = n.deepMin + n.coreMin + n.remMin + n.awakeMin + (n.unspecifiedMin || 0);
+    const seg = (k, v) => (v > 0 && total > 0 ? `<span style="flex:${v};background:${STAGE_COLORS[k] || '#6c6494'}"></span>` : '');
+    body = `<div class="stage-bar">${seg('deep', n.deepMin)}${seg('core', n.coreMin)}${seg('rem', n.remMin)}${seg('awake', n.awakeMin)}</div>
+      <div class="stage-leg">
+        <span><i style="background:${STAGE_COLORS.deep}"></i>Sâu<b>${hm(n.deepMin).replace('h', ':')}</b></span>
+        <span><i style="background:${STAGE_COLORS.core}"></i><em class="wide-only">Ngủ nhẹ</em><em class="narrow-only">Nhẹ</em><b>${hm(n.coreMin).replace('h', ':')}</b></span>
+        <span><i style="background:${STAGE_COLORS.rem}"></i>REM<b>${hm(n.remMin).replace('h', ':')}</b></span>
+      </div>`;
+  } else {
+    body = `${m.score != null ? `<div class="tile-sub"><span class="soft-chip">${ICONS.bed} Điểm ngủ ${fmtNum(m.score)}</span></div>` : ''}
+      ${waveChart(d.metrics.spark.map((p) => p.sleep), '#8f8bff')}`;
+  }
+  return `<article class="tile c-indigo sleep-tile" data-go="trends" role="button" tabindex="0">
+    <svg class="moon-deco" viewBox="0 0 100 100" aria-hidden="true"><defs><mask id="mm${++uid}"><rect width="100" height="100" fill="#fff"/><circle cx="36" cy="40" r="34" fill="#000"/></mask><radialGradient id="mg${uid}" cx=".6" cy=".4" r=".7"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#c9c0ff"/></radialGradient></defs><circle cx="56" cy="46" r="34" fill="url(#mg${uid})" mask="url(#mm${uid})"/></svg>
+    ${tileHead('moon', 'Giấc ngủ', m.basis || '')}
+    <div class="tile-row"><div class="tile-val hm">${hmParts(mins)}</div>
+    ${deltaPill(diff, { higherBetter: true, text: diff == null ? '' : `${signed(diff)} phút`, flatBelow: 4 })}</div>
+    ${n?.bedStart ? `<div class="tile-sub">${esc(n.bedStart)} → ${esc(n.bedEnd || '—')}${m.basis ? `<span class="wide-only"> · ${esc(m.basis)}</span>` : ''}</div>` : `<div class="tile-sub">${esc(m.basis || '')}</div>`}
+    ${body}
+  </article>`;
+}
+
+function actKind(a) {
+  const t = String(a.type || '');
+  if (/padel|pickle|tennis|squash|racquet|badminton/i.test(t)) return 'racket';
+  if (/yoga|pilates/i.test(t)) return 'yoga';
+  if (/ride|bike|cycl/i.test(t)) return 'bike';
+  if (/swim/i.test(t)) return 'swim';
+  if (/weight|strength|crossfit/i.test(t)) return 'dumbbell';
+  if (/run|walk|hike/i.test(t)) return 'activities';
+  return 'flame';
+}
+function relDay(iso) {
+  const day = String(iso || '').slice(0, 10);
+  if (!day) return '—';
+  const t = todayIso();
+  const y = new Date(`${t}T12:00:00`); y.setDate(y.getDate() - 1);
+  if (day === t) return 'Hôm nay';
+  if (day === new Intl.DateTimeFormat('en-CA').format(y)) return 'Hôm qua';
+  return fmtLong(day);
+}
+function workoutCard(d) {
+  const items = d.recent || [];
+  const a = items[0];
+  const st = d.strain && Array.isArray(d.strain.last7) ? d.strain.last7 : [];
+  const chart = st.length > 1 ? `<div class="work-chart">${waveChart(st.map((x) => (x && Number.isFinite(Number(x.strain)) ? Number(x.strain) : 0)), '#ff9a3c', { w: 420, h: 96, dot: false })}<span class="work-chart-cap">Strain 7 ngày</span></div>` : '';
+  const head = `<div class="tile-head">${'<span class="tile-ico">' + ICONS.activities + '</span>'}<h3>Buổi tập gần đây</h3><button class="chip-btn" data-go="activities">Xem tất cả ${ICONS.chev}</button></div>`;
+  if (!a) {
+    return `<article class="tile c-orange work-card">${head}<div class="empty">Chưa có buổi tập. Bấm Đồng bộ hoặc nhập CSV trong Cài đặt.</div>${chart}</article>`;
+  }
+  const start = String(a.start_date_local || '');
+  const time = start.slice(11, 16);
+  const mins = Math.round((a.moving_time || 0) / 60);
+  return `<article class="tile c-orange work-card">
+    ${head}
+    <div class="work-main">
+      <div class="work-badge">${ICONS[actKind(a)]}</div>
+      <div class="work-name"><b>${esc(a.name || a.type || 'Buổi tập')}</b><span>${esc(relDay(start))}${time ? `, ${esc(time)}` : ''}</span></div>
+    </div>
+    <div class="work-stats">
+      <div>${ICONS.clock}<b>${fmtNum(mins)}</b><small>phút</small><span>Thời lượng</span></div>
+      <div>${ICONS.flame}<b>${a.training_load != null ? fmtNum(a.training_load) : '—'}</b><span>Tải tập</span></div>
+    </div>
+    ${chart}
+    ${items.length > 1 ? `<div class="work-more">${items.slice(1, 4).map((x) => `<span>${ICONS[actKind(x)]}${esc(x.name || x.type || 'Buổi tập')} · ${Math.round((x.moving_time || 0) / 60)}′</span>`).join('')}</div>` : ''}
+  </article>`;
+}
+
+function sleepPlanCard(d) {
+  const p = d.sleepPlan;
+  if (!p) return '';
+  const wake = localStorage.getItem('nhipWake') || '06:30';
+  const wakeMin = parseClock(wake);
+  const bed = (mins) => minutesToClock(wakeMin - mins - 15);
+  const target = p.tiers.perform;
+  return `<article class="tile c-night plan-card">
+    <svg class="plan-scene" viewBox="0 0 400 150" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+      <circle cx="330" cy="46" r="26" fill="url(#moonG)"/>
+      <defs><radialGradient id="moonG" cx=".4" cy=".35" r=".7"><stop offset="0" stop-color="#fff"/><stop offset=".6" stop-color="#e3dcff"/><stop offset="1" stop-color="#b6a6ff" stop-opacity=".6"/></radialGradient></defs>
+      <path d="M0 120 C60 92 110 108 170 86 C230 64 280 98 340 80 C370 72 390 76 400 74 V150 H0Z" fill="rgba(122,96,255,.28)"/>
+      <path d="M0 136 C80 116 150 132 230 112 C300 96 350 122 400 108 V150 H0Z" fill="rgba(40,24,110,.65)"/>
+    </svg>
+    <div class="tile-head"><span class="tile-ico">${ICONS.bed}</span><h3>Kế hoạch ngủ</h3></div>
+    <p class="plan-lead">Ngủ đủ và đúng giờ để phục hồi tốt hơn.</p>
+    <div class="plan-box">
+      <div class="plan-goal"><span class="plan-ico">${ICONS.target}</span><div><span>Mục tiêu tối nay</span><div class="plan-big">${hmParts(target)}</div></div></div>
+      <div class="plan-times">
+        <div><span class="plan-ico sm">${ICONS.bed}</span><div><span>Đi ngủ</span><b data-bed-mins="${target}">${bed(target)}</b></div></div>
+        ${ICONS.chev}
+        <label class="plan-wake"><span class="plan-ico sm">${ICONS.alarm}</span><div><span>Thức dậy</span><b data-wake-text>${esc(wake)}</b><input type="time" id="wakeTime" value="${esc(wake)}" aria-label="Giờ thức dậy (chạm để đổi)"></div></label>
+      </div>
+    </div>
+    <div class="plan-tiers">
+      <span title="${esc(p.tierLabels.getBy)}">Tối thiểu <b>${hm(p.tiers.getBy)}</b> · ngủ <b data-bed-mins="${p.tiers.getBy}">${bed(p.tiers.getBy)}</b></span>
+      <span title="${esc(p.tierLabels.peak)}">Đỉnh <b>${hm(p.tiers.peak)}</b> · ngủ <b data-bed-mins="${p.tiers.peak}">${bed(p.tiers.peak)}</b></span>
+      <span>Nợ ngủ 7 ngày <b>${hm(p.debtMinutes)}</b>${p.strainBumpMinutes ? ` · +${fmtNum(p.strainBumpMinutes)} phút vì tập` : ''}</span>
+    </div>
+  </article>`;
+}
+
 function heroCard(d) {
   const r = d.recovery;
   if (r.needsHrv) {
-    return `<section class="hero card band-unknown hero-gated">
-    <div class="hero-glow"></div>
+    return `<section class="hero tile c-violet band-unknown hero-gated">
     <div class="hero-head">
-      <div class="card-title"><span class="ico-chip">${ICONS.recovery}</span><div><h3>Điểm phục hồi</h3><div class="small">${esc(fmtLong(d.today))}</div></div></div>
+      <div class="tile-head"><span class="tile-ico">${ICONS.leaf}</span><h3>Phục hồi tổng thể</h3></div>
       <button class="icon-btn" id="syncBtn" title="Đồng bộ Intervals.icu" aria-label="Đồng bộ">${ICONS.sync}</button>
     </div>
     ${hrvGateBody(d)}
@@ -507,26 +699,21 @@ function heroCard(d) {
   const circ = 2 * Math.PI * R;
   const dash = r.score == null ? 0 : (r.score / 100) * circ;
   const emergency = r.band === 'emergency';
-  const hex = { green: '#5fe39a', yellow: '#f6c445', red: '#ff7a6e', unknown: '#9bb0a4', emergency: '#ff3c3c' }[r.band] || '#9bb0a4';
-  const hex2 = { green: '#c8fadc', yellow: '#ffe6a0', red: '#ffbdb5', unknown: '#c3d2c9', emergency: '#ffbdb5' }[r.band] || '#c3d2c9';
-  return `<section class="hero card band-${r.band} ${emergency ? 'hero-emergency' : ''}">
-    <div class="hero-glow"></div>
-    <svg class="hero-hills" viewBox="0 0 800 200" preserveAspectRatio="none" aria-hidden="true">
-      <path d="M0 120 C90 70 160 95 240 60 C320 25 380 80 460 55 C540 30 610 70 690 45 C740 30 780 40 800 35 V200 H0Z" fill="rgba(150,210,175,0.05)"/>
-      <path d="M0 150 C110 115 190 140 290 105 C380 75 450 125 540 100 C630 78 700 110 800 90 V200 H0Z" fill="rgba(110,180,140,0.06)"/>
-      <path d="M0 200 V170 C120 150 210 175 330 150 C430 130 520 165 620 145 C700 130 760 140 800 135 V200Z" fill="rgba(4,14,9,0.35)"/>
-      <path class="hill-line" d="M420 178 C520 150 600 168 700 120" fill="none" stroke="${hex}" stroke-opacity=".35" stroke-width="1.5"/>
-    </svg>
+  const warn = r.band === 'red' || emergency;
+  const c1 = warn ? '#ffb3a8' : '#e7c8ff';
+  const c2 = warn ? '#ff5d52' : '#9a5cff';
+  const c3 = warn ? '#ff3c6e' : '#d070ff';
+  return `<section class="hero tile c-violet band-${r.band} ${emergency ? 'hero-emergency' : ''}">
     <div class="hero-head">
-      <div class="card-title"><span class="ico-chip">${ICONS.recovery}</span><div><h3>Điểm phục hồi</h3><div class="small">${esc(fmtLong(d.today))}</div></div></div>
-      <button class="icon-btn" id="syncBtn" title="Đồng bộ Intervals.icu" aria-label="Đồng bộ">${ICONS.sync}</button>
+      <div class="tile-head"><span class="tile-ico">${ICONS.leaf}</span><h3>Phục hồi tổng thể</h3><button class="tip tip-btn" type="button" data-explain-tip title="Vì sao điểm này?">${ICONS.info}</button></div>
     </div>
-    <div class="hero-body">
+    <div class="hero-main">
       <div class="ring-wrap">
         <svg class="ring" viewBox="0 0 220 220" role="img" aria-label="Chỉ số hồi phục ${r.score == null ? 'chưa đủ dữ liệu' : r.score + ' trên 100'}">
-          <defs><linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${hex2}"/><stop offset="1" stop-color="${hex}"/></linearGradient></defs>
+          <defs><linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${c1}"/><stop offset=".5" stop-color="${c2}"/><stop offset="1" stop-color="${c3}"/></linearGradient></defs>
+          <circle class="ring-halo" cx="110" cy="110" r="${R}"/>
           <circle class="ring-track" cx="110" cy="110" r="${R}"/>
-          <circle class="ring-value" cx="110" cy="110" r="${R}" stroke-dasharray="${dash.toFixed(1)} ${circ.toFixed(1)}" style="stroke:url(#ringGrad);filter:drop-shadow(0 0 10px ${hex}88)"/>
+          <circle class="ring-value" cx="110" cy="110" r="${R}" stroke-dasharray="${dash.toFixed(1)} ${circ.toFixed(1)}" style="stroke:url(#ringGrad);filter:drop-shadow(0 0 12px ${c2})"/>
         </svg>
         <div class="ring-center">
           <div class="ring-score ${r.score == null ? 'empty' : ''}">${r.score == null ? '—' : r.score}</div>
@@ -534,13 +721,14 @@ function heroCard(d) {
         </div>
       </div>
       <div class="hero-info">
-        <div class="hero-band">${esc(r.bandLabel)}</div>
-        <div class="hero-verdict"><span class="dot"></span>${esc(d.advice.label)}</div>
+        <div class="hero-eyebrow">${ICONS.leaf}Phục hồi</div>
+        <div class="hero-band"><span class="hero-band-ico">${ICONS.sparkle}</span>${esc(r.bandLabel)}</div>
         <p class="hero-action">${esc(r.action)}</p>
-        <div class="hero-cta"><button class="btn small" data-go="trends">Xem xu hướng ${ICONS.chev}</button><button class="btn small" type="button" data-explain hidden>Vì sao hôm nay?</button></div>
+        <div class="hero-verdict"><span class="dot"></span>${esc(d.advice.label)}</div>
+        <div class="hero-cta"><button class="btn small" type="button" data-explain hidden>Vì sao hôm nay?</button></div>
       </div>
-      ${weekStrip(d.history)}
     </div>
+    ${trend7(d.history)}
     ${emergency && d.advice.emergency?.show ? `<div class="emergency-box">${esc(d.advice.emergency.text)}</div>` : ''}
     ${r.capped ? `<div class="cap-note">Điểm bị giới hạn vì ${esc(r.capped)}. Cảm giác của bạn thắng đồng hồ.</div>` : ''}
     <div class="hero-foot">
@@ -551,23 +739,9 @@ function heroCard(d) {
   </section>`;
 }
 
-function miniWrap(d) {
-  const m = d.metrics;
-  const spark = (key) => m.spark.map((p) => p[key]);
-  const hrvDelta = m.hrv.value != null && m.hrv.mean != null
-    ? deltaChip(m.hrv.value, m.hrv.mean, { digits: 0, higherBetter: true })
-    : '<span class="mini-delta flat"><span class="arrow">–</span>—</span>';
-  return `<div class="mini-wrap">
-    ${miniCard({ label: 'HRV', value: m.hrv.value == null ? null : fmtNum(m.hrv.value, 1), unit: 'ms', basis: m.hrv.basis, delta: hrvDelta, spark: spark('hrv'), color: '#5fe39a', icon: 'hrv' })}
-    ${miniCard({ label: 'Nhịp tim nghỉ', value: m.rhr.value == null ? null : fmtNum(m.rhr.value), unit: 'bpm', basis: m.rhr.basis, delta: deltaChip(m.rhr.value, m.rhr.mean, { higherBetter: false }), spark: spark('rhr'), color: '#ff8577', icon: 'heart' })}
-    ${miniCard({ label: 'Giấc ngủ', value: m.sleep.value == null ? null : fmtNum(m.sleep.value, 1), unit: 'giờ', basis: m.sleep.score != null ? `Điểm ngủ ${fmtNum(m.sleep.score)}` : m.sleep.basis, delta: deltaChip(m.sleep.value, m.sleep.mean, { digits: 1, higherBetter: true, unit: 'h' }), spark: spark('sleep'), color: '#a99bff', icon: 'moon' })}
-    ${miniCard({ label: 'Nhịp thở', value: m.resp.value == null ? null : fmtNum(m.resp.value, 1), unit: '/ph', basis: m.resp.basis, delta: m.resp.state === 'elevated' ? deltaChip(m.resp.value, m.resp.mean, { digits: 1, higherBetter: false }) : `<span class="mini-delta flat"><span class="arrow">–</span>${m.resp.value == null ? '—' : 'ổn'}</span>`, spark: spark('resp'), color: '#7cc4ff', icon: 'wind' })}
-  </div>`;
-}
-
 function factorsCard(d) {
   return `<div class="card factors-card">
-    <div class="card-head"><div class="card-title"><span class="ico-chip" style="--chip:#f6c445">${ICONS.bulb}</span><div><div class="eyebrow">Phân rã</div><h3>Vì sao điểm này?</h3></div></div><span class="confidence-chip ${d.recovery.confidence === 'cao' ? 'green' : d.recovery.confidence === 'vừa' ? 'amber' : 'red'}">${esc(d.recovery.confidence)}</span></div>
+    <div class="card-head"><div class="card-title"><span class="ico-chip" style="--chip:#ffc04d">${ICONS.bulb}</span><div><div class="eyebrow">Phân rã</div><h3>Vì sao điểm này?</h3></div></div><span class="confidence-chip ${d.recovery.confidence === 'cao' ? 'green' : d.recovery.confidence === 'vừa' ? 'amber' : 'red'}">${esc(d.recovery.confidence)}</span></div>
     ${d.recovery.factors.map(factorRow).join('')}
     ${d.recovery.capped && d.recovery.rawScore != null ? `<div class="cap-line">Điểm thô ${d.recovery.rawScore} bị giới hạn còn ${d.recovery.score} vì ${esc(d.recovery.capped)}.</div>` : ''}
     ${d.recovery.score == null && d.recovery.factors.length ? `<div class="cap-line note-line">${esc(d.recovery.note)}</div>` : ''}
@@ -581,44 +755,12 @@ function historyCard(d) {
   return `<div class="card history-card">
     <div class="chart-head"><div class="card-title"><span class="ico-chip">${ICONS.chart}</span><div><div class="chart-title">30 ngày hồi phục</div><div class="chart-meta">${avg == null ? 'Chưa đủ dữ liệu' : `TB ${avg} · ${valid.length} ngày có điểm`}</div></div></div></div>
     ${recoveryBars(d.history)}
-    <div class="chart-legend"><span><i class="sw" style="background:#5fe39a"></i>Sẵn sàng (67–100)</span><span><i class="sw" style="background:#f6c445"></i>Trung bình (34–66)</span><span><i class="sw" style="background:#ff7a6e"></i>Cần hồi phục (0–33)</span></div>
-  </div>`;
-}
-
-function sleepCard(d) {
-  const p = d.sleepPlan;
-  const wake = localStorage.getItem('nhipWake') || '06:30';
-  const wakeMin = parseClock(wake);
-  const bed = (mins) => minutesToClock(wakeMin - mins - 15);
-  const tiers = [
-    { key: 'peak', name: 'Peak', mins: p.tiers.peak, note: p.tierLabels.peak },
-    { key: 'perform', name: 'Perform', mins: p.tiers.perform, note: p.tierLabels.perform, rec: true },
-    { key: 'getBy', name: 'Get By', mins: p.tiers.getBy, note: p.tierLabels.getBy },
-  ];
-  return `<div class="card sleep-card">
-    <div class="card-head">
-      <div class="card-title"><span class="ico-chip" style="--chip:#a99bff">${ICONS.bed}</span><div><div class="eyebrow">Kế hoạch ngủ</div><h3>Ngủ bao nhiêu tối nay?</h3></div></div>
-      <label class="wake"><span>Thức dậy</span><input type="time" id="wakeTime" value="${esc(wake)}"></label>
-    </div>
-    <div class="tiers">
-      ${tiers.map((t) => `<div class="tier ${t.rec ? 'recommended' : ''}">
-        <div class="tier-label">${t.name}</div>
-        <div class="tier-time">${hm(t.mins)}</div>
-        <div class="tier-bed" data-mins="${t.mins}">ngủ ${bed(t.mins)}</div>
-        <div class="tier-sub">${esc(t.note)}</div>
-      </div>`).join('')}
-    </div>
-    <div class="sleep-foot">
-      <span>Nợ ngủ 7 ngày <b>${hm(p.debtMinutes)}</b></span>
-      <span>Tập hôm qua <b>${fmtNum(p.yesterdayMinutes)} phút</b></span>
-      <span>Điều chỉnh <b>+${fmtNum(p.strainBumpMinutes)} phút</b></span>
-    </div>
-    <div class="hint" style="margin-top:8px">${esc(p.note)}</div>
+    <div class="chart-legend"><span><i class="sw" style="background:#3fe0a8"></i>Sẵn sàng (67–100)</span><span><i class="sw" style="background:#ffc04d"></i>Trung bình (34–66)</span><span><i class="sw" style="background:#ff6b8f"></i>Cần hồi phục (0–33)</span></div>
   </div>`;
 }
 
 /* Sleep structure pushed from Apple Health by the iPhone Shortcut. Shown, not scored. */
-const STAGE_COLORS = { deep: '#6f7dff', core: '#a99bff', rem: '#7cc4ff', awake: '#ff8577' };
+const STAGE_COLORS = { deep: '#4f6bff', core: '#a07bff', rem: '#62cdff', awake: '#ff7fb6' };
 function durText(min) {
   if (min == null || !Number.isFinite(Number(min))) return '—';
   const m = Math.round(min);
@@ -661,7 +803,7 @@ function sleepDetailCard(sd) {
     </div>`;
   }
   const total = n.deepMin + n.coreMin + n.remMin + n.awakeMin + (n.unspecifiedMin || 0);
-  const seg = (k, v) => (v > 0 && total > 0 ? `<span style="width:${(v / total * 100).toFixed(2)}%;background:${STAGE_COLORS[k] || '#5d6b63'}" title="${esc(k)}"></span>` : '');
+  const seg = (k, v) => (v > 0 && total > 0 ? `<span style="width:${(v / total * 100).toFixed(2)}%;background:${STAGE_COLORS[k] || '#6c6494'}" title="${esc(k)}"></span>` : '');
   const nm = sd.norm && sd.norm.deepPct != null ? sd.norm : null;
   const row = (color, label, min, pct, normPct, neutral = false) => `<div class="sd-row"><span class="sd-dot" style="background:${color}"></span><span class="sd-k">${label}</span><span class="sd-v">${durText(min)}<small>${pctText(pct)}</small></span>${nm ? vsNorm(pct, normPct, { neutral }) : ''}</div>`;
   const cmp = sd.compare && Math.abs(sd.compare.diffMin) >= 20
@@ -1141,97 +1283,60 @@ function checkinCard(d) {
   </div>`;
 }
 
-function recentCard(d) {
-  const items = d.recent || [];
-  return `<div class="card recent-card">
-    <div class="card-head"><div class="card-title"><span class="ico-chip" style="--chip:#ff9f6e">${ICONS.flame}</span><div><div class="eyebrow">Vận động</div><h3>Buổi tập gần đây</h3></div></div><button class="card-link" data-go="activities">Xem tất cả ${ICONS.chev}</button></div>
-    ${items.length ? items.map(actRow).join('') : '<div class="empty">Chưa có buổi tập. Bấm Đồng bộ hoặc nhập CSV trong Cài đặt.</div>'}
-  </div>`;
-}
-
-function actType(a) {
-  const t = String(a.type || '');
-  if (/padel|pickle/i.test(t)) return 'PB';
-  if (/badminton/i.test(t)) return 'BMT';
-  if (/yoga|pilates/i.test(t)) return 'YOGA';
-  if (/hiit|highintensity/i.test(t)) return 'HIIT';
-  if (/run/i.test(t)) return 'RUN';
-  if (/ride|bike|cycl/i.test(t)) return 'RIDE';
-  if (/swim/i.test(t)) return 'SWIM';
-  if (/walk|hike/i.test(t)) return 'WALK';
-  if (/weight|workout|strength/i.test(t)) return 'GYM';
-  if (/hiit|interval/i.test(t)) return 'HIIT';
-  return (t || 'TẬP').slice(0, 4).toUpperCase();
-}
-function actRow(a) {
-  const date = String(a.start_date_local || '').slice(0, 10);
-  return `<div class="act-row">
-    <div class="act-icon">${esc(actType(a))}</div>
-    <div class="act-main"><b>${esc(a.name || a.type || 'Buổi tập')}</b><span>${esc(fmtDate(date))} · ${Math.round((a.moving_time || 0) / 60)} phút</span></div>
-    <div class="act-load"><b>${a.training_load != null ? Math.round(a.training_load) : '—'}</b><span>tải</span></div>
-  </div>`;
-}
-
 async function renderToday(view) {
   const d = await api('/api/dashboard');
+  const name = (state.user.displayName || '').split(' ').slice(-1)[0];
   view.innerHTML = `
-    <div class="view-head">
+    <div class="view-head today-head">
       <div class="greet">
-        <div class="greet-date">${esc(fmtLong(d.today))}</div>
-        <h1>${esc(greeting())}, ${esc((state.user.displayName || '').split(' ').slice(-1)[0])}</h1>
+        <div class="eyebrow">Hôm nay</div>
+        <h1>${esc(greeting())}, ${esc(name)}! <span class="wave-hand" aria-hidden="true">👋</span></h1>
         <div class="view-sub">${esc(subline(d))}</div>
       </div>
       <div class="head-actions">
-        <div class="head-pill glass">${ICONS.sun}<span>Sức khỏe tốt hôm nay là nền tảng cho những ngày tuyệt vời phía trước.</span></div>
-        <button class="btn small" id="syncTop">${ICONS.sync} Đồng bộ</button>
+        <div class="date-pill">${esc(fmtLong(d.today))}</div>
+        <button class="icon-btn" id="syncTop" title="Đồng bộ" aria-label="Đồng bộ">${ICONS.sync}</button>
+        <div class="avatar orb" title="${esc(state.user.displayName || '')}">${esc(initials(state.user.displayName))}</div>
       </div>
     </div>
+    ${doctorBanner(d)}
+    <div class="dash-top">
+      ${heroCard(d)}
+      ${hrvTile(d)}
+      ${rhrTile(d)}
+      ${sleepTile(d)}
+      ${workoutCard(d)}
+      ${sleepPlanCard(d)}
+    </div>
+    <div id="aiExplain"></div>
     <div class="today-grid">
-      <div class="hero-stack">
-        ${doctorBanner(d)}
-        ${heroCard(d)}
-        <div id="aiExplain"></div>
-      </div>
       ${manualCard(d)}
       ${contextCardHtml()}
-      ${miniWrap(d)}
       ${d.recovery.needsHrv ? '' : factorsCard(d)}
       ${historyCard(d)}
-      ${d.recovery.needsHrv ? '' : sleepCard(d)}
       ${sleepDetailCard(d.sleepDetail)}
       ${d.recovery.needsHrv ? '' : loadCard(d)}
       ${strainCard(d)}
       ${checkinCard(d)}
-      ${recentCard(d)}
     </div>`;
-  const sync = async (btn) => {
-    if (btn) btn.classList.add('spin');
-    toastMsg('Đang đồng bộ…');
-    try {
-      const r = await api('/api/sync', { method: 'POST', body: {} });
-      toastMsg(`Xong: ${r.stats.wellness.written} ngày wellness, ${r.stats.activities.written} buổi tập.`);
-      await renderView();
-    } catch (e) { toastMsg('Đồng bộ lỗi: ' + e.message); if (btn) btn.classList.remove('spin'); }
-  };
-  const syncBtn = view.querySelector('#syncBtn');
-  if (syncBtn) syncBtn.onclick = () => sync(syncBtn);
+  const sync = runSync;
   const gateSync = view.querySelector('[data-auto-sync-hero]');
   if (gateSync) gateSync.onclick = () => sync(gateSync);
   const syncTop = view.querySelector('#syncTop');
-  if (syncTop) syncTop.onclick = () => sync(syncTop.querySelector('svg'));
+  if (syncTop) syncTop.onclick = () => sync(syncTop);
+  const tip = view.querySelector('[data-explain-tip]');
+  const factors = view.querySelector('.factors-card');
+  if (tip && factors) tip.onclick = (e) => { e.stopPropagation(); factors.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
   const wake = view.querySelector('#wakeTime');
   if (wake) {
-    const wakeMin = parseClock(wake.value);
-    view.querySelectorAll('.tier-bed').forEach((el) => {
-      el.textContent = `ngủ ${minutesToClock(wakeMin - Number(el.dataset.mins) - 15)}`;
-    });
-    wake.onchange = () => {
-      localStorage.setItem('nhipWake', wake.value);
+    const paint = () => {
       const wm = parseClock(wake.value);
-      view.querySelectorAll('.tier-bed').forEach((el) => {
-        el.textContent = `ngủ ${minutesToClock(wm - Number(el.dataset.mins) - 15)}`;
-      });
+      view.querySelectorAll('[data-bed-mins]').forEach((el) => { el.textContent = minutesToClock(wm - Number(el.dataset.bedMins) - 15); });
+      const wt = view.querySelector('[data-wake-text]');
+      if (wt) wt.textContent = minutesToClock(wm);
     };
+    wake.onclick = (e) => e.stopPropagation();
+    wake.onchange = () => { localStorage.setItem('nhipWake', wake.value); paint(); };
   }
   attachCheckin(view);
   attachManualCard(view, d);
@@ -1284,19 +1389,19 @@ async function renderTrends(view) {
   });
 
   const defs = [
-    { title: 'HRV rMSSD', field: 'hrv_rmssd', color: '#5fe39a', unit: 'ms', digits: 1 },
-    { title: 'Nhịp tim nghỉ', field: 'resting_hr', color: '#ff8577', unit: 'bpm', digits: 0 },
-    { title: 'Giấc ngủ', field: 'sleep_secs', scale: 1 / 3600, color: '#a78bfa', unit: 'giờ', digits: 1 },
-    { title: 'Điểm ngủ', field: 'sleep_score', color: '#f6c445', unit: '/100', digits: 0 },
-    { title: 'Số bước', field: 'steps', color: '#7cc4ff', unit: 'bước', digits: 0 },
+    { title: 'HRV rMSSD', field: 'hrv_rmssd', color: '#3ff3e0', unit: 'ms', digits: 1 },
+    { title: 'Nhịp tim nghỉ', field: 'resting_hr', color: '#ff6b8f', unit: 'bpm', digits: 0 },
+    { title: 'Giấc ngủ', field: 'sleep_secs', scale: 1 / 3600, color: '#8f8bff', unit: 'giờ', digits: 1 },
+    { title: 'Điểm ngủ', field: 'sleep_score', color: '#ffc04d', unit: '/100', digits: 0 },
+    { title: 'Số bước', field: 'steps', color: '#62b8ff', unit: 'bước', digits: 0 },
     { title: 'Nhịp thở', field: 'respiration', color: '#4fd1c5', unit: '/ph', digits: 1 },
-    { title: 'SpO2', field: 'spo2', color: '#7cc4ff', unit: '%', digits: 0 },
-    { title: 'Cân nặng', field: 'weight', color: '#a99bff', unit: 'kg', digits: 1 },
+    { title: 'SpO2', field: 'spo2', color: '#62b8ff', unit: '%', digits: 0 },
+    { title: 'Cân nặng', field: 'weight', color: '#b48cff', unit: 'kg', digits: 1 },
   ];
 
   view.innerHTML = `
     <div class="view-head">
-      <div><h1>Xu hướng</h1><div class="view-sub">So với đường cơ sở cá nhân, không so với chuẩn chung.</div></div>
+      <div><div class="page-title"><span class="page-ico" style="--pc:#4f8dff">${ICONS.trends}</span><h1>Xu hướng</h1></div><div class="view-sub">So với đường cơ sở cá nhân, không so với chuẩn chung.</div></div>
       <div class="range-row" id="rangeRow">
         ${[7, 30, 90].map((n) => `<button data-d="${n}" class="${range === n ? 'active' : ''}">${n} ngày</button>`).join('')}
       </div>
@@ -1304,7 +1409,7 @@ async function renderTrends(view) {
     <div class="card" style="margin-bottom:14px">
       <div class="chart-head"><div><div class="chart-title">Điểm hồi phục</div><div class="chart-meta">${range} ngày · trung bình và các dải màu</div></div></div>
       ${recoveryBars(dash.history)}
-      <div class="chart-legend"><span><i class="sw" style="background:#5fe39a"></i>Sẵn sàng</span><span><i class="sw" style="background:#f6c445"></i>Trung bình</span><span><i class="sw" style="background:#ff7a6e"></i>Cần hồi phục</span><span>Đường đứt = trung bình</span></div>
+      <div class="chart-legend"><span><i class="sw" style="background:#3fe0a8"></i>Sẵn sàng</span><span><i class="sw" style="background:#ffc04d"></i>Trung bình</span><span><i class="sw" style="background:#ff6b8f"></i>Cần hồi phục</span><span>Đường đứt = trung bình</span></div>
     </div>
     <div class="charts-grid">
       ${defs.map((def) => `<div class="card">
@@ -1352,17 +1457,17 @@ async function renderActivities(view) {
   });
   view.innerHTML = `
     <div class="view-head">
-      <div><h1>Buổi tập</h1><div class="view-sub">Tải từ Intervals.icu; không phản ánh đủ sức mạnh, bơi, yoga.</div></div>
+      <div><div class="page-title"><span class="page-ico" style="--pc:#ff8a3d">${ICONS.dumbbell}</span><h1>Buổi tập</h1></div><div class="view-sub">Tải từ Intervals.icu; không phản ánh đủ sức mạnh, bơi, yoga.</div></div>
       <div class="range-row" id="rangeRow">${[30, 90, 180].map((n) => `<button data-d="${n}" class="${range === n ? 'active' : ''}">${n} ngày</button>`).join('')}</div>
     </div>
     <div class="stat-tiles">
-      <div class="stat-tile"><b>${items.length}</b><span>buổi</span></div>
-      <div class="stat-tile"><b>${fmtNum(totalMin)}</b><span>phút</span></div>
-      <div class="stat-tile"><b>${fmtNum(totalLoad)}</b><span>tổng tải</span></div>
+      <div class="stat-tile st-orange"><b>${items.length}</b><span>buổi</span></div>
+      <div class="stat-tile st-orange"><b>${fmtNum(totalMin)}</b><span>phút</span></div>
+      <div class="stat-tile st-orange"><b>${fmtNum(totalLoad)}</b><span>tổng tải</span></div>
     </div>
     <div class="card" style="margin-bottom:14px">
       <div class="chart-head"><div><div class="chart-title">Tải theo ngày</div><div class="chart-meta">${range} ngày gần nhất</div></div></div>
-      ${items.length ? loadBars(days, items) : '<div class="empty">Chưa có buổi tập trong khoảng này.</div>'}
+      ${items.length ? loadBars(days, items, '#ff9a3c') : '<div class="empty">Chưa có buổi tập trong khoảng này.</div>'}
     </div>
     <div class="card">
       <div class="card-head"><div><h3>Danh sách</h3></div></div>
@@ -1654,7 +1759,7 @@ async function renderJournal(view) {
 
   const ssHtml = sleepStructureCard(pat.error ? null : pat.sleepStructure);
   view.innerHTML = `
-    <div class="view-head"><div><h1>Quy luật</h1><div class="view-sub">Thói quen nào ảnh hưởng đến hồi phục của riêng bạn.</div></div></div>
+    <div class="view-head"><div><div class="page-title"><span class="page-ico" style="--pc:#ff5fa8">${ICONS.layers}</span><h1>Quy luật</h1></div><div class="view-sub">Thói quen nào ảnh hưởng đến hồi phục của riêng bạn.</div></div></div>
     <div class="settings-stack">
       <div class="card" id="weeklyCard">
         <div class="card-head"><div><div class="eyebrow">Tuần</div><h3>${esc(wk(weekly))}</h3></div></div>
@@ -1763,7 +1868,7 @@ async function renderSettings(view) {
   const [icu, status, ai] = await Promise.all([api('/api/config/icu'), api('/api/status'), api('/api/ai/status').catch(() => null)]);
   const me = state.user;
   view.innerHTML = `
-    <div class="view-head"><div><h1>Cài đặt</h1><div class="view-sub">Kết nối dữ liệu, ngưỡng gợi ý, sao lưu và giải thích chỉ số.</div></div></div>
+    <div class="view-head"><div><div class="page-title"><span class="page-ico" style="--pc:#25d0c4">${ICONS.settings}</span><h1>Cài đặt</h1></div><div class="view-sub">Kết nối dữ liệu, ngưỡng gợi ý, sao lưu và giải thích chỉ số.</div></div></div>
     <div class="settings-stack">
       <div class="card">
         <div class="card-head"><div><div class="eyebrow">Hồ sơ</div><h3>${esc(me.displayName)}</h3></div><span class="confidence-chip">${me.role === 'admin' ? 'Quản trị' : 'Thành viên'}</span></div>

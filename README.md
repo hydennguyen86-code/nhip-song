@@ -6,7 +6,7 @@ App **cần HRV rMSSD mỗi đêm**. Không có HRV thì không có điểm và 
 
 > Đây **không phải WHOOP** và **không phải thiết bị y tế**. Điểm 0–100 là chỉ số tham khảo có công thức công khai, tính theo mức nền của chính bạn. Cảm giác của bạn luôn được ưu tiên hơn số đồng hồ.
 
-<img src="docs/images/tong-quan.jpg" alt="Trang Hôm nay trên máy tính với điểm hồi phục, kết luận, số của hôm nay và phần giải thích điểm" width="760">
+<img src="docs/images/tong-quan.jpg" alt="Trang Hôm nay trên máy tính: điểm phục hồi, HRV, nhịp tim nghỉ, giấc ngủ, buổi tập và kế hoạch ngủ" width="760">
 
 *Mọi ảnh trong README đều chụp từ dữ liệu giả, không phải dữ liệu sức khoẻ thật.*
 
