@@ -36,7 +36,7 @@ function plantedWorld({ days = 140 } = {}) {
     const date = addDays(start, i);
     const isLeg = i % 7 === 3;
     const isChest = i % 7 === 0 || i % 7 === 5;
-    contexts.set(date, isLeg ? { workout: ['leg'], load: 'le50' } : isChest ? { workout: ['chest_triceps'] } : { workout: ['rest'], coffee_cups: 2 });
+    contexts.set(date, isLeg ? { workout: ['leg'], load: 'le50' } : isChest ? { workout: ['chest_tri'] } : { workout: ['rest'], coffee_cups: 2 });
     const prevLeg = (i - 1) % 7 === 3;
     const prev2Leg = (i - 2) % 7 === 3;
     let hrv = 60 * Math.exp(0.05 * noise(i, 3));
@@ -49,9 +49,13 @@ function plantedWorld({ days = 140 } = {}) {
 }
 
 describe('daily context', () => {
-  test('historical gym splits map to the current schedule', () => {
-    assert.deepEqual(normalizeContext({ workout: ['chest_back', 'shoulder_arm', 'chest_triceps'] }), { workout: ['chest_triceps', 'back_biceps'] });
-    assert.deepEqual(contextLabels({ workout: ['chest_back', 'shoulder_arm'] }), ['Tập ngực / tay sau', 'Tập lưng / tay trước']);
+  test('home split days (Nov 2026) stay valid and count toward the v4 split', () => {
+    assert.deepEqual(normalizeContext({ workout: ['chest_triceps', 'back_biceps'] }), { workout: ['chest_triceps', 'back_biceps'] });
+    const chest = FACTORS.find((f) => f.id === 'chest_tri');
+    const bi = FACTORS.find((f) => f.id === 'shoulder_bi');
+    assert.ok(chest.test({ workout: ['chest_triceps'] }));
+    assert.ok(bi.test({ workout: ['back_biceps'] }));
+    assert.ok(!bi.test({ workout: ['chest_triceps'] }));
   });
   test('valid context is normalized, empties dropped', () => {
     const c = normalizeContext({ workout: ['leg'], load: 'le50', sauna: 'evening', coffee_cups: 2, coffee_late: false, bedtime: '23:45', work_stress: 1, alcohol: '' });
@@ -76,7 +80,7 @@ describe('daily context', () => {
   });
   test('labels never include the private symptom field', () => {
     const labels = contextLabels({ workout: ['leg'], symptom: true, alcohol: 2 });
-    assert.ok(labels.includes('Tập chân'));
+    assert.ok(labels.includes('Tập chân / đùi'));
     assert.ok(labels.some((l) => l.includes('Rượu bia 2')));
     assert.ok(!labels.join(' ').toLowerCase().includes('tê'));
   });
@@ -116,7 +120,7 @@ describe('pattern engine', () => {
   test('a factor without a real effect is not called clear, even when it follows leg days', () => {
     const { contexts, wellness } = plantedWorld();
     const p = computePatterns({ wellness, contexts, today: TODAY });
-    const chest = p.factors.find((f) => f.id === 'chest_triceps');
+    const chest = p.factors.find((f) => f.id === 'chest_tri');
     assert.ok(chest);
     assert.notEqual(chest.confidence, 'clear', chest.summary);
     assert.ok(Math.abs(chest.lags[0].hrv.swc) < 1, chest.summary);
@@ -144,12 +148,12 @@ describe('pattern engine', () => {
     for (let i = 0; i <= 140; i++) {
       const w = i % 7;
       // shoulders always exactly 2 days before legs → "leg 1 day ago" == "shoulders 3 days ago"
-      contexts.set(addDays(start, i), w === 3 ? { workout: ['leg'] } : w === 1 ? { workout: ['back_biceps'] } : { workout: ['rest'] });
+      contexts.set(addDays(start, i), w === 3 ? { workout: ['leg'] } : w === 1 ? { workout: ['shoulder_bi'] } : { workout: ['rest'] });
     }
     const p = computePatterns({ wellness, contexts, today: TODAY });
     const leg = p.factors.find((f) => f.id === 'leg');
     assert.ok(leg.inseparable, leg.summary);
-    assert.equal(leg.inseparable.id, 'back_biceps');
+    assert.equal(leg.inseparable.id, 'shoulder_bi');
     assert.equal(leg.confidence, 'unclear');
     assert.match(leg.summary, /Chưa tách được/);
   });
@@ -229,7 +233,7 @@ describe('AI guard layer', () => {
     const recovery = computeRecovery({ wellness, today: TODAY, checkin: null });
     const packet = buildPacket({ today: TODAY, recovery, advice: { label: 'Có thể theo kế hoạch vừa sức' }, wellness, history: [], contexts, patterns: computePatterns({ wellness, contexts, today: TODAY }) });
     const s = JSON.stringify(packet);
-    assert.ok(packet.boi_canh_cac_ngay.some((d) => d.ngay === y && d.boi_canh.includes('Tập chân')));
+    assert.ok(packet.boi_canh_cac_ngay.some((d) => d.ngay === y && d.boi_canh.includes('Tập chân / đùi')));
     for (const banned of ['symptom', 'tê', 'run sau tập', 'displayName', 'username', 'note', 'Hyden']) assert.ok(!s.includes(banned), banned);
     assert.ok(packet.so_lieu_theo_ngay.length <= 14);
   });
@@ -442,7 +446,7 @@ describe('dose factors', () => {
 
   test('watch activities: Padel = pickleball with load and minutes, stray < 10 min recordings ignored, gym load shared by ticked parts', () => {
     const days = buildDayFacts({
-      contexts: new Map([['2026-10-03', { workout: ['leg', 'back_biceps'] }]]),
+      contexts: new Map([['2026-10-03', { workout: ['leg', 'shoulder_arm'] }]]),
       activities: [
         { start_date_local: '2026-10-02T17:49:00', type: 'Padel', moving_time: 95, training_load: 0 },
         { start_date_local: '2026-10-02T17:52:00', type: 'Padel', moving_time: 4200, training_load: 36 },
@@ -520,6 +524,39 @@ describe('family sports from the watch', () => {
   });
 
   test('context labels name watch sessions and tagged sports plainly', () => {
-    assert.deepEqual(contextLabels({ workout: ['yoga', 'leg'] }), ['Yoga', 'Tập chân']);
+    assert.deepEqual(contextLabels({ workout: ['yoga', 'leg'] }), ['Yoga', 'Tập chân / đùi']);
+  });
+});
+
+describe('gym split and new sports (Nov 2026)', () => {
+  test('new gym split is selectable; old split stays valid and counts toward the new pattern', () => {
+    assert.deepEqual(normalizeContext({ workout: ['chest_tri', 'shoulder_bi'] }), { workout: ['chest_tri', 'shoulder_bi'] });
+    assert.deepEqual(normalizeContext({ workout: ['chest_back'] }), { workout: ['chest_back'] });
+    const f = (id) => FACTORS.find((x) => x.id === id);
+    assert.equal(f('chest_tri').test({ workout: ['chest_back'] }), true, 'ngực / lưng day counts as a chest day');
+    assert.equal(f('shoulder_bi').test({ workout: ['shoulder_arm'] }), true);
+    assert.equal(f('chest_back'), undefined, 'no duplicate factor for the old split');
+    assert.deepEqual(contextLabels({ workout: ['chest_tri', 'shoulder_bi'] }), ['Tập ngực / tay sau', 'Tập vai / tay trước']);
+  });
+
+  test('badminton and swimming are their own sports, not pickleball or "Cardio khác"', () => {
+    const d = '2026-11-10';
+    const days = buildDayFacts({
+      activities: [
+        { start_date_local: `${d}T06:00:00`, type: 'Badminton', moving_time: 3600, training_load: 45 },
+        { start_date_local: `${d}T17:00:00`, type: 'Swim', moving_time: 1800, training_load: 20 },
+      ],
+    });
+    const day = days.get(d);
+    const f = (id) => FACTORS.find((x) => x.id === id);
+    assert.equal(f('badminton').test(day), true);
+    assert.equal(f('badminton').dose(day), 45);
+    assert.equal(f('pickleball').test(day), false, 'badminton is not pickleball');
+    assert.equal(f('swim').test(day), true);
+    assert.equal(f('swim').unit, 'phút');
+    assert.equal(f('swim').dose(day), 30);
+    assert.equal(f('cardio').test(day), false);
+    assert.deepEqual(contextLabels(day), ['Cầu lông 60 phút (đồng hồ)', 'Bơi lội 30 phút (đồng hồ)']);
+    assert.deepEqual(contextLabels({ ...day, workout: ['badminton', 'swim'] }), ['Cầu lông', 'Bơi lội']);
   });
 });

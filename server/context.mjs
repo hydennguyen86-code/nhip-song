@@ -14,14 +14,23 @@ export const CONTEXT_FIELDS = Object.freeze([
   {
     id: 'workout', label: 'Buổi tập', type: 'multi',
     options: [
-      { id: 'back_biceps', label: 'Lưng / Tay trước' },
-      { id: 'chest_triceps', label: 'Ngực / Tay sau' },
-      { id: 'leg', label: 'Chân' },
-      { id: 'gym_full', label: 'Gym toàn thân' },
+      { id: 'chest_tri', label: 'Ngực / Tay sau', group: 'gym' },
+      { id: 'shoulder_bi', label: 'Vai / Tay trước', group: 'gym' },
+      { id: 'leg', label: 'Chân / Đùi', group: 'gym' },
+      { id: 'gym_full', label: 'Gym toàn thân', group: 'gym' },
+      // Old gym split (before Nov 2026): still valid so saved days keep working,
+      // hidden from the picker unless that day already has it.
+      { id: 'chest_back', label: 'Ngực / Lưng', group: 'gym', legacy: true },
+      { id: 'shoulder_arm', label: 'Vai / Tay', group: 'gym', legacy: true },
+      // Home split (Nov 2026, before v4): Ngực / Tay sau → chest_tri, Lưng / Tay trước → biceps day.
+      { id: 'chest_triceps', label: 'Ngực / Tay sau (cũ)', group: 'gym', legacy: true },
+      { id: 'back_biceps', label: 'Lưng / Tay trước', group: 'gym', legacy: true },
       { id: 'pickleball', label: 'Pickleball' },
+      { id: 'badminton', label: 'Cầu lông' },
       { id: 'run', label: 'Chạy bộ' },
+      { id: 'walk', label: 'Đi bộ nhẹ' },
+      { id: 'swim', label: 'Bơi lội' },
       { id: 'ride', label: 'Đạp xe' },
-      { id: 'walk', label: 'Đi bộ' },
       { id: 'yoga', label: 'Yoga' },
       { id: 'hiit', label: 'Lớp HIIT' },
       { id: 'cardio', label: 'Cardio khác' },
@@ -45,12 +54,6 @@ export const CONTEXT_FIELDS = Object.freeze([
   { id: 'symptom', label: 'Có cơn tê / run sau tập', type: 'bool', private: true },
 ]);
 
-// Historical splits follow the user's current training schedule.
-const WORKOUT_ALIAS = { chest_back: 'chest_triceps', shoulder_arm: 'back_biceps' };
-const workoutId = (id) => WORKOUT_ALIAS[id] || id;
-const canonicalContext = (c) => c && Array.isArray(c.workout)
-  ? { ...c, workout: [...new Set(c.workout.map(workoutId))] } : c;
-
 const FIELD = new Map(CONTEXT_FIELDS.map((f) => [f.id, f]));
 export const PRIVATE_FIELDS = Object.freeze(CONTEXT_FIELDS.filter((f) => f.private).map((f) => f.id));
 
@@ -66,7 +69,7 @@ export function normalizeContext(input) {
     switch (f.type) {
       case 'multi': {
         if (!Array.isArray(v)) throw new Error(`${f.label}: cần danh sách.`);
-        const ids = [...new Set(v.map((id) => workoutId(String(id))))];
+        const ids = [...new Set(v.map(String))];
         for (const id of ids) if (!f.options.some((o) => o.id === id)) throw new Error(`${f.label}: "${id}" không hợp lệ.`);
         if (ids.includes('rest') && ids.length > 1) throw new Error('Đã chọn "Nghỉ" thì không chọn buổi tập khác.');
         if (ids.length) out[k] = ids;
@@ -117,20 +120,23 @@ export function saveContext(db, userId, date, data, { today } = {}) {
 
 export function getContext(db, userId, date) {
   const row = db.prepare('SELECT data FROM daily_context WHERE user_id = ? AND date = ?').get(userId, date);
-  return row ? canonicalContext(JSON.parse(row.data)) : null;
+  return row ? JSON.parse(row.data) : null;
 }
 
 /** Map date → context object, oldest first. */
 export function listContexts(db, userId, oldest, newest) {
   const rows = db.prepare('SELECT date, data FROM daily_context WHERE user_id = ? AND date BETWEEN ? AND ? ORDER BY date').all(userId, oldest, newest);
-  return new Map(rows.map((r) => [r.date, canonicalContext(JSON.parse(r.data))]));
+  return new Map(rows.map((r) => [r.date, JSON.parse(r.data)]));
 }
 
 /* ---------------------------------------------------------- factors -- */
 
 const bedMinutes = (t) => { const [h, m] = String(t).split(':').map(Number); const mins = h * 60 + m; return mins < 5 * 60 ? mins + 24 * 60 : mins; };
-const hasWorkout = (c, id) => Array.isArray(c.workout) && c.workout.some((value) => workoutId(value) === id);
-const GYM_PARTS = ['leg', 'back_biceps', 'chest_triceps', 'gym_full'];
+const hasWorkout = (c, id) => Array.isArray(c.workout) && c.workout.includes(id);
+const GYM_PARTS = ['chest_tri', 'shoulder_bi', 'leg', 'gym_full', 'chest_back', 'shoulder_arm', 'chest_triceps', 'back_biceps'];
+/** Old split days count toward the new split's pattern: a "ngực / lưng" day is a chest day, a "vai / tay" day a shoulder day. */
+const LEGACY_PART = { chest_tri: ['chest_back', 'chest_triceps'], shoulder_bi: ['shoulder_arm', 'back_biceps'] };
+const hasPart = (c, id) => hasWorkout(c, id) || (LEGACY_PART[id] || []).some((old) => hasWorkout(c, old));
 /** Watch load of a gym day, shared between the body parts ticked that day. */
 const gymShare = (c) => {
   if (!(c._gym_load > 0)) return null;
@@ -144,8 +150,8 @@ const gymMinShare = (c) => {
 };
 
 /**
- * A sport the watch records when the person starts it (run, ride, walk, yoga,
- * pickleball): found from Intervals.icu even without a tag, so every day is
+ * A sport the watch records when the person starts it (run, ride, walk, swim,
+ * yoga, pickleball, badminton): found from Intervals.icu even without a tag, so every day is
  * "known" (no recording and no tag = did not do it). Tagging it covers days
  * without the watch. Load is the dose for hard sports; minutes for gentle ones
  * (walking, yoga), where heart-rate load is near zero and tells little.
@@ -172,14 +178,17 @@ const watchSport = (id, label, kind, unit = 'load') => ({
  * counts at the usual dose. `minutes(c)` is only for the summary text.
  */
 export const FACTORS = Object.freeze([
-  { id: 'back_biceps', label: 'Tập lưng / tay trước', source: 'context', test: (c) => hasWorkout(c, 'back_biceps'), dose: gymShare, minutes: gymMinShare, unit: 'load' },
-  { id: 'chest_triceps', label: 'Tập ngực / tay sau', source: 'context', test: (c) => hasWorkout(c, 'chest_triceps'), dose: gymShare, minutes: gymMinShare, unit: 'load' },
-  { id: 'leg', label: 'Tập chân', source: 'context', test: (c) => hasWorkout(c, 'leg'), dose: gymShare, minutes: gymMinShare, unit: 'load' },
+  { id: 'chest_tri', label: 'Tập ngực / tay sau', source: 'context', test: (c) => hasPart(c, 'chest_tri'), dose: gymShare, minutes: gymMinShare, unit: 'load' },
+  { id: 'shoulder_bi', label: 'Tập vai / tay trước', source: 'context', test: (c) => hasPart(c, 'shoulder_bi'), dose: gymShare, minutes: gymMinShare, unit: 'load' },
+  { id: 'leg', label: 'Tập chân / đùi', source: 'context', test: (c) => hasWorkout(c, 'leg'), dose: gymShare, minutes: gymMinShare, unit: 'load' },
   { id: 'gym_full', label: 'Gym toàn thân', source: 'context', test: (c) => hasWorkout(c, 'gym_full'), dose: gymShare, minutes: gymMinShare, unit: 'load' },
   watchSport('pickleball', 'Pickleball', 'racket'),
+  watchSport('badminton', 'Cầu lông', 'badminton'),
   watchSport('run', 'Chạy bộ', 'run'),
   watchSport('ride', 'Đạp xe', 'ride'),
-  watchSport('walk', 'Đi bộ', 'walk', 'phút'),
+  // Wrist heart rate is unreliable in water, so swimming is dosed by minutes.
+  watchSport('swim', 'Bơi lội', 'swim', 'phút'),
+  watchSport('walk', 'Đi bộ nhẹ', 'walk', 'phút'),
   watchSport('yoga', 'Yoga', 'yoga', 'phút'),
   // HIIT needs the tag: HUAWEI labels many ordinary moments "HIIT" on its own.
   { id: 'hiit', label: 'Lớp HIIT', source: 'context', test: (c) => hasWorkout(c, 'hiit'), dose: (c) => (c._hiit_load > 0 ? c._hiit_load : null), minutes: (c) => (c._hiit_min > 0 ? c._hiit_min : null), unit: 'load' },
@@ -229,18 +238,20 @@ export function addBedtimeDeviation(days, rules = BEDTIME_RULES) {
 
 /** Intervals.icu activity types. Huawei has no pickleball mode, so pickleball arrives as Padel. */
 export const ACTIVITY_KIND = Object.freeze({
-  racket: /padel|pickle|tennis|badminton|squash|racquet/i,
+  badminton: /badminton/i,
+  racket: /padel|pickle|tennis|squash|racquet/i,
   gym: /weight|strength|crossfit/i,
   yoga: /yoga|pilates/i,
   hiit: /hiit|highintensity|interval/i,
   run: /run$/i,
   ride: /ride$|bike|cycl/i,
   walk: /walk|hike/i,
-  cardio: /swim|row|elliptic|stair|cardio|workout/i,
+  swim: /swim/i,
+  cardio: /row|elliptic|stair|cardio|workout/i,
 });
 const KINDS = Object.keys(ACTIVITY_KIND);
-const KIND_LABEL = { racket: 'Pickleball', run: 'Chạy bộ', ride: 'Đạp xe', walk: 'Đi bộ', yoga: 'Yoga' };
-const KIND_TAG = { racket: 'pickleball', run: 'run', ride: 'ride', walk: 'walk', yoga: 'yoga' };
+const KIND_LABEL = { racket: 'Pickleball', badminton: 'Cầu lông', run: 'Chạy bộ', ride: 'Đạp xe', swim: 'Bơi lội', walk: 'Đi bộ', yoga: 'Yoga' };
+const KIND_TAG = { racket: 'pickleball', badminton: 'badminton', run: 'run', ride: 'ride', swim: 'swim', walk: 'walk', yoga: 'yoga' };
 /** Recordings shorter than this are ignored (stray starts on the watch). */
 export const MIN_ACTIVITY_SECS = 600;
 
@@ -261,7 +272,7 @@ const LEGACY_TAG = {
 export function buildDayFacts({ contexts = new Map(), checkins = [], activities = [], bedtimes = new Map() }) {
   const days = new Map();
   const get = (d) => { if (!days.has(d)) days.set(d, { _logged: false }); return days.get(d); };
-  for (const [date, c] of contexts) Object.assign(get(date), canonicalContext(c), { _logged: true });
+  for (const [date, c] of contexts) Object.assign(get(date), c, { _logged: true });
   // Bedtime measured by the watch (Apple Health) when not typed in: no more hand entry.
   for (const [date, b] of bedtimes) {
     const t = typeof b === 'string' ? b : b?.bedtime;
@@ -306,11 +317,11 @@ export function buildDayFacts({ contexts = new Map(), checkins = [], activities 
 /** Short Vietnamese labels for one day's context (for UI lists and the AI packet). Never includes private fields. */
 export function contextLabels(c) {
   if (!c) return [];
-  c = canonicalContext(c);
   const out = [];
   const wf = FIELD.get('workout');
   if (Array.isArray(c.workout)) for (const id of c.workout) {
     const label = wf.options.find((o) => o.id === id)?.label;
+    if (!label) continue;
     out.push(id === 'rest' ? 'Nghỉ tập' : GYM_PARTS.includes(id) && id !== 'gym_full' ? `Tập ${label.toLowerCase()}` : label);
   }
   if (c.load) out.push(`Tạ ${FIELD.get('load').options.find((o) => o.id === c.load)?.label}`);
