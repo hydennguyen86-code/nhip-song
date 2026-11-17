@@ -49,8 +49,8 @@ describe('recovery index', () => {
       assert.match(r.factors.find((f) => f.key === key).text, /chưa có.*2026-10-27/i);
     }
     assert.equal(r.factors.find((f) => f.key === 'resp').respState, 'missing_today');
-    const insufficient = computeRecovery({ wellness: rows({ n: 3 }), today: TODAY });
-    assert.match(insufficient.factors.find((f) => f.key === 'rhr').text, /hiện có 3/);
+    const insufficient = computeRecovery({ wellness: rows({ n: 2 }), today: TODAY });
+    assert.match(insufficient.factors.find((f) => f.key === 'rhr').text, /hiện có 2/);
   });
   test('weights are explicit and sum to 1', () => {
     const sum = Object.values(RECOVERY_WEIGHTS).reduce((a, b) => a + b, 0);
@@ -154,10 +154,12 @@ describe('recovery index', () => {
   });
 
   test('HRV gate: baseline still building, then no recent night', () => {
-    const building = computeRecovery({ wellness: rows({ n: 6 }), today: TODAY, checkin: null });
+    const building = computeRecovery({ wellness: rows({ n: 2 }), today: TODAY, checkin: null });
     assert.equal(building.hrvGate.state, 'hrv_building');
-    assert.equal(building.hrvGate.daysAvailable, 6);
-    assert.equal(building.hrvGate.nights, 7); // last night counts towards progress
+    assert.equal(building.hrvGate.daysAvailable, 2);
+    assert.equal(building.hrvGate.nights, 3); // last night counts towards progress
+    assert.equal(building.hrvGate.minDays, 3); // progress toward the provisional index
+    assert.equal(building.hrvGate.fullDays, 14);
     // First night ever entered: building, not "device sends no HRV".
     const first = rows({ n: 10 }).map((w) => (w.date === TODAY ? w : { ...w, hrv_rmssd: null }));
     const g = computeRecovery({ wellness: first, today: TODAY, checkin: null }).hrvGate;
@@ -168,6 +170,25 @@ describe('recovery index', () => {
     const r = computeRecovery({ wellness: stale, today: TODAY, checkin: null });
     assert.equal(r.hrvGate.state, 'hrv_no_recent');
     assert.equal(r.score, null);
+  });
+
+  test('new wearer: provisional index from 3 nights, full baseline from 14', () => {
+    const p3 = computeRecovery({ wellness: rows({ n: 3 }), today: TODAY, checkin: null });
+    assert.ok(p3.score != null, 'score shown from 3 nights');
+    assert.deepEqual(p3.provisional, { nights: 3, fullDays: 14 });
+    assert.equal(p3.confidence, 'thấp');
+    assert.equal(p3.factors.find((f) => f.key === 'hrv').tier, 'tạm tính');
+    assert.ok(p3.factors.find((f) => f.key === 'rhr').subscore != null, 'resting HR also provisional from 3 days');
+    assert.match(p3.note, /tạm tính/);
+    const p13 = computeRecovery({ wellness: rows({ n: 13 }), today: TODAY, checkin: null });
+    assert.ok(p13.provisional);
+    const full = computeRecovery({ wellness: rows({ n: 14 }), today: TODAY, checkin: null });
+    assert.equal(full.provisional, null);
+    assert.equal(full.factors.find((f) => f.key === 'hrv').tier, 'sơ bộ');
+    // Same drop last night moves the provisional score less (wider spread floor).
+    const dropP = computeRecovery({ wellness: rows({ n: 3, todayHrv: 60 }), today: TODAY, checkin: null }).factors.find((f) => f.key === 'hrv').z;
+    const dropF = computeRecovery({ wellness: rows({ n: 30, todayHrv: 60 }), today: TODAY, checkin: null }).factors.find((f) => f.key === 'hrv').z;
+    assert.ok(dropP < 0 && Math.abs(dropP) < Math.abs(dropF));
   });
 
   test('HRV gate holds even with an illness pattern in RHR and breathing', () => {

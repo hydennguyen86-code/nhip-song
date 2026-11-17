@@ -43,6 +43,13 @@ export const BASELINE_NEEDS = Object.freeze({
 });
 /** Minimum spread in ln(HRV): day-to-day noise of wrist rMSSD is ≥ ~7%. */
 export const HRV_LN_SPREAD_FLOOR = 0.07;
+/**
+ * New wearers: from 3 nights the app shows a PROVISIONAL index built on the
+ * nights it has, with a wider spread floor so a few nights cannot swing the
+ * z-score hard. From the full minDays (HRV 14, RHR 7) the normal baseline
+ * takes over unchanged.
+ */
+export const PROVISIONAL = Object.freeze({ minDays: 3, hrvSpreadFloor: 0.12, rhrSpreadFloor: 2 });
 /** Last night vs 7-day mean in the HRV signal. */
 export const HRV_MIX = Object.freeze({ acute: 0.6, chronic: 0.4 });
 /** Sleep performance cut-offs (obtained / need). */
@@ -129,12 +136,13 @@ export function sameHrvSource(r, src) {
 /* ------------------------------------------------------------------ RHR -- */
 
 /** Last night's resting HR vs robust 30-day baseline (median, MAD, floor 1 bpm). */
-export function rhrModel(wellness, today, { windowDays = BASELINE_NEEDS.resting_hr.windowDays, minDays = BASELINE_NEEDS.resting_hr.minDays, sickDates = null } = {}) {
+export function rhrModel(wellness, today, { windowDays = BASELINE_NEEDS.resting_hr.windowDays, minDays = BASELINE_NEEDS.resting_hr.minDays, provisionalDays = PROVISIONAL.minDays, sickDates = null } = {}) {
   const vals = priorValues(wellness, 'resting_hr', today, { windowDays, sickDates });
-  const info = { count: vals.length, minDays, windowDays };
-  if (vals.length < minDays) return { ready: false, state: 'insufficient', ...info };
+  const provisional = vals.length < minDays;
+  const info = { count: vals.length, minDays, provisionalDays: Math.min(provisionalDays, minDays), windowDays, provisional };
+  if (vals.length < info.provisionalDays) return { ready: false, state: 'insufficient', ...info };
   const st = robustStats(vals);
-  const spread = Math.max(st.spread, 1);
+  const spread = Math.max(st.spread, provisional ? PROVISIONAL.rhrSpreadFloor : 1);
   const row = rowOn(wellness, today);
   if (!row || !plausible('resting_hr', row.resting_hr)) return { ready: false, state: 'missing_today', ...info, median: st.median, spread };
   const z = (row.resting_hr - st.median) / spread;
@@ -150,10 +158,11 @@ export function rhrModel(wellness, today, { windowDays = BASELINE_NEEDS.resting_
  * Intervals.icu). SDNN is a different quantity (total variability, strongly
  * dependent on recording length) and cannot be converted to rMSSD, so it is
  * stored if a source sends it but never scored.
- * Baseline: 60 days before today (≥14 valid days), centre = median of ln,
+ * Baseline: 60 days before today (≥14 valid days; 3–13 days = provisional,
+ * spread floor 0.12), centre = median of ln,
  * spread = max(MAD-SD of ln, 0.07).
  */
-export function hrvModel(wellness, today, { windowDays = BASELINE_NEEDS.hrv_rmssd.windowDays, minDays = BASELINE_NEEDS.hrv_rmssd.minDays, sickDates = null } = {}) {
+export function hrvModel(wellness, today, { windowDays = BASELINE_NEEDS.hrv_rmssd.windowDays, minDays = BASELINE_NEEDS.hrv_rmssd.minDays, provisionalDays = PROVISIONAL.minDays, sickDates = null } = {}) {
   const field = 'hrv_rmssd';
   const name = 'rMSSD';
   // One baseline = one kind of HRV: Apple night median and Intervals.icu all-day
@@ -161,14 +170,16 @@ export function hrvModel(wellness, today, { windowDays = BASELINE_NEEDS.hrv_rmss
   const src = hrvSourceAt(wellness, today);
   wellness = wellness.map((r) => (sameHrvSource(r, src) ? r : { ...r, [field]: null }));
   const lnVals = priorValues(wellness, field, today, { windowDays, sickDates }).map(Math.log);
-  const tier = lnVals.length < minDays ? 'không đủ' : lnVals.length < 28 ? 'sơ bộ' : 'ổn định';
+  const minProvisional = Math.min(provisionalDays, minDays);
+  const provisional = lnVals.length < minDays;
+  const tier = lnVals.length < minProvisional ? 'không đủ' : provisional ? 'tạm tính' : lnVals.length < 28 ? 'sơ bộ' : 'ổn định';
   const todayHasHrv = plausible(field, rowOn(wellness, today)?.[field]);
-  const info = { field, name, daysAvailable: lnVals.length, minDays, windowDays, tier, todayHasHrv, src };
-  if (lnVals.length < minDays) return { ready: false, state: 'insufficient', ...info };
+  const info = { field, name, daysAvailable: lnVals.length, minDays, provisionalDays: minProvisional, provisional, windowDays, tier, todayHasHrv, src };
+  if (lnVals.length < minProvisional) return { ready: false, state: 'insufficient', ...info };
 
   const st = robustStats(lnVals);
   const center = st.median;
-  const spread = Math.max(st.spread, HRV_LN_SPREAD_FLOOR);
+  const spread = Math.max(st.spread, provisional ? PROVISIONAL.hrvSpreadFloor : HRV_LN_SPREAD_FLOOR);
   const byDate = new Map(wellness.map((r) => [r.date, r]));
 
   const todayRow = byDate.get(today);

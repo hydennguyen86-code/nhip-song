@@ -13,8 +13,13 @@
  *   - respiratory rate is a one-sided illness flag, never points. Breathing up
  *     together with RHR up or HRV down caps the index at 50.
  *
- * HRV is REQUIRED. Without a usable ln(rMSSD) signal (no device HRV, baseline
- * still building, or no recent nights) there is no index and no training
+ * New wearers: from 3 nights before today the index is PROVISIONAL (baseline
+ * from the nights available, wider spread floor, confidence "thấp", green
+ * band's strain target held to "Tập vừa"). At 14 nights the full baseline
+ * takes over unchanged.
+ *
+ * HRV is REQUIRED. Without a usable ln(rMSSD) signal (no device HRV, fewer
+ * than 3 nights, or no recent nights) there is no index and no training
  * advice: resting HR and sleep alone are not sensitive enough to clear a
  * person for hard training, so the app says so instead of guessing.
  * The result then carries `needsHrv: true` and `hrvGate` for the UI.
@@ -47,7 +52,7 @@ const ACTIONS = {
   rest: 'Nghỉ hoàn toàn. Ngủ sớm hơn 45 phút, uống đủ nước, ăn nhẹ.',
   unknown: 'Chưa đủ dữ liệu. Hãy đồng bộ hoặc nhập tay số hôm nay, hoặc ghi cảm giác.',
   no_device_hrv: 'Không có lời khuyên. App cần HRV rMSSD mỗi đêm; thiết bị không đo HRV thì không dùng được Nhịp Sống.',
-  hrv_building: 'Chưa có lời khuyên. Cứ đeo khi ngủ và đồng bộ mỗi sáng cho đến khi đủ nền HRV.',
+  hrv_building: 'Chưa có lời khuyên. Cứ đeo khi ngủ và đồng bộ mỗi sáng; đủ 3 đêm HRV là có chỉ số tạm tính.',
   hrv_no_recent: 'Chưa có lời khuyên hôm nay vì thiếu HRV đêm qua. Hãy đồng bộ lại hoặc nhập tay HRV.',
   emergency: 'Dừng buổi tập. Gọi 115 hoặc đến khoa cấp cứu gần nhất.',
 };
@@ -91,13 +96,15 @@ function bandFor(score) {
  */
 export function hrvGateOf(hrv) {
   const nights = hrv.daysAvailable + (hrv.todayHasHrv ? 1 : 0);
+  // Progress bar counts toward the first (provisional) index, not the full baseline.
+  const need = hrv.provisionalDays ?? hrv.minDays;
   const state = nights === 0 ? 'no_device_hrv' : hrv.state === 'insufficient' ? 'hrv_building' : 'hrv_no_recent';
   const text = {
     no_device_hrv: `Chưa có đêm HRV rMSSD nào trong ${hrv.windowDays} ngày. Nhịp Sống chỉ kết luận khi có HRV, vì đây là tín hiệu chính của thuật toán; nhịp tim nghỉ và giấc ngủ một mình không đủ nhạy để cho phép tập nặng. Thiết bị không đo HRV (Mi Band, Xiaomi Smart Band 10 trở về trước) không dùng được app này. Với HUAWEI: đồng bộ qua Health Sync lên Intervals.icu để có HRV rMSSD.`,
-    hrv_building: `Đang dựng nền HRV: đã có ${nights} đêm rMSSD, cần ${hrv.minDays} đêm trước hôm nay. Đủ thì app bắt đầu kết luận.`,
+    hrv_building: `Đang dựng nền HRV: đã có ${nights} đêm rMSSD. Có ${need} đêm trước hôm nay là app cho chỉ số tạm tính; đủ ${hrv.minDays} đêm thì dùng mức nền đầy đủ.`,
     hrv_no_recent: 'Đã có nền HRV nhưng thiếu HRV đêm qua và chưa đủ 3 đêm trong 7 ngày gần nhất, nên hôm nay không kết luận.',
   }[state];
-  return { state, nights, daysAvailable: hrv.daysAvailable, minDays: hrv.minDays, windowDays: hrv.windowDays, text };
+  return { state, nights, daysAvailable: hrv.daysAvailable, minDays: need, fullDays: hrv.minDays, windowDays: hrv.windowDays, text };
 }
 
 function factorBase(key, label) {
@@ -175,6 +182,7 @@ export function computeRecovery({ wellness, today, checkin, settings = DEFAULT_S
       if (hrv.acute) parts.push(`đêm qua ${hrv.acute.value.toFixed(0)} ms (${signed(hrv.acute.z)}σ)`);
       if (hrv.chronic) parts.push(`TB ${hrv.chronic.count} ngày ${hrv.chronic.value.toFixed(0)} ms (${signed(hrv.chronic.z)}σ, ${hrv.chronicState === 'inside' ? 'trong SWC' : hrv.chronicState === 'below' ? 'dưới SWC' : 'trên SWC'})`);
       let text = `HRV ${hrv.name}: ${parts.join('; ')}. Nền ${hrv.baselineMs.toFixed(0)} ms, vùng thay đổi nhỏ nhất có ý nghĩa ${hrv.swc.low.toFixed(0)}–${hrv.swc.high.toFixed(0)} ms (${hrv.daysAvailable} ngày, ${hrv.tier}).`;
+      if (hrv.provisional) text += ` Mức nền tạm tính từ ${hrv.daysAvailable} đêm; đủ ${hrv.minDays} đêm sẽ dùng mức nền đầy đủ.`;
       if (hrv.cv7?.high) text += ` HRV dao động mạnh bất thường 7 ngày qua (CV ${hrv.cv7.value.toFixed(0)}% so với thường ${hrv.cv7.typical.toFixed(0)}%).`;
       if (suspectHigh) text += ` HRV đêm qua cao bất thường so với nền (z ${signed(alerts.hrvHighZ)} > ${ALERT_RULES.hrvHighZ}), nên không được cộng điểm.`;
       factors.push({
@@ -188,6 +196,7 @@ export function computeRecovery({ wellness, today, checkin, settings = DEFAULT_S
         word: hrv.z >= 0.5 ? 'tốt hơn nền' : hrv.z <= -0.5 ? 'thấp hơn nền' : 'trong khoảng nền',
         text,
         tier: hrv.tier,
+        provisional: Boolean(hrv.provisional),
         cvHigh: Boolean(hrv.cv7?.high),
         suspectHigh,
       });
@@ -214,14 +223,14 @@ export function computeRecovery({ wellness, today, checkin, settings = DEFAULT_S
         subscore: sub,
         status: rhr.z <= -0.5 ? 'good' : rhr.z >= 0.5 ? 'bad' : 'neutral',
         word,
-        text: `Nhịp tim nghỉ ${Math.round(rhr.value)} bpm so với trung vị ${Math.round(rhr.median)} bpm (${signed(rhr.z)}σ, ${rhr.count} ngày) — ${word}.`,
+        text: `Nhịp tim nghỉ ${Math.round(rhr.value)} bpm so với trung vị ${Math.round(rhr.median)} bpm (${signed(rhr.z)}σ, ${rhr.count} ngày${rhr.provisional ? `, tạm tính đến khi đủ ${rhr.minDays} ngày` : ''}) — ${word}.`,
       });
     } else {
       factors.push({
         ...factorBase('rhr', 'Nhịp tim nghỉ'),
         status: 'missing',
         text: rhr.state === 'insufficient'
-          ? `Cần ≥7 ngày nhịp tim nghỉ trong 30 ngày nền (hiện có ${rhr.count}).`
+          ? `Cần ≥${rhr.provisionalDays} ngày nhịp tim nghỉ trong 30 ngày nền (hiện có ${rhr.count}).`
           : `Đã có ${rhr.count} ngày nền, nhưng chưa có nhịp tim nghỉ cho ngày ${today}.`,
       });
     }
@@ -324,6 +333,9 @@ export function computeRecovery({ wellness, today, checkin, settings = DEFAULT_S
   let confidence = used.length >= 3 ? 'cao' : used.length === 2 ? 'vừa' : 'thấp';
   const hrvUsed = used.find((f) => f.key === 'hrv');
   if (confidence === 'cao' && hrvUsed && hrvUsed.tier === 'sơ bộ') confidence = 'vừa';
+  // A baseline of a few nights can only support a low-confidence index.
+  const provisional = hrv.provisional ? { nights: hrv.daysAvailable, fullDays: hrv.minDays } : null;
+  if (provisional) confidence = 'thấp';
   const top = ranked[0];
   const explanation = top
     ? `${top.label} ${top.contribution >= 0 ? 'kéo điểm lên' : 'kéo điểm xuống'} ${Math.abs(top.contribution)} điểm so với mốc 50.`
@@ -344,8 +356,11 @@ export function computeRecovery({ wellness, today, checkin, settings = DEFAULT_S
     illness,
     alerts,
     explanation,
+    provisional,
     weights: RECOVERY_WEIGHTS,
-    note: 'Chỉ số tham khảo, công thức công khai: HRV ln (đêm qua + 7 ngày), nhịp tim nghỉ so trung vị, giấc ngủ so với nhu cầu. Nhịp thở là cờ cảnh báo, không cộng điểm. Không phải thuật toán WHOOP, không phải thiết bị y tế.',
+    note: provisional
+      ? `Chỉ số tạm tính: mức nền mới có ${provisional.nights} đêm HRV. Đủ ${provisional.fullDays} đêm thì app tự chuyển sang mức nền đầy đủ như bình thường. Trong lúc này chưa khuyên tập nặng.`
+      : 'Chỉ số tham khảo, công thức công khai: HRV ln (đêm qua + 7 ngày), nhịp tim nghỉ so trung vị, giấc ngủ so với nhu cầu. Nhịp thở là cờ cảnh báo, không cộng điểm. Không phải thuật toán WHOOP, không phải thiết bị y tế.',
   };
 }
 

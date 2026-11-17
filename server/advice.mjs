@@ -230,7 +230,10 @@ export function buildAdvice({ user, today, wellness, activities = [], checkin, s
     const which = flags.sleep ? 'Ngủ chưa đủ nhu cầu' : flags.resp ? 'Nhịp thở tăng bất thường' : 'Một chỉ số lệch nền';
     return finalize(VERDICT.EASE, LABEL[VERDICT.EASE], `${which} — buổi tập nên nhẹ hơn dự kiến.`, reasons, gaps, extra);
   }
-  return finalize(VERDICT.PLAN, LABEL[VERDICT.PLAN], 'Các chỉ số trong khoảng nền cá nhân, ngủ đủ nhu cầu.', reasons, gaps, extra);
+  const planHead = hrv.provisional
+    ? `Các chỉ số trong khoảng nền tạm tính (${hrv.daysAvailable}/${hrv.minDays} đêm HRV) — giữ vừa sức cho đến khi đủ mức nền.`
+    : 'Các chỉ số trong khoảng nền cá nhân, ngủ đủ nhu cầu.';
+  return finalize(VERDICT.PLAN, LABEL[VERDICT.PLAN], planHead, reasons, gaps, extra);
 }
 
 function finalize(verdict, label, headline, reasons, gaps, extra) {
