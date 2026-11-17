@@ -336,7 +336,8 @@ async function route(req, res) {
     sleepDetail.consistency = sleepConsistency(listNights(db, req.user.id, addDays(today, -10), today), today);
     const hrvRow = db.prepare('SELECT hrv, hrv_method, hrv_n FROM apple_daily WHERE user_id = ? AND date = ?').get(req.user.id, today);
     sleepDetail.hrvNight = hrvRow?.hrv != null ? { value: hrvRow.hrv, method: hrvRow.hrv_method || 'window', n: hrvRow.hrv_n || 0 } : null;
-    const strain = buildStrain({ activities, today, band: recovery.band });
+    // Provisional index (few nights of baseline): never a "train hard" target.
+    const strain = buildStrain({ activities, today, band: recovery.provisional && recovery.band === 'green' ? 'yellow' : recovery.band });
     const hrvSource = hrvSourceInfo(db, req.user.id, today);
     sleepDetail.appleFields = todayRow?._apple || [];
 

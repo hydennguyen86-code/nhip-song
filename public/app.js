@@ -731,6 +731,7 @@ function heroCard(d) {
     ${trend7(d.history)}
     ${emergency && d.advice.emergency?.show ? `<div class="emergency-box">${esc(d.advice.emergency.text)}</div>` : ''}
     ${r.capped ? `<div class="cap-note">Điểm bị giới hạn vì ${esc(r.capped)}. Cảm giác của bạn thắng đồng hồ.</div>` : ''}
+    ${r.provisional ? `<div class="cap-note">Chỉ số tạm tính từ ${r.provisional.nights} đêm HRV. Đủ ${r.provisional.fullDays} đêm app tự dùng mức nền đầy đủ.</div>` : ''}
     <div class="hero-foot">
       <span>${r.used}/${r.total} yếu tố · tin cậy ${esc(r.confidence)}</span>
       <span>${d.data.days} ngày dữ liệu</span>
@@ -1350,6 +1351,7 @@ async function renderToday(view) {
 
 function subline(d) {
   const b = d.recovery?.band;
+  if (d.recovery?.provisional && (b === 'green' || b === 'yellow' || b === 'red')) return `Chỉ số tạm tính (${d.recovery.provisional.nights}/${d.recovery.provisional.fullDays} đêm) — tập vừa sức trong lúc app làm quen với bạn.`;
   if (b === 'green') return 'Cơ thể sẵn sàng — một ngày tốt để vận động.';
   if (b === 'yellow') return 'Một ngày mới, một cơ hội để sống khỏe hơn.';
   if (b === 'red') return 'Hôm nay ưu tiên nghỉ ngơi và hồi phục.';
