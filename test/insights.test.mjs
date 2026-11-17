@@ -36,7 +36,7 @@ function plantedWorld({ days = 140 } = {}) {
     const date = addDays(start, i);
     const isLeg = i % 7 === 3;
     const isChest = i % 7 === 0 || i % 7 === 5;
-    contexts.set(date, isLeg ? { workout: ['leg'], load: 'le50' } : isChest ? { workout: ['chest_back'] } : { workout: ['rest'], coffee_cups: 2 });
+    contexts.set(date, isLeg ? { workout: ['leg'], load: 'le50' } : isChest ? { workout: ['chest_triceps'] } : { workout: ['rest'], coffee_cups: 2 });
     const prevLeg = (i - 1) % 7 === 3;
     const prev2Leg = (i - 2) % 7 === 3;
     let hrv = 60 * Math.exp(0.05 * noise(i, 3));
@@ -49,6 +49,10 @@ function plantedWorld({ days = 140 } = {}) {
 }
 
 describe('daily context', () => {
+  test('historical gym splits map to the current schedule', () => {
+    assert.deepEqual(normalizeContext({ workout: ['chest_back', 'shoulder_arm', 'chest_triceps'] }), { workout: ['chest_triceps', 'back_biceps'] });
+    assert.deepEqual(contextLabels({ workout: ['chest_back', 'shoulder_arm'] }), ['Tập ngực / tay sau', 'Tập lưng / tay trước']);
+  });
   test('valid context is normalized, empties dropped', () => {
     const c = normalizeContext({ workout: ['leg'], load: 'le50', sauna: 'evening', coffee_cups: 2, coffee_late: false, bedtime: '23:45', work_stress: 1, alcohol: '' });
     assert.deepEqual(c, { workout: ['leg'], load: 'le50', sauna: 'evening', coffee_cups: 2, bedtime: '23:45', work_stress: 1 });
@@ -112,7 +116,7 @@ describe('pattern engine', () => {
   test('a factor without a real effect is not called clear, even when it follows leg days', () => {
     const { contexts, wellness } = plantedWorld();
     const p = computePatterns({ wellness, contexts, today: TODAY });
-    const chest = p.factors.find((f) => f.id === 'chest_back');
+    const chest = p.factors.find((f) => f.id === 'chest_triceps');
     assert.ok(chest);
     assert.notEqual(chest.confidence, 'clear', chest.summary);
     assert.ok(Math.abs(chest.lags[0].hrv.swc) < 1, chest.summary);
@@ -140,12 +144,12 @@ describe('pattern engine', () => {
     for (let i = 0; i <= 140; i++) {
       const w = i % 7;
       // shoulders always exactly 2 days before legs → "leg 1 day ago" == "shoulders 3 days ago"
-      contexts.set(addDays(start, i), w === 3 ? { workout: ['leg'] } : w === 1 ? { workout: ['shoulder_arm'] } : { workout: ['rest'] });
+      contexts.set(addDays(start, i), w === 3 ? { workout: ['leg'] } : w === 1 ? { workout: ['back_biceps'] } : { workout: ['rest'] });
     }
     const p = computePatterns({ wellness, contexts, today: TODAY });
     const leg = p.factors.find((f) => f.id === 'leg');
     assert.ok(leg.inseparable, leg.summary);
-    assert.equal(leg.inseparable.id, 'shoulder_arm');
+    assert.equal(leg.inseparable.id, 'back_biceps');
     assert.equal(leg.confidence, 'unclear');
     assert.match(leg.summary, /Chưa tách được/);
   });
@@ -438,7 +442,7 @@ describe('dose factors', () => {
 
   test('watch activities: Padel = pickleball with load and minutes, stray < 10 min recordings ignored, gym load shared by ticked parts', () => {
     const days = buildDayFacts({
-      contexts: new Map([['2026-10-03', { workout: ['leg', 'shoulder_arm'] }]]),
+      contexts: new Map([['2026-10-03', { workout: ['leg', 'back_biceps'] }]]),
       activities: [
         { start_date_local: '2026-10-02T17:49:00', type: 'Padel', moving_time: 95, training_load: 0 },
         { start_date_local: '2026-10-02T17:52:00', type: 'Padel', moving_time: 4200, training_load: 36 },

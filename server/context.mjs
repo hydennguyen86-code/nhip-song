@@ -14,9 +14,9 @@ export const CONTEXT_FIELDS = Object.freeze([
   {
     id: 'workout', label: 'Buổi tập', type: 'multi',
     options: [
+      { id: 'back_biceps', label: 'Lưng / Tay trước' },
+      { id: 'chest_triceps', label: 'Ngực / Tay sau' },
       { id: 'leg', label: 'Chân' },
-      { id: 'chest_back', label: 'Ngực / Lưng' },
-      { id: 'shoulder_arm', label: 'Vai / Tay' },
       { id: 'gym_full', label: 'Gym toàn thân' },
       { id: 'pickleball', label: 'Pickleball' },
       { id: 'run', label: 'Chạy bộ' },
@@ -45,6 +45,12 @@ export const CONTEXT_FIELDS = Object.freeze([
   { id: 'symptom', label: 'Có cơn tê / run sau tập', type: 'bool', private: true },
 ]);
 
+// Historical splits follow the user's current training schedule.
+const WORKOUT_ALIAS = { chest_back: 'chest_triceps', shoulder_arm: 'back_biceps' };
+const workoutId = (id) => WORKOUT_ALIAS[id] || id;
+const canonicalContext = (c) => c && Array.isArray(c.workout)
+  ? { ...c, workout: [...new Set(c.workout.map(workoutId))] } : c;
+
 const FIELD = new Map(CONTEXT_FIELDS.map((f) => [f.id, f]));
 export const PRIVATE_FIELDS = Object.freeze(CONTEXT_FIELDS.filter((f) => f.private).map((f) => f.id));
 
@@ -60,7 +66,7 @@ export function normalizeContext(input) {
     switch (f.type) {
       case 'multi': {
         if (!Array.isArray(v)) throw new Error(`${f.label}: cần danh sách.`);
-        const ids = [...new Set(v.map(String))];
+        const ids = [...new Set(v.map((id) => workoutId(String(id))))];
         for (const id of ids) if (!f.options.some((o) => o.id === id)) throw new Error(`${f.label}: "${id}" không hợp lệ.`);
         if (ids.includes('rest') && ids.length > 1) throw new Error('Đã chọn "Nghỉ" thì không chọn buổi tập khác.');
         if (ids.length) out[k] = ids;
@@ -111,20 +117,20 @@ export function saveContext(db, userId, date, data, { today } = {}) {
 
 export function getContext(db, userId, date) {
   const row = db.prepare('SELECT data FROM daily_context WHERE user_id = ? AND date = ?').get(userId, date);
-  return row ? JSON.parse(row.data) : null;
+  return row ? canonicalContext(JSON.parse(row.data)) : null;
 }
 
 /** Map date → context object, oldest first. */
 export function listContexts(db, userId, oldest, newest) {
   const rows = db.prepare('SELECT date, data FROM daily_context WHERE user_id = ? AND date BETWEEN ? AND ? ORDER BY date').all(userId, oldest, newest);
-  return new Map(rows.map((r) => [r.date, JSON.parse(r.data)]));
+  return new Map(rows.map((r) => [r.date, canonicalContext(JSON.parse(r.data))]));
 }
 
 /* ---------------------------------------------------------- factors -- */
 
 const bedMinutes = (t) => { const [h, m] = String(t).split(':').map(Number); const mins = h * 60 + m; return mins < 5 * 60 ? mins + 24 * 60 : mins; };
-const hasWorkout = (c, id) => Array.isArray(c.workout) && c.workout.includes(id);
-const GYM_PARTS = ['leg', 'chest_back', 'shoulder_arm', 'gym_full'];
+const hasWorkout = (c, id) => Array.isArray(c.workout) && c.workout.some((value) => workoutId(value) === id);
+const GYM_PARTS = ['leg', 'back_biceps', 'chest_triceps', 'gym_full'];
 /** Watch load of a gym day, shared between the body parts ticked that day. */
 const gymShare = (c) => {
   if (!(c._gym_load > 0)) return null;
@@ -166,9 +172,9 @@ const watchSport = (id, label, kind, unit = 'load') => ({
  * counts at the usual dose. `minutes(c)` is only for the summary text.
  */
 export const FACTORS = Object.freeze([
+  { id: 'back_biceps', label: 'Tập lưng / tay trước', source: 'context', test: (c) => hasWorkout(c, 'back_biceps'), dose: gymShare, minutes: gymMinShare, unit: 'load' },
+  { id: 'chest_triceps', label: 'Tập ngực / tay sau', source: 'context', test: (c) => hasWorkout(c, 'chest_triceps'), dose: gymShare, minutes: gymMinShare, unit: 'load' },
   { id: 'leg', label: 'Tập chân', source: 'context', test: (c) => hasWorkout(c, 'leg'), dose: gymShare, minutes: gymMinShare, unit: 'load' },
-  { id: 'chest_back', label: 'Tập ngực / lưng', source: 'context', test: (c) => hasWorkout(c, 'chest_back'), dose: gymShare, minutes: gymMinShare, unit: 'load' },
-  { id: 'shoulder_arm', label: 'Tập vai / tay', source: 'context', test: (c) => hasWorkout(c, 'shoulder_arm'), dose: gymShare, minutes: gymMinShare, unit: 'load' },
   { id: 'gym_full', label: 'Gym toàn thân', source: 'context', test: (c) => hasWorkout(c, 'gym_full'), dose: gymShare, minutes: gymMinShare, unit: 'load' },
   watchSport('pickleball', 'Pickleball', 'racket'),
   watchSport('run', 'Chạy bộ', 'run'),
@@ -255,7 +261,7 @@ const LEGACY_TAG = {
 export function buildDayFacts({ contexts = new Map(), checkins = [], activities = [], bedtimes = new Map() }) {
   const days = new Map();
   const get = (d) => { if (!days.has(d)) days.set(d, { _logged: false }); return days.get(d); };
-  for (const [date, c] of contexts) Object.assign(get(date), c, { _logged: true });
+  for (const [date, c] of contexts) Object.assign(get(date), canonicalContext(c), { _logged: true });
   // Bedtime measured by the watch (Apple Health) when not typed in: no more hand entry.
   for (const [date, b] of bedtimes) {
     const t = typeof b === 'string' ? b : b?.bedtime;
@@ -300,6 +306,7 @@ export function buildDayFacts({ contexts = new Map(), checkins = [], activities 
 /** Short Vietnamese labels for one day's context (for UI lists and the AI packet). Never includes private fields. */
 export function contextLabels(c) {
   if (!c) return [];
+  c = canonicalContext(c);
   const out = [];
   const wf = FIELD.get('workout');
   if (Array.isArray(c.workout)) for (const id of c.workout) {

@@ -1270,10 +1270,11 @@ async function renderTrends(view) {
     d.setDate(d.getDate() - (range - 1 - i));
     return d.toISOString().slice(0, 10);
   });
-  const [trend, dash, baseline] = await Promise.all([
+  const [trend, dash, baseline, body] = await Promise.all([
     api(`/api/trends?days=${range}`),
     api(`/api/dashboard?history=${range}`),
     api('/api/baseline'),
+    api('/api/body').catch(() => null),
   ]);
   const byDate = new Map(trend.wellness.map((w) => [w.date, w]));
   const series = (field, scale = 1) => days.map((d) => {
@@ -1311,10 +1312,104 @@ async function renderTrends(view) {
         ${lineChart(series(def.field, def.scale || 1), { color: def.color, unit: def.unit, digits: def.digits })}
       </div>`).join('')}
     </div>
-    ${baselineCard(baseline)}`;
+    ${baselineCard(baseline)}
+    ${bodyCard(body)}`;
+  attachBodyCard(view, body);
   view.querySelectorAll('#rangeRow button').forEach((b) => {
     b.onclick = () => { state.trendsRange = Number(b.dataset.d); renderView(); };
   });
+}
+
+/* ---------------- body composition (weekly smart scale) ---------------- */
+const Z_SEGMENTS = [['ra', 'Tay phải'], ['la', 'Tay trái'], ['tr', 'Thân'], ['rl', 'Chân phải'], ['ll', 'Chân trái']];
+const BODY_MAIN = ['weight', 'fat_pct', 'skeletal_kg', 'lean_kg'];
+function bodyCard(b) {
+  if (!b) return '';
+  const s = b.summary || {};
+  const F = Object.fromEntries(b.fields.map((f) => [f.col, f]));
+  const rows = [...b.rows].sort((x, y) => (x.date < y.date ? 1 : -1));
+  const chg = (col) => {
+    const c = s.change?.[col];
+    if (c == null) return '';
+    return `<span class="type-note">${c > 0 ? '+' : c < 0 ? '−' : ''}${fmtNum(Math.abs(c), F[col].digits)} so với ${s.weeksApart} tuần trước</span>`;
+  };
+  const stat = (col) => {
+    const f = F[col];
+    const v = s.recent?.[col];
+    return `<div class="body-stat"><span class="k">${esc(f.label)}</span><b>${v == null ? '—' : fmtNum(v, f.digits)}<small> ${esc(f.unit)}</small></b>${chg(col)}</div>`;
+  };
+  const chartCol = rows.some((r) => r.skeletal_kg != null) ? 'skeletal_kg' : rows.some((r) => r.lean_kg != null) ? 'lean_kg' : 'weight';
+  const series = [...rows].reverse().filter((r) => r.standard && r[chartCol] != null).map((r) => ({ date: r.date, value: r[chartCol] }));
+  const chip = s.last
+    ? `<span class="confidence-chip ${s.due ? 'amber' : 'green'}">${s.due ? 'đến lúc đo' : `đo ${esc(fmtShort(s.last.date))}`}</span>`
+    : '<span class="confidence-chip amber">chưa đo</span>';
+  const src = (r) => ({ manual: 'nhập tay', apple: 'Apple Health', 'manual+apple': 'tay + Apple' })[r.source] || '—';
+  const table = rows.length
+    ? `<div class="table-wrap"><table class="compare-table body-table"><thead><tr><th>Ngày</th><th class="num">Cân</th><th class="num">Mỡ %</th><th class="num">Cơ xương</th><th>Nguồn</th></tr></thead><tbody>
+        ${rows.slice(0, 10).map((r) => `<tr data-body-row="${esc(r.date)}" class="${r.standard ? '' : 'muted'}"><td class="nowrap">${esc(fmtShort(r.date))}${r.standard ? '' : ' <small>(ngoài điều kiện)</small>'}</td><td class="num">${fmtNum(r.weight, 1)}</td><td class="num">${fmtNum(r.fat_pct, 1)}</td><td class="num">${fmtNum(r.skeletal_kg, 1)}</td><td class="small">${src(r)}</td></tr>`).join('')}
+      </tbody></table></div><div class="hint">Chạm một dòng để sửa.</div>`
+    : '';
+  const fieldHtml = (f) => `<label class="field manual-field"><span>${esc(f.label)} <small>(${esc(f.unit)})</small></span><input data-body-col="${f.col}" type="number" min="${f.min}" max="${f.max}" step="any" inputmode="decimal"></label>`;
+  const zGrid = `<table class="z-grid"><thead><tr><th></th>${Z_SEGMENTS.map(([, n]) => `<th>${n}</th>`).join('')}</tr></thead><tbody>
+      ${['z20', 'z100'].map((fq) => `<tr><th>${fq === 'z20' ? '20 kHz' : '100 kHz'}</th>${Z_SEGMENTS.map(([k, n]) => `<td><input data-body-z="${fq}.${k}" type="number" step="any" inputmode="decimal" aria-label="${n} ${fq}"></td>`).join('')}</tr>`).join('')}
+    </tbody></table>`;
+  return `<div class="card" style="margin-top:14px" data-body>
+    <div class="card-head"><div><div class="eyebrow">Cân thành phần cơ thể · mỗi tuần</div><h3>Thành phần cơ thể</h3></div>${chip}</div>
+    ${s.recent ? `<div class="body-stats">${BODY_MAIN.map(stat).join('')}</div><div class="hint" style="margin:6px 0 10px">Trung bình ${s.recent.n} lần đo đúng điều kiện gần nhất, không phải một lần đo lẻ.</div>` : ''}
+    ${(s.messages || []).map((m) => `<p class="body-msg ${s.state === 'changed' ? 'is-changed' : ''}">${esc(m)}</p>`).join('')}
+    ${s.protein ? `<p class="body-msg">Đạm mục tiêu khoảng <b>${fmtNum(s.protein.gPerDay)} g/ngày</b> (1,6 g × ${fmtNum(s.protein.weight, 1)} kg). Ăn nhiều hơn mức này không giúp tăng cơ thêm; chia đều cho các bữa trong ngày.</p>` : ''}
+    ${series.length >= 2 ? `<div class="chart-head" style="margin-top:8px"><div class="chart-title">${esc(F[chartCol].label)} qua các lần đo</div></div>${lineChart(series, { color: '#a99bff', unit: 'kg', digits: 1 })}` : ''}
+    ${table}
+    <div class="manual-actions" style="margin-top:10px"><button class="btn primary small" type="button" data-body-new>Nhập lần đo</button></div>
+    <form class="manual-form body-form" data-body-form hidden novalidate>
+      <div class="manual-who"><label class="field"><span>Ngày đo</span><input data-body-date type="date" max="${esc(b.today)}" required></label></div>
+      <div class="manual-fields">${b.fields.map(fieldHtml).join('')}</div>
+      <label class="check-label body-check"><input type="checkbox" data-body-standard checked> Đo đúng điều kiện: buổi sáng, sau khi đi vệ sinh, trước khi ăn uống, không ngay sau xông hơi hay tập</label>
+      <details class="body-z"><summary>Trở kháng gốc Z (Ω), cuối bảng báo cáo · không bắt buộc</summary>${zGrid}<div class="hint">Đây là số cân đo thật; cơ và mỡ là kết quả tính từ các số này.</div></details>
+      <label class="field"><span>Ghi chú</span><input data-body-note type="text" maxlength="200" placeholder="ví dụ: tối qua uống bia"></label>
+      <div class="manual-actions"><button class="btn primary small" type="submit">Lưu lần đo</button><button class="btn small ghost" type="button" data-body-cancel>Đóng</button><button class="btn small ghost" type="button" data-body-delete hidden>Xoá lần đo này</button></div>
+    </form>
+    <div class="hint" style="margin-top:10px">Nếu cân đồng bộ được sang Apple Health, phím tắt sẽ tự gửi cân nặng, % mỡ và khối không mỡ; số nhập tay luôn được ưu tiên. Chỉ cần nhập tay phần còn lại (cơ xương, mỡ nội tạng, trở kháng).</div>
+  </div>`;
+}
+
+function attachBodyCard(view, b) {
+  const card = view.querySelector('[data-body]');
+  if (!card) return;
+  const form = card.querySelector('[data-body-form]');
+  const delBtn = form.querySelector('[data-body-delete]');
+  const fill = (date) => {
+    const r = b.rows.find((x) => x.date === date) || {};
+    form.querySelector('[data-body-date]').value = date;
+    form.querySelectorAll('[data-body-col]').forEach((el) => { const v = r[el.dataset.bodyCol]; el.value = v == null ? '' : v; });
+    form.querySelectorAll('[data-body-z]').forEach((el) => { const [fq, k] = el.dataset.bodyZ.split('.'); const v = r.impedance?.[fq]?.[k]; el.value = v == null ? '' : v; });
+    form.querySelector('[data-body-standard]').checked = r.standard !== false;
+    form.querySelector('[data-body-note]').value = r.note || '';
+    delBtn.hidden = !r.date;
+    form.hidden = false;
+    form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  };
+  card.querySelector('[data-body-new]').onclick = () => fill(b.today);
+  form.querySelector('[data-body-date]').onchange = (e) => fill(e.target.value);
+  card.querySelectorAll('[data-body-row]').forEach((tr) => { tr.style.cursor = 'pointer'; tr.onclick = () => fill(tr.dataset.bodyRow); });
+  form.querySelector('[data-body-cancel]').onclick = () => { form.hidden = true; };
+  delBtn.onclick = async () => {
+    const date = form.querySelector('[data-body-date]').value;
+    if (!confirm(`Xoá lần đo ngày ${fmtDate(date)}?`)) return;
+    try { await api(`/api/body?date=${encodeURIComponent(date)}`, { method: 'DELETE' }); toastMsg('Đã xoá.'); renderView(); }
+    catch (e) { toastMsg(e.message); }
+  };
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    const data = { standard: form.querySelector('[data-body-standard]').checked, note: form.querySelector('[data-body-note]').value, impedance: {} };
+    form.querySelectorAll('[data-body-col]').forEach((el) => { data[el.dataset.bodyCol] = el.value === '' ? null : el.value; });
+    form.querySelectorAll('[data-body-z]').forEach((el) => { if (el.value === '') return; const [fq, k] = el.dataset.bodyZ.split('.'); (data.impedance[fq] ||= {})[k] = el.value; });
+    try {
+      await api('/api/body', { method: 'POST', body: { date: form.querySelector('[data-body-date]').value, data } });
+      toastMsg('Đã lưu lần đo.');
+      renderView();
+    } catch (err) { toastMsg(err.message); }
+  };
 }
 
 function baselineCard(b) {
@@ -1456,7 +1551,7 @@ function attachContext(view) {
     let body = '';
     if (f.type === 'multi' || f.type === 'choice') {
       const sel = f.type === 'multi' ? (Array.isArray(v) ? v : []) : (v == null ? [] : [v]);
-      body = `<div class="ctx-chips">${(f.options || []).map((o) => `<button type="button" class="ctx-chip ${sel.includes(o.id) ? 'selected' : ''}" data-f="${esc(f.id)}" data-opt="${esc(o.id)}" aria-pressed="${sel.includes(o.id)}">${esc(o.label)}</button>`).join('')}</div>`;
+      body = `<div class="ctx-chips">${(f.options || []).filter((o) => !o.legacy || sel.includes(o.id)).map((o) => `<button type="button" class="ctx-chip ${sel.includes(o.id) ? 'selected' : ''}" data-f="${esc(f.id)}" data-opt="${esc(o.id)}" aria-pressed="${sel.includes(o.id)}">${esc(o.label)}</button>`).join('')}</div>`;
     } else if (f.type === 'count') {
       const min = f.min ?? 0, max = f.max ?? 99;
       body = `<div class="ctx-stepper"><button type="button" data-f="${esc(f.id)}" data-step="-1" aria-label="Giảm">−</button><output>${v ?? min}</output><button type="button" data-f="${esc(f.id)}" data-step="1" aria-label="Tăng">+</button></div>`;
@@ -1885,6 +1980,19 @@ function pairCell(pair, digits = 0, cls = '') {
   const off = i != null && a != null && Math.abs(i - a) > Math.max(Math.abs(i) * 0.1, digits ? 0.3 : 1);
   return `<td class="num ${cls} ${off ? 'pair-off' : ''}">${f(i)}<span class="pair-sep">/</span>${f(a)}</td>`;
 }
+function hrvTrialHtml(c) {
+  const t = c.hrvTrial;
+  if (!t || !c.days.some((d) => d.hrv3 && (d.hrv3.deep != null || d.hrv3.sleep != null))) return '';
+  const cell = (v, n) => (v == null ? '<td class="num muted">—</td>' : `<td class="num">${fmtNum(v, 1)}${n ? `<span class="type-note"> ${n} lần</span>` : ''}</td>`);
+  const row = (label, x) => `<div class="set-row"><span class="k">${label}</span><span class="v">${x.noise == null ? 'chưa đủ đêm' : `dao động đêm-qua-đêm ±${fmtNum(x.noise * 100, 0)}%`}<span class="type-note">trung vị ${x.median == null ? '—' : fmtNum(x.median, 1)} ms${x.readings ? ` · ${fmtNum(x.readings, 0)} lần đo/đêm` : ''}</span></span></div>`;
+  return `<div class="divider"></div>
+    <div class="eyebrow" style="margin-bottom:6px">Thử nghiệm 3 cách tính HRV</div>
+    <div class="table-wrap"><table class="compare-table"><thead><tr><th>Ngày</th><th class="num">Intervals</th><th class="num">Ngủ sâu</th><th class="num">Cả giấc ngủ</th></tr></thead><tbody>
+      ${c.days.map((d) => `<tr><td class="nowrap">${esc(fmtShort(d.date))}</td>${cell(d.hrv3.icu)}${cell(d.hrv3.deep, d.hrv3.deepN)}${cell(d.hrv3.sleep, d.hrv3.sleepN)}</tr>`).join('')}
+    </tbody></table></div>
+    <div class="compare-stats">${row('Intervals', t.icu)}${row('Ngủ sâu', t.deep)}${row('Cả giấc ngủ', t.sleep)}</div>
+    <div class="hint" style="margin-top:6px">Tính trên ${t.nights} đêm có đủ cả ba số trong ${t.days} ngày gần nhất. Dao động thấp hơn là ổn định hơn, nhưng chưa nói cách nào đúng hơn: còn phải xem cách nào tụt rõ sau đêm uống bia, ngủ trễ hay ngày ốm. Ba số này chỉ để so sánh, chưa ảnh hưởng điểm hồi phục.</div>`;
+}
 function appleCompareHtml(c) {
   if (!c || !c.days.some((d) => ['hrv', 'rhr', 'sleepH', 'steps', 'resp'].some((k) => d[k][1] != null))) return '';
   const st = (k, label, digits = 0, unit = '') => {
@@ -1898,6 +2006,7 @@ function appleCompareHtml(c) {
       ${c.days.map((d) => `<tr><td class="nowrap">${esc(fmtShort(d.date))}</td>${pairCell(d.hrv)}${pairCell(d.rhr)}${pairCell(d.sleepH, 1)}${pairCell(d.resp, 1)}${pairCell(d.steps, 0, 'col-steps')}</tr>`).join('')}
     </tbody></table></div>
     <div class="compare-stats">${st('hrv', 'HRV', 1, ' ms')}${st('rhr', 'Nhịp tim nghỉ', 1)}${st('sleepH', 'Giờ ngủ', 1, ' h')}${st('resp', 'Nhịp thở', 1)}${st('steps', 'Số bước')}</div>
+    ${hrvTrialHtml(c)}
     <div class="hint" style="margin-top:6px">Ô tô màu là ngày hai nguồn lệch hơn 10%. Cột Ngủ: Apple = đêm chính + ngủ trưa cùng ngày, đúng cách HUAWEI/Intervals cộng. Cột HRV: Apple là HRV lúc ngủ, Intervals là trung bình cả ngày, nên lệch là bình thường; app không bao giờ trộn hai loại trong một mức nền.</div>`;
 }
 function appleWorkoutsHtml(ws) {

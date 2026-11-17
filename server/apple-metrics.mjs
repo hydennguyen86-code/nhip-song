@@ -34,6 +34,7 @@
 import { localDate, getConfig, setConfig } from './db.mjs';
 import { BASELINE_NEEDS } from './signals.mjs';
 import { parseTime, parseSamples, buildNights, saveNight, listNights } from './apple-health.mjs';
+import { saveAppleBody } from './body.mjs';
 
 const MIN = 60_000;
 const DAY = 86_400_000;
@@ -45,6 +46,11 @@ export function metricOf(type) {
   const t = fold(type).replace(/[_-]+/g, ' ');
   if (!t) return null;
   if (/sleep analysis|phan tich giac ngu|^giac ngu$|^sleep$/.test(t)) return 'sleep';
+  // Body composition from a smart scale (Fitdays+ → Apple Health). BMI is derived, so skipped.
+  if (/body mass index|\bbmi\b|chi so khoi/.test(t)) return null;
+  if (/lean body|lean mass|khoi (luong )?(co the )?nac/.test(t)) return 'lean_mass';
+  if (/body fat|mo co the|ty le mo/.test(t)) return 'body_fat';
+  if (/body mass|^weight$|^can nang$|khoi luong co the/.test(t)) return 'body_mass';
   if (/variability|bien thien|\bhrv\b/.test(t)) return 'hrv';
   if (/resting heart|nhip tim (luc |khi )?nghi/.test(t)) return 'rhr';
   if (/walking heart|nhip tim trung binh khi di|khi di bo/.test(t)) return 'walk_hr';
@@ -80,13 +86,17 @@ export function parseValue(raw, metric = '') {
 const RANGE = {
   hrv: [3, 300], rhr: [25, 130], hr: [25, 230], walk_hr: [30, 200], resp: [4, 40],
   spo2: [70, 100], wrist_temp: [-5, 45], steps: [0, 100000], kcal: [0, 10000],
+  body_mass: [20, 300], body_fat: [2, 70], lean_mass: [10, 200],
 };
+const BODY_METRIC_COL = { body_mass: 'weight', body_fat: 'fat_pct', lean_mass: 'lean_kg' };
 
 function normalize(metric, value, unit = '') {
   if (value == null) return null;
   let v = value;
   const u = fold(unit);
   if (metric === 'spo2' && v <= 1) v *= 100;
+  if (metric === 'body_fat' && v <= 1) v *= 100; // Apple stores a fraction
+  if ((metric === 'body_mass' || metric === 'lean_mass') && /lb|pound/.test(u)) v /= 2.20462;
   if (metric === 'kcal' && /kj/.test(u)) v /= 4.184;
   if (metric === 'wrist_temp' && /f/.test(u)) v = v > 50 ? (v - 32) / 1.8 : v / 1.8; // °F absolute or °F deviation
   const r = RANGE[metric];
@@ -280,8 +290,21 @@ export function aggregateDaily(samples, windows = new Map()) {
     const win = inside(list, dayStart(d) - 3 * 3600000, dayStart(d) + 11 * 3600000);
     return { pick: win, method: win.length ? 'window' : null };
   };
+  /**
+   * The two Apple variants of the three-way HRV trial, each computed on its own
+   * (no fallback between them): median inside deep sleep (≥ HRV_DEEP_MIN
+   * readings) and median of the whole main sleep. The third is Intervals.icu.
+   */
+  const hrvVariants = (d) => {
+    const list = byMetric.get('hrv') || [];
+    const w = windows.get(d);
+    if (!w) return { deep: [], sleep: [] };
+    const deep = w.deep?.length ? list.filter((s) => w.deep.some(([a, b]) => s.start >= a && s.start < b)) : [];
+    return { deep: deep.length >= HRV_DEEP_MIN ? deep : [], sleep: inside(list, w.start, w.end) };
+  };
   for (const d of dates) {
     const { pick: hrv, method: hrvMethod } = nightHrv(d);
+    const variants = hrvVariants(d);
     const w = windows.get(d);
     const hrDay = inside(byMetric.get('hr') || [], dayStart(d), dayStart(d) + DAY);
     const hrSleep = w ? inside(byMetric.get('hr') || [], w.start, w.end) : [];
@@ -292,6 +315,10 @@ export function aggregateDaily(samples, windows = new Map()) {
       hrv: round1(median(hrv.map((s) => s.value))),
       hrv_n: hrv.length || null,
       hrv_method: hrvMethod,
+      hrv_deep: round1(median(variants.deep.map((s) => s.value))),
+      hrv_deep_n: variants.deep.length || null,
+      hrv_sleep: round1(median(variants.sleep.map((s) => s.value))),
+      hrv_sleep_n: variants.sleep.length || null,
       rhr: latest('rhr', d),
       sleep_hr: round1(mean(hrSleep.map((s) => s.value))),
       // Whole-day average only when heart rate covers most of the day, not just a workout.
@@ -304,7 +331,23 @@ export function aggregateDaily(samples, windows = new Map()) {
       wrist_temp: latest('wrist_temp', d),
       sources: [...new Set([...hrv, ...hrDay].map((s) => s.source).filter(Boolean))],
     };
-    if (Object.entries(row).some(([k, v]) => !['date', 'sources', 'hrv_n', 'hrv_method'].includes(k) && v != null)) out[d] = row;
+    if (Object.entries(row).some(([k, v]) => !['date', 'sources', 'hrv_n', 'hrv_method', 'hrv_deep_n', 'hrv_sleep_n'].includes(k) && v != null)) out[d] = row;
+  }
+  return out;
+}
+
+/** Smart-scale samples → { [date]: { weight, fat_pct, lean_kg } }, latest reading of each kind that day. */
+export function aggregateBody(samples) {
+  const out = {};
+  const at = {};
+  for (const s of samples) {
+    const col = BODY_METRIC_COL[s.metric];
+    if (!col) continue;
+    const d = dateOf(s.start);
+    const key = `${d}|${col}`;
+    if (at[key] != null && at[key] > s.start) continue;
+    at[key] = s.start;
+    (out[d] ||= {})[col] = s.value;
   }
   return out;
 }
@@ -347,9 +390,11 @@ export function buildWorkouts(workouts, samples, { restHr = 60, maxHr = 185 } = 
 
 // ---------------- storage ----------------
 
-const DAILY_COLS = ['hrv', 'hrv_n', 'hrv_method', 'rhr', 'sleep_hr', 'avg_hr', 'resp', 'spo2', 'steps', 'kcal_active', 'walk_hr', 'wrist_temp'];
+const DAILY_COLS = ['hrv', 'hrv_n', 'hrv_method', 'hrv_deep', 'hrv_deep_n', 'hrv_sleep', 'hrv_sleep_n', 'rhr', 'sleep_hr', 'avg_hr', 'resp', 'spo2', 'steps', 'kcal_active', 'walk_hr', 'wrist_temp'];
 const GROWING = new Set(['steps', 'kcal_active']);
 const HRV_COLS = new Set(['hrv', 'hrv_n', 'hrv_method']);
+/** Trial variants: value + count travel together; the push that saw more of the night wins. */
+const VARIANT_OF = { hrv_deep: 'hrv_deep', hrv_deep_n: 'hrv_deep', hrv_sleep: 'hrv_sleep', hrv_sleep_n: 'hrv_sleep' };
 
 export function saveDaily(db, userId, row) {
   // Night HRV: a later push whose window cut the night short has fewer readings;
@@ -363,6 +408,8 @@ export function saveDaily(db, userId, row) {
     ? `${c}=CASE WHEN excluded.${c} IS NULL THEN apple_daily.${c} WHEN apple_daily.${c} IS NULL THEN excluded.${c} ELSE MAX(excluded.${c}, apple_daily.${c}) END`
     : HRV_COLS.has(c)
       ? `${c}=CASE WHEN ${hrvWins} THEN excluded.${c} ELSE apple_daily.${c} END`
+    : VARIANT_OF[c]
+      ? `${c}=CASE WHEN excluded.${VARIANT_OF[c]} IS NOT NULL AND (apple_daily.${VARIANT_OF[c]} IS NULL OR COALESCE(excluded.${VARIANT_OF[c]}_n,0) >= COALESCE(apple_daily.${VARIANT_OF[c]}_n,0)) THEN excluded.${c} ELSE apple_daily.${c} END`
       : `${c}=COALESCE(excluded.${c}, apple_daily.${c})`)).join(', ');
   db.prepare(`INSERT INTO apple_daily(user_id,date,${DAILY_COLS.join(',')},sources,updated_at)
       VALUES(?,?,${DAILY_COLS.map(() => '?').join(',')},?,?)
@@ -450,6 +497,11 @@ export function ingestAll(db, userId, body = {}) {
   const built = buildWorkouts(workouts, samples, hrRefs(db, userId, samples));
   for (const w of built) saveWorkout(db, userId, w);
 
+  // Smart-scale readings: the latest value of each kind per day fills the body-composition row.
+  const scale = aggregateBody(samples);
+  for (const [date, vals] of Object.entries(scale)) saveAppleBody(db, userId, date, vals);
+  const bodyDays = Object.keys(scale).sort();
+
   // Message for the phone notification: the newest day, in a line.
   const days = Object.keys(daily).sort();
   const lastDay = days[days.length - 1];
@@ -463,6 +515,8 @@ export function ingestAll(db, userId, body = {}) {
     }
   }
   if (built.length) parts.push(`${built.length} buổi tập`);
+  const lastBody = bodyDays.length ? scale[bodyDays[bodyDays.length - 1]] : null;
+  if (lastBody?.weight != null) parts.push(`cân ${String(Math.round(lastBody.weight * 10) / 10).replace('.', ',')} kg${lastBody.fat_pct != null ? `, mỡ ${String(Math.round(lastBody.fat_pct * 10) / 10).replace('.', ',')}%` : ''}`);
   const when = newestNight || lastDay;
   const message = `${when ? `Ngày ${ddmm(when)}: ` : ''}${parts.join(', ') || 'đã nhận dữ liệu'}.${unknownTypes.length ? ` Bỏ qua loại lạ: ${unknownTypes.slice(0, 3).join(', ')}.` : ''}`;
   return {
@@ -472,6 +526,7 @@ export function ingestAll(db, userId, body = {}) {
     nights: nights.map((n) => ({ date: n.date, asleepMin: n.asleepMin, deepMin: n.deepMin, remMin: n.remMin, awakeMin: n.awakeMin, awakenings: n.awakenings })),
     days: days.map((k) => daily[k]),
     workouts: built.map((w) => ({ date: w.date, name: w.name, minutes: w.minutes, avgHr: w.avgHr, maxHr: w.maxHr, trimp: w.trimp })),
+    body: bodyDays.map((d) => ({ date: d, ...scale[d] })),
     unknownTypes,
     badLines,
     format: isAutoExport ? 'health-auto-export' : 'shortcut',
@@ -657,6 +712,8 @@ export function compareSources(db, userId, today = localDate(), days = 14) {
     rows.push({
       date,
       hrv: [I.hrv_rmssd ?? null, A.hrv ?? null],
+      // Three-way trial: Intervals.icu, median in deep sleep, median of the whole sleep (+ readings used).
+      hrv3: { icu: I.hrv_rmssd ?? null, deep: A.hrv_deep ?? null, deepN: A.hrv_deep_n ?? null, sleep: A.hrv_sleep ?? null, sleepN: A.hrv_sleep_n ?? null },
       rhr: [I.resting_hr ?? null, A.rhr ?? null],
       // Apple night + that day's naps = how Intervals.icu (HUAWEI) counts a day's sleep.
       sleepH: [I.sleep_secs != null ? Math.round(I.sleep_secs / 360) / 10 : null, S.asleep_min != null ? Math.round((S.asleep_min + (S.nap_min || 0)) / 6) / 10 : null],
@@ -674,7 +731,34 @@ export function compareSources(db, userId, today = localDate(), days = 14) {
       meanAbsDiff: both.length ? Math.round(mean(both.map((r) => Math.abs(r[key][0] - r[key][1]))) * 10) / 10 : null,
     };
   };
-  return { days: rows, stats: { hrv: stat('hrv'), rhr: stat('rhr'), sleepH: stat('sleepH'), steps: stat('steps'), resp: stat('resp') } };
+  return { days: rows, hrvTrial: hrvTrial(db, userId, today), stats: { hrv: stat('hrv'), rhr: stat('rhr'), sleepH: stat('sleepH'), steps: stat('steps'), resp: stat('resp') } };
+}
+
+/**
+ * Three-way HRV trial over the last `days` days, on the nights that have all
+ * three numbers so the comparison is fair. `noise` is the night-to-night
+ * spread: SD of the successive differences of ln(HRV) / √2 (a steady method
+ * scores low). `n` readings per night explains most of it.
+ */
+export function hrvTrial(db, userId, today = localDate(), days = 60) {
+  const from = localDate(new Date(Date.parse(`${today}T12:00:00+07:00`) - (days - 1) * DAY));
+  const rows = db.prepare(`SELECT a.date, w.hrv_rmssd AS icu, a.hrv_deep AS deep, a.hrv_deep_n AS deepN, a.hrv_sleep AS sleep, a.hrv_sleep_n AS sleepN
+      FROM apple_daily a LEFT JOIN wellness w ON w.user_id = a.user_id AND w.date = a.date
+      WHERE a.user_id = ? AND a.date >= ? AND a.date <= ? ORDER BY a.date`).all(userId, from, today);
+  const full = rows.filter((r) => r.icu > 0 && r.deep > 0 && r.sleep > 0);
+  const sd = (xs) => { if (xs.length < 2) return null; const m = mean(xs); return Math.sqrt(xs.reduce((a, x) => a + (x - m) ** 2, 0) / (xs.length - 1)); };
+  const r3 = (x) => (x == null ? null : Math.round(x * 1000) / 1000);
+  const one = (k, nk) => {
+    const ln = full.map((r) => Math.log(r[k]));
+    const diffs = [];
+    for (let i = 1; i < full.length; i++) {
+      if (Date.parse(`${full[i].date}T12:00:00Z`) - Date.parse(`${full[i - 1].date}T12:00:00Z`) === DAY) diffs.push(ln[i] - ln[i - 1]);
+    }
+    const s = sd(diffs);
+    return { median: round1(median(full.map((r) => r[k]))), spread: r3(sd(ln)), noise: s == null ? null : r3(s / Math.SQRT2), readings: nk ? round1(mean(full.map((r) => r[nk] || 0))) : null };
+  };
+  return { days, nights: full.length, missing: { deep: rows.filter((r) => r.sleep > 0 && !(r.deep > 0)).length, sleep: rows.filter((r) => !(r.sleep > 0)).length },
+    icu: one('icu'), deep: one('deep', 'deepN'), sleep: one('sleep', 'sleepN') };
 }
 
 /** Apple workouts with the overlapping Intervals.icu activity's load beside the TRIMP estimate. */

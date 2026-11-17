@@ -14,6 +14,7 @@ import { computePatterns } from './patterns.mjs';
 import { analyzeSleepStructure } from './sleep-structure.mjs';
 import { listNights, appleBedtimes } from './apple-health.mjs';
 import { aiConfig, buildPacket, runAi, hashPacket, usageSummary, weeklyWindow, cached, AiError } from './ai.mjs';
+import { BODY_FIELDS, SEGMENTS, listBody, saveManualBody, deleteBody, bodySummary } from './body.mjs';
 
 const isDate = (d) => /^\d{4}-\d{2}-\d{2}$/.test(String(d || ''));
 
@@ -89,6 +90,33 @@ export async function handleExtRoutes({ p, method, u, req, res, db, json, readJs
     } catch (err) {
       json(res, 400, { error: err.message });
     }
+    return true;
+  }
+
+  // ---------- body composition (weekly smart-scale reading) ----------
+  if (p === '/api/body' && method === 'GET') {
+    if (!requireUser(req, res)) return true;
+    const today = localDate();
+    const rows = listBody(db, req.user.id, addDays(today, -730), today);
+    json(res, 200, { today, fields: BODY_FIELDS, segments: SEGMENTS, rows, summary: bodySummary(rows, { today }) });
+    return true;
+  }
+  if (p === '/api/body' && method === 'POST') {
+    if (!requireUser(req, res)) return true;
+    const body = await readJson(req);
+    try {
+      const row = saveManualBody(db, req.user.id, body.date, body.data || {}, { today: localDate() });
+      json(res, 200, { ok: true, row });
+    } catch (err) {
+      json(res, 400, { error: err.message });
+    }
+    return true;
+  }
+  if (p === '/api/body' && method === 'DELETE') {
+    if (!requireUser(req, res)) return true;
+    const date = u.searchParams.get('date');
+    if (!isDate(date)) { json(res, 400, { error: 'Ngày không hợp lệ.' }); return true; }
+    json(res, 200, { ok: deleteBody(db, req.user.id, date) });
     return true;
   }
 

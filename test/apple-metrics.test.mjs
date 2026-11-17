@@ -258,6 +258,9 @@ describe('apple metrics: storage and merge', () => {
     assert.equal(d.hrv_method, 'deep');
     assert.equal(d.hrv_n, 4);
     assert.equal(d.hrv, 63, 'median of 60, 62, 64, 128');
+    assert.equal(d.hrv_deep, 63); assert.equal(d.hrv_deep_n, 4);
+    assert.equal(d.hrv_sleep, 61, 'whole sleep: median of 20, 60, 64, 128, 62, 21');
+    assert.equal(d.hrv_sleep_n, 6, 'the 15:00 spot check is outside the sleep');
 
     const db2 = tmpDb();
     const u2 = newUser(db2);

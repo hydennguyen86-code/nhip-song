@@ -4,6 +4,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { AI_SCHEMA } from './ai-schema.mjs';
 import { APPLE_SCHEMA } from './apple-schema.mjs';
+import { BODY_SCHEMA } from './body-schema.mjs';
 
 export const APP_TZ = 'Asia/Ho_Chi_Minh';
 
@@ -147,7 +148,12 @@ export function openDb(dir) {
   try { db.exec('ALTER TABLE checkins ADD COLUMN tags TEXT'); } catch { /* already there */ }
   db.exec(AI_SCHEMA);
   db.exec(APPLE_SCHEMA);
+  db.exec(BODY_SCHEMA);
   try { db.exec('ALTER TABLE apple_daily ADD COLUMN hrv_method TEXT'); } catch { /* already there */ }
+  // Three-way HRV trial: deep-sleep median and whole-sleep median kept side by side.
+  for (const c of ['hrv_deep REAL', 'hrv_deep_n INTEGER', 'hrv_sleep REAL', 'hrv_sleep_n INTEGER']) {
+    try { db.exec(`ALTER TABLE apple_daily ADD COLUMN ${c}`); } catch { /* already there */ }
+  }
   try { db.exec('ALTER TABLE apple_sleep ADD COLUMN sleep_start TEXT'); } catch { /* already there */ }
   try { db.exec('ALTER TABLE apple_sleep ADD COLUMN sleep_end TEXT'); } catch { /* already there */ }
   return db;
