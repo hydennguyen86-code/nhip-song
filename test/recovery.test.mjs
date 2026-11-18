@@ -43,17 +43,22 @@ function rows({
 }
 
 describe('recovery index', () => {
-  test('uses the synced HUAWEI sleep score and falls back for other sources', () => {
+  test('blends the synced HUAWEI sleep score 50/50 with duration vs need, falls back for other sources', () => {
     const w = rows();
+    const base = computeRecovery({ wellness: w, today: TODAY }).factors.find((x) => x.key === 'sleep');
+    const dur = base.subscore;
     Object.assign(w.at(-1), { source: 'intervals.icu', sleep_score: 40 });
     const low = computeRecovery({ wellness: w, today: TODAY });
     const f = low.factors.find((x) => x.key === 'sleep');
-    assert.equal(f.subscore, 40);
+    assert.equal(f.deviceScore, 40);
+    assert.equal(f.durationSubscore, dur);
+    assert.ok(Math.abs(f.subscore - (40 + dur) / 2) <= 0.05);
     assert.match(f.text, /HUAWEI 40\/100/);
+    assert.equal(f.basis, 'Đêm qua · điểm HUAWEI + thời lượng');
     w.at(-1).sleep_score = 90;
     const high = computeRecovery({ wellness: w, today: TODAY });
-    assert.equal(high.factors.find((x) => x.key === 'sleep').subscore, 90);
-    assert.equal(high.rawScore - low.rawScore, 15);
+    assert.ok(Math.abs(high.factors.find((x) => x.key === 'sleep').subscore - (90 + dur) / 2) <= 0.05);
+    assert.ok(Math.abs((high.rawScore - low.rawScore) - 7.5) <= 1);
     for (const overrides of [
       { sleep_score: null }, { sleep_score: 101 }, { sleep_score: 90, sleep_score_manual: 1 },
       { sleep_score: 90, sleep_score_manual: 0, _apple: ['sleep_score'] },
@@ -63,7 +68,18 @@ describe('recovery index', () => {
       const fallback = computeRecovery({ wellness: w, today: TODAY }).factors.find((x) => x.key === 'sleep');
       assert.match(fallback.text, /tạm tính theo thời lượng/);
       assert.equal(fallback.basis, 'Đêm qua · so với nhu cầu');
+      assert.equal(fallback.subscore, dur);
     }
+  });
+  test('short sleep with a high device score is still flagged as short', () => {
+    const w = rows({ todaySleep: 5.5 * 3600 });
+    Object.assign(w.at(-1), { source: 'intervals.icu', sleep_score: 90 });
+    const f = computeRecovery({ wellness: w, today: TODAY }).factors.find((x) => x.key === 'sleep');
+    assert.equal(f.deviceScore, 90);
+    assert.ok(f.subscore < 60, `blended ${f.subscore} should be pulled down by short duration`);
+    assert.equal(f.status, 'bad');
+    assert.equal(f.word, 'thiếu ngủ');
+    assert.match(f.text, /vẫn báo thiếu ngủ/);
   });
   test('explains missing current values separately from insufficient baseline', () => {
     const r = computeRecovery({ wellness: rows({ todayRhr: null, todaySleep: null, todayResp: null }), today: TODAY });

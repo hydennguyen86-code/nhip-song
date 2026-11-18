@@ -746,7 +746,7 @@ function factorsCard(d) {
     ${d.recovery.factors.map(factorRow).join('')}
     ${d.recovery.capped && d.recovery.rawScore != null ? `<div class="cap-line">Điểm thô ${d.recovery.rawScore} bị giới hạn còn ${d.recovery.score} vì ${esc(d.recovery.capped)}.</div>` : ''}
     ${d.recovery.score == null && d.recovery.factors.length ? `<div class="cap-line note-line">${esc(d.recovery.note)}</div>` : ''}
-    <div class="formula hint">Điểm = trung bình có trọng số: HRV 45%, nhịp tim nghỉ 25%, giấc ngủ 30%. Giấc ngủ dùng điểm HUAWEI đồng bộ qua Intervals.icu; nếu thiếu điểm thì dùng thời lượng so với nhu cầu. HRV lấy lúc ngủ từ Apple Health khi có, nếu không thì dùng HRV trung bình ngày từ Intervals.icu (hai nguồn không bao giờ trộn). Nhu cầu ngủ tăng theo strain hôm qua. Nhịp thở chỉ là cờ cảnh báo, không cộng điểm. Không có HRV thì không có điểm; thiếu nhịp tim nghỉ hoặc giấc ngủ thì chia lại trọng số. Không phải thuật toán WHOOP.</div>
+    <div class="formula hint">Điểm = trung bình có trọng số: HRV 45%, nhịp tim nghỉ 25%, giấc ngủ 30%. Giấc ngủ = 50% điểm ngủ HUAWEI đồng bộ qua Intervals.icu + 50% thời lượng so với nhu cầu; thiếu điểm thì dùng 100% thời lượng. HRV lấy lúc ngủ từ Apple Health khi có, nếu không thì dùng HRV trung bình ngày từ Intervals.icu (hai nguồn không bao giờ trộn). Nhu cầu ngủ tăng theo strain hôm qua. Nhịp thở chỉ là cờ cảnh báo, không cộng điểm. Không có HRV thì không có điểm; thiếu nhịp tim nghỉ hoặc giấc ngủ thì chia lại trọng số. Không phải thuật toán WHOOP.</div>
   </div>`;
 }
 
