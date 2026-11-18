@@ -43,6 +43,28 @@ function rows({
 }
 
 describe('recovery index', () => {
+  test('uses the synced HUAWEI sleep score and falls back for other sources', () => {
+    const w = rows();
+    Object.assign(w.at(-1), { source: 'intervals.icu', sleep_score: 40 });
+    const low = computeRecovery({ wellness: w, today: TODAY });
+    const f = low.factors.find((x) => x.key === 'sleep');
+    assert.equal(f.subscore, 40);
+    assert.match(f.text, /HUAWEI 40\/100/);
+    w.at(-1).sleep_score = 90;
+    const high = computeRecovery({ wellness: w, today: TODAY });
+    assert.equal(high.factors.find((x) => x.key === 'sleep').subscore, 90);
+    assert.equal(high.rawScore - low.rawScore, 15);
+    for (const overrides of [
+      { sleep_score: null }, { sleep_score: 101 }, { sleep_score: 90, sleep_score_manual: 1 },
+      { sleep_score: 90, sleep_score_manual: 0, _apple: ['sleep_score'] },
+      { sleep_score: 90, source: 'apple', _apple: [] },
+    ]) {
+      Object.assign(w.at(-1), { source: 'intervals.icu', sleep_score_manual: 0, _apple: [] }, overrides);
+      const fallback = computeRecovery({ wellness: w, today: TODAY }).factors.find((x) => x.key === 'sleep');
+      assert.match(fallback.text, /tạm tính theo thời lượng/);
+      assert.equal(fallback.basis, 'Đêm qua · so với nhu cầu');
+    }
+  });
   test('explains missing current values separately from insufficient baseline', () => {
     const r = computeRecovery({ wellness: rows({ todayRhr: null, todaySleep: null, todayResp: null }), today: TODAY });
     for (const key of ['rhr', 'sleep']) {
