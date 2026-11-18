@@ -401,7 +401,7 @@ Health có thể hiển thị điểm ngủ, nhưng chưa chắc phím tắt đ�
 - Mẫu chồng nhau được xử lý từng phút: "Đã ngủ" thắng "Trên giường", giai đoạn ngủ thắng "Đã ngủ". Nhờ vậy không bị cộng hai lần.
 - **Thức giữa đêm** = số phút không ngủ giữa lúc bắt đầu ngủ và lúc ngủ lần cuối. **Lần tỉnh** = đoạn thức ít nhất 5 phút. **Hiệu suất** = thời gian ngủ / thời gian trên giường.
 - **So với thói quen**: so với trung bình 30 đêm trước của bạn. Cần ít nhất 7 đêm có giai đoạn ngủ.
-- Số giờ ngủ hiện cạnh số của Intervals nếu lệch từ 20 phút. Trong giai đoạn chạy song song, **điểm hồi phục vẫn dùng số của Intervals**.
+- Số giờ ngủ hiện cạnh số của Intervals nếu lệch từ 20 phút. Điểm ngủ HUAWEI từ Intervals được dùng cho hồi phục khi có; thời lượng dùng nguồn theo cài đặt và quy tắc bên dưới.
 - Nhận nhãn tiếng Việt và tiếng Anh: Sâu/Deep, Lõi/Core, REM, Thức/Awake, Trên giường/In Bed, Đã ngủ/Asleep; và số HealthKit 0–5.
 - Giai đoạn ngủ từ đồng hồ đeo tay có sai số so với đo đa ký giấc ngủ. Hãy nhìn **xu hướng nhiều đêm**, đừng tin một đêm.
 
@@ -418,7 +418,7 @@ Health có thể hiển thị điểm ngủ, nhưng chưa chắc phím tắt đ�
 - **Ngủ phục hồi** = ngủ sâu + REM. Hiện theo phút, theo % và so với mức thường của bạn.
 - **Độ đều giờ ngủ** từ 0–100 = 100 − (độ lệch chuẩn giờ lên giường + độ lệch chuẩn giờ thức dậy của 7 đêm, tính bằng phút) ÷ 1,2. Cần ít nhất 4 đêm.
 - Tab **Quy luật** xét các đêm **ít ngủ sâu**, **ít REM** và **thức nhiều** có làm HRV **đêm kế tiếp** thấp hơn không. App không so cùng đêm, vì HRV và ngủ sâu đo cùng lúc nên luôn đi cùng nhau.
-- Phần này **chỉ hiển thị**. Cấu trúc giấc ngủ chưa được tính vào điểm.
+- Các số giai đoạn từ Apple chỉ hiển thị; điểm ngủ HUAWEI đồng bộ qua Intervals có xét các giai đoạn và được dùng trong điểm hồi phục khi có.
 
 ### Bảo mật
 
@@ -549,10 +549,10 @@ Vòng lớn ở giữa là **chỉ số hồi phục tham khảo**, không phả
 | --- | --- | --- |
 | HRV rMSSD (**bắt buộc**) | 45% | **ln(rMSSD)**. 60% đêm qua + 40% trung bình 7 ngày, z so với **trung vị 60 ngày** (độ lệch = 1,4826 × MAD, sàn 0,07 ≈ 7%). Báo vùng **SWC** = nền ± 0,5 độ lệch và **CV 7 ngày** (cảnh báo khi ≥ 1,5 × CV thường lệ). |
 | Nhịp tim nghỉ | 25% | đêm qua so với **trung vị 30 ngày**, độ lệch MAD (sàn 1 bpm); **đảo dấu** vì cao hơn là xấu |
-| Giấc ngủ | 30% | **so với nhu cầu, không so với trung bình của bạn**: % = ngủ / nhu cầu. Nhu cầu = nền (TB 30 đêm, kẹp 7h30–8h30; < 7 đêm thì 8h) + 20% nợ ngủ 7 đêm trước (tối đa 60 phút) + 5 phút cho mỗi điểm strain hôm qua trên 10, tối đa 45 phút. 85% nhu cầu = 50 điểm; mỗi 10% ≈ 22 điểm. |
+| Giấc ngủ | 30% | Dùng trực tiếp **điểm ngủ HUAWEI từ Intervals.icu** (0–100) khi có. Nếu thiếu, dùng **thời lượng so với nhu cầu**: % = ngủ / nhu cầu. Nhu cầu = nền (TB 30 đêm, kẹp 7h30–8h30; < 7 đêm thì 8h) + 20% nợ ngủ 7 đêm trước (tối đa 60 phút) + 5 phút cho mỗi điểm strain hôm qua trên 10, tối đa 45 phút. 85% nhu cầu = 50 điểm; mỗi 10% ≈ 22 điểm. |
 | Nhịp thở | **0%** | **Cờ cảnh báo một chiều**, không cộng điểm. Bật khi đêm qua cao hơn trung vị 30 đêm ≥ max(1,5; 2 × độ lệch) lần/phút. Thở chậm hơn **không** được cộng điểm. Chưa có số → hiện "chưa có số", **không** hạ độ tin cậy. Có thể nhập tay từ HUAWEI Health ở thẻ *Số của hôm nay*, mục *Nhập tay*. |
 
-Mỗi phần đổi thành điểm con `50 + z × 22`, kẹp 2–99 (giấc ngủ: `50 + (% − 0,85) × 220`). Điểm cuối là trung bình có trọng số. **Không có HRV thì không có điểm** và không có lời khuyên. Thiếu nhịp tim nghỉ hoặc giấc ngủ thì **chia lại trọng số** và hạ độ tin cậy (3/3 = cao, 2 = vừa, 1 = thấp; HRV còn "sơ bộ" < 28 ngày thì tối đa "vừa"). Dải màu: **67–100 sẵn sàng**, **34–66 trung bình**, **0–33 cần hồi phục**.
+HRV và nhịp tim nghỉ đổi thành điểm con `50 + z × 22`, kẹp 2–99. Điểm ngủ HUAWEI dùng trực tiếp; khi thiếu điểm, thời lượng dùng `50 + (% − 0,85) × 220`. Điểm cuối là trung bình có trọng số. **Không có HRV thì không có điểm** và không có lời khuyên. Thiếu nhịp tim nghỉ hoặc giấc ngủ thì **chia lại trọng số** và hạ độ tin cậy (3/3 = cao, 2 = vừa, 1 = thấp; HRV còn "sơ bộ" < 28 ngày thì tối đa "vừa"). Dải màu: **67–100 sẵn sàng**, **34–66 trung bình**, **0–33 cần hồi phục**.
 
 **Mẫu hình ốm**: nhịp thở tăng **cùng lúc** với nhịp tim nghỉ tăng (z ≥ 1) hoặc HRV giảm (z ≤ −1) → điểm bị chặn ở 50 và kết luận buổi sáng ít nhất là "ưu tiên hồi phục".
 
@@ -843,11 +843,11 @@ App **không** sao chép thuật toán WHOOP (bí mật độc quyền, không a
 
 | Vấn đề | WHOOP | App này | Khoa học nói gì |
 | --- | --- | --- | --- |
-| Điểm phục hồi 0–100 | Có, thuật toán kín, trọng số riêng | **Có, công thức công khai**: 45% HRV / 25% RHR / 30% ngủ so với nhu cầu, nhịp thở chỉ là cờ, hiện từng đóng góp và hạ độ tin cậy khi thiếu | Một chỉ số tổng hợp tiện theo dõi, nhưng trọng số là lựa chọn thiết kế, không phải chân lý sinh lý. Minh bạch quan trọng hơn một con số kín. |
+| Điểm phục hồi 0–100 | Có, thuật toán kín, trọng số riêng | **Có, công thức công khai**: 45% HRV / 25% RHR / 30% điểm ngủ HUAWEI (thiếu thì dùng thời lượng so với nhu cầu), nhịp thở chỉ là cờ, hiện từng đóng góp và hạ độ tin cậy khi thiếu | Một chỉ số tổng hợp tiện theo dõi, nhưng trọng số là lựa chọn thiết kế, không phải chân lý sinh lý. Minh bạch quan trọng hơn một con số kín. |
 | Mức nền | 30 ngày cuộn, cập nhật liên tục | 30 ngày **trước** ngày đánh giá, cá nhân hoá | Nền ngắn hạn bắt kịp thay đổi tập luyện; nền phải loại chính ngày đánh giá. |
 | HRV | 1 đêm (giấc ngủ sóng chậm), so nền | **HRV lúc ngủ** từ Apple Health: trung vị các lần đo trong **ngủ sâu** (giống WHOOP); trộn 60% đêm qua + 40% trung bình 7 ngày (log), so nền 60 ngày cùng nguồn | Plews et al.: trung bình 7 ngày (hoặc log 7 ngày) đáng tin hơn 1 đêm — một đêm thấp thường là nhiễu. Trung vị chống được các lần đo lẻ quá cao/thấp của đồng hồ. |
 | Strain | 0–21, lôgarit, tính nhịp tim cả ngày, thuật toán kín | **0–21, lôgarit, công thức công khai**, từ load các buổi tập trên Intervals.icu; mục tiêu theo màu hồi phục | Thang lôgarit phản ánh đúng việc tải càng cao càng khó tăng thêm. Không tính vận động ngoài buổi tập nên ngày nghỉ là 0. |
-| Cấu trúc giấc ngủ | Có, dùng trong điểm ngủ | Có (sâu, lõi, REM, thức, ngủ phục hồi, độ đều giờ ngủ). **Chỉ đưa vào điểm khi tab Quy luật chứng minh** nó dự báo HRV đêm kế tiếp của chính bạn | Giai đoạn ngủ đo ở cổ tay khớp đa ký giấc ngủ ở mức vừa phải; tin xu hướng nhiều đêm hơn một đêm. |
+| Cấu trúc giấc ngủ | Có, dùng trong điểm ngủ | Có (sâu, lõi, REM, thức, ngủ phục hồi, độ đều giờ ngủ). Các giai đoạn Apple chỉ hiển thị; điểm HUAWEI từ Intervals có xét giai đoạn được dùng trong điểm hồi phục | Giai đoạn ngủ đo ở cổ tay khớp đa ký giấc ngủ ở mức vừa phải; tin xu hướng nhiều đêm hơn một đêm. |
 | Số ngày tối thiểu cho HRV | Không công bố | 14 ngày → mức "sơ bộ"; ≥ 28 ngày → mức "ổn định" | Plews et al.: cần ≥ 4 tuần để nền HRV dùng được cho quyết định. |
 | RHR, ngủ | 1 đêm, so nền | 1 đêm, so nền (z-score) | Các chỉ số này ít nhiễu hơn HRV, dùng 1 đêm chấp nhận được. |
 | Nhịp thở | Có, một trong các yếu tố | Có khi dữ liệu có, chỉ là **gợi ý bổ sung**, không quyết định một mình | Nhịp thở tăng là dấu hiệu bệnh nhưng độ ồn cao từ cảm biến đeo tay; chỉ nên là tín hiệu phụ. |

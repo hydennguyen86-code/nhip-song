@@ -7,7 +7,8 @@
  *   - HRV (45%): ln(rMSSD) — 60% last night + 40% 7-day mean — as robust
  *     z vs a 60-day median/MAD baseline; SWC and 7-day CV are reported;
  *   - resting HR (25%): last night vs 30-day median, sign inverted;
- *   - sleep (30%): obtained / NEED (not vs own average), 85% → 50 points;
+ *   - sleep (30%): HUAWEI score from Intervals when available; otherwise
+ *     obtained / NEED, 85% → 50 points;
  *   - each part maps to 50 + 22 × z, clamped 2–99; weights re-normalised when
  *     a part is missing, so the output always says how many parts it used;
  *   - respiratory rate is a one-sided illness flag, never points. Breathing up
@@ -241,6 +242,13 @@ export function computeRecovery({ wellness, today, checkin, settings = DEFAULT_S
   if (s.sleep_on) {
     const sp = sleepPerformance(wellness, activities, today);
     if (sp.ready) {
+      const day = wellness.find((row) => row.date === today);
+      // The Intervals connection is configured to receive HUAWEI Health scores.
+      // Do not mistake a hand entry or an Apple score for that source.
+      const score = day?.source === 'intervals.icu' && day.sleep_score_manual !== 1 && !day._apple?.includes('sleep_score')
+        && typeof day.sleep_score === 'number' && Number.isFinite(day.sleep_score)
+        && day.sleep_score >= 0 && day.sleep_score <= 100 ? day.sleep_score : null;
+      const sleepSubscore = score ?? sp.subscore;
       const pctTxt = `${Math.round(sp.pct * 100)}%`;
       const extras = [];
       if (sp.repayMin) extras.push(`+${sp.repayMin} phút trả nợ ngủ (nợ 7 đêm ${hhmm(sp.debtMin)})`);
@@ -249,16 +257,20 @@ export function computeRecovery({ wellness, today, checkin, settings = DEFAULT_S
       let text = `Ngủ ${hhmm(sp.actualMin)} / nhu cầu ${hhmm(sp.needMin)} = ${pctTxt}. Nhu cầu = nền ${hhmm(sp.baseMin)}${extras.length ? ' ' + extras.join(', ') : ''}.`;
       if (sp.nights < 7) text += ' Chưa đủ 7 đêm lịch sử nên nền tạm là 8h.';
       if (sp.suspect) text += ' Dưới 3 giờ — nếu là lỗi đồng bộ, hãy đánh dấu sai.';
+      text += score == null
+        ? ' Chưa có điểm HUAWEI từ Intervals.icu; tạm tính theo thời lượng so với nhu cầu.'
+        : ` Điểm ngủ HUAWEI ${Math.round(score)}/100 được dùng trực tiếp cho 30% thành phần giấc ngủ; thời lượng vẫn dùng để tính nhu cầu và cảnh báo thiếu ngủ.`;
       factors.push({
         ...factorBase('sleep', 'Giấc ngủ'),
-        basis: 'Đêm qua · so với nhu cầu',
+        basis: score == null ? 'Đêm qua · so với nhu cầu' : 'Đêm qua · điểm HUAWEI',
         valueText: hhmm(sp.actualMin),
         meanText: `cần ${hhmm(sp.needMin)}`,
-        z: (sp.subscore - 50) / 22,
-        chip: pctTxt,
-        subscore: sp.subscore,
-        status: sp.pct >= SLEEP_PERF.good ? 'good' : sp.pct < SLEEP_PERF.warn ? 'bad' : 'neutral',
-        word: sp.pct >= SLEEP_PERF.good ? 'đủ nhu cầu' : sp.pct < SLEEP_PERF.warn ? 'thiếu ngủ' : 'gần đủ',
+        z: (sleepSubscore - 50) / 22,
+        chip: score == null ? pctTxt : `${Math.round(score)}/100`,
+        subscore: sleepSubscore,
+        status: score == null ? (sp.pct >= SLEEP_PERF.good ? 'good' : sp.pct < SLEEP_PERF.warn ? 'bad' : 'neutral')
+          : score >= BANDS.green ? 'good' : score < BANDS.yellow ? 'bad' : 'neutral',
+        word: score == null ? (sp.pct >= SLEEP_PERF.good ? 'đủ nhu cầu' : sp.pct < SLEEP_PERF.warn ? 'thiếu ngủ' : 'gần đủ') : 'điểm ngủ HUAWEI',
         pct: sp.pct,
         needMin: sp.needMin,
         text,
@@ -360,7 +372,7 @@ export function computeRecovery({ wellness, today, checkin, settings = DEFAULT_S
     weights: RECOVERY_WEIGHTS,
     note: provisional
       ? `Chỉ số tạm tính: mức nền mới có ${provisional.nights} đêm HRV. Đủ ${provisional.fullDays} đêm thì app tự chuyển sang mức nền đầy đủ như bình thường. Trong lúc này chưa khuyên tập nặng.`
-      : 'Chỉ số tham khảo, công thức công khai: HRV ln (đêm qua + 7 ngày), nhịp tim nghỉ so trung vị, giấc ngủ so với nhu cầu. Nhịp thở là cờ cảnh báo, không cộng điểm. Không phải thuật toán WHOOP, không phải thiết bị y tế.',
+      : 'Chỉ số tham khảo: HRV ln (đêm qua + 7 ngày), nhịp tim nghỉ so trung vị, điểm ngủ HUAWEI hoặc thời lượng so với nhu cầu khi thiếu điểm. Nhịp thở là cờ cảnh báo, không cộng điểm. Không phải thuật toán WHOOP, không phải thiết bị y tế.',
   };
 }
 
