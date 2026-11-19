@@ -725,7 +725,8 @@ function heroCard(d) {
         <div class="hero-band"><span class="hero-band-ico">${ICONS.sparkle}</span>${esc(r.bandLabel)}</div>
         <p class="hero-action">${esc(r.action)}</p>
         <div class="hero-verdict"><span class="dot"></span>${esc(d.advice.label)}</div>
-        <div class="hero-cta"><button class="btn small" type="button" data-explain hidden>Vì sao hôm nay?</button></div>
+        <div class="hero-cta"><button class="btn small" type="button" data-explain>Vì sao hôm nay?</button></div>
+        <div id="aiExplain" role="status" aria-live="polite"></div>
       </div>
     </div>
     ${trend7(d.history)}
@@ -746,7 +747,7 @@ function factorsCard(d) {
     ${d.recovery.factors.map(factorRow).join('')}
     ${d.recovery.capped && d.recovery.rawScore != null ? `<div class="cap-line">Điểm thô ${d.recovery.rawScore} bị giới hạn còn ${d.recovery.score} vì ${esc(d.recovery.capped)}.</div>` : ''}
     ${d.recovery.score == null && d.recovery.factors.length ? `<div class="cap-line note-line">${esc(d.recovery.note)}</div>` : ''}
-    <div class="formula hint">Điểm = trung bình có trọng số: HRV 45%, nhịp tim nghỉ 25%, giấc ngủ 30%. Giấc ngủ dùng điểm HUAWEI đồng bộ qua Intervals.icu; nếu thiếu điểm thì dùng thời lượng so với nhu cầu. HRV lấy lúc ngủ từ Apple Health khi có, nếu không thì dùng HRV trung bình ngày từ Intervals.icu (hai nguồn không bao giờ trộn). Nhu cầu ngủ tăng theo strain hôm qua. Nhịp thở chỉ là cờ cảnh báo, không cộng điểm. Không có HRV thì không có điểm; thiếu nhịp tim nghỉ hoặc giấc ngủ thì chia lại trọng số. Không phải thuật toán WHOOP.</div>
+    <div class="formula hint">Điểm = trung bình có trọng số: HRV 45%, nhịp tim nghỉ 25%, giấc ngủ 30%. Giấc ngủ = 50% điểm ngủ HUAWEI đồng bộ qua Intervals.icu + 50% thời lượng so với nhu cầu; thiếu điểm thì dùng 100% thời lượng. HRV lấy lúc ngủ từ Apple Health khi có, nếu không thì dùng HRV trung bình ngày từ Intervals.icu (hai nguồn không bao giờ trộn). Nhu cầu ngủ tăng theo strain hôm qua. Nhịp thở chỉ là cờ cảnh báo, không cộng điểm. Không có HRV thì không có điểm; thiếu nhịp tim nghỉ hoặc giấc ngủ thì chia lại trọng số. Không phải thuật toán WHOOP.</div>
   </div>`;
 }
 
@@ -1309,7 +1310,6 @@ async function renderToday(view) {
       ${workoutCard(d)}
       ${sleepPlanCard(d)}
     </div>
-    <div id="aiExplain"></div>
     <div class="today-grid">
       ${manualCard(d)}
       ${contextCardHtml()}
@@ -1517,18 +1517,19 @@ function doctorBanner(d) {
   return t ? `<div class="doctor-banner" role="status">${esc(t)}</div>` : '';
 }
 
-async function attachExplain(view) {
+function attachExplain(view) {
   const btn = view.querySelector('[data-explain]');
   const slot = view.querySelector('#aiExplain');
   if (!btn || !slot) return;
-  const st = await getAiStatus();
-  if (!st.configured || !btn.isConnected) return;
-  btn.hidden = false;
   btn.onclick = async () => {
     btn.disabled = true;
     const old = btn.textContent;
     btn.innerHTML = '<span class="spinner"></span>Đang hỏi…';
+    slot.innerHTML = '<div class="ai-card card"><div class="hint"><span class="spinner"></span> Đang phân tích…</div></div>';
     try {
+      const st = await getAiStatus(true);
+      if (st.failed) throw new Error('Không đọc được trạng thái AI. Kiểm tra kết nối rồi thử lại.');
+      if (!st.configured) throw new Error('Chưa bật AI trên máy chủ.');
       const r = await api('/api/ai/explain', { method: 'POST', body: {} });
       slot.innerHTML = aiTextBox(r, 'Giải thích (AI)');
     } catch (e) {
