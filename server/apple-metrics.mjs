@@ -51,7 +51,7 @@ export function metricOf(type) {
   if (/lean body|lean mass|khoi (luong )?(co the )?nac/.test(t)) return 'lean_mass';
   if (/body fat|mo co the|ty le mo/.test(t)) return 'body_fat';
   if (/body mass|^weight$|^can nang$|khoi luong co the/.test(t)) return 'body_mass';
-  if (/variability|bien thien|\bhrv\b/.test(t)) return 'hrv';
+  if (/variability|bien thien|\bhrv\b|rmssd/.test(t)) return 'hrv';
   if (/resting heart|nhip tim (luc |khi )?nghi/.test(t)) return 'rhr';
   if (/walking heart|nhip tim trung binh khi di|khi di bo/.test(t)) return 'walk_hr';
   if (/respirat|nhip tho/.test(t)) return 'resp';
@@ -105,11 +105,29 @@ function normalize(metric, value, unit = '') {
 }
 
 /**
- * Apple's HRV slot is labelled SDNN. Health Sync writes HUAWEI's rMSSD into it
- * (same number Intervals.icu shows), but an Apple Watch writes real SDNN, a
- * different quantity. Its readings are dropped so the two never mix.
+ * Up to iOS 26 Apple Health had one HRV slot, labelled SDNN. Health Sync wrote
+ * HUAWEI's rMSSD into it (same number Intervals.icu shows), but an Apple Watch
+ * writes real SDNN, a different quantity, so Apple Watch SDNN is dropped.
+ * iOS 27 added a separate RMSSD type ("Heart Rate Variability (RMSSD)"): from
+ * then on Health Sync writes there, and an Apple Watch RMSSD reading is the
+ * same quantity, so it is kept. When one source sends both types for the same
+ * day, only its RMSSD readings are used (no double counting).
  */
 export const isAppleWatch = (source) => /apple\s*watch|dong ho apple/.test(fold(source));
+
+/** 'rmssd' for the iOS 27 RMSSD type, otherwise 'sdnn' (the old HRV slot). */
+export const hrvKindOf = (type) => (/rmssd/.test(fold(type)) ? 'rmssd' : 'sdnn');
+
+/** Keep an HRV sample? Apple Watch SDNN is a different quantity and never mixes. */
+const keepHrv = (kind, source) => kind === 'rmssd' || !isAppleWatch(source);
+
+/** Per source and day: when RMSSD readings exist, drop that source's SDNN-slot readings. */
+export function preferRmssd(samples) {
+  const key = (x) => `${x.source}|${localDate(new Date(x.start))}`;
+  const withRmssd = new Set(samples.filter((x) => x.metric === 'hrv' && x.kind === 'rmssd').map(key));
+  if (!withRmssd.size) return samples;
+  return samples.filter((x) => !(x.metric === 'hrv' && x.kind !== 'rmssd' && withRmssd.has(key(x))));
+}
 
 // ---------------- parsing ----------------
 
@@ -142,12 +160,17 @@ export function parseShortcutLines(input) {
     }
     const v = normalize(metric, parseValue(value, metric), unit);
     if (v == null) { badLines++; continue; }
-    if (metric === 'hrv' && isAppleWatch(source)) continue;
+    if (metric === 'hrv') {
+      const kind = hrvKindOf(type);
+      if (!keepHrv(kind, source)) continue;
+      samples.push({ metric, kind, start: s, end: e, value: v, source: source.slice(0, 60) });
+      continue;
+    }
     samples.push({ metric, start: s, end: e, value: v, source: source.slice(0, 60) });
   }
   const sleep = parseSamples(sleepLines);
   for (const l of sleep.unknownLabels) unknownTypes.add(l);
-  return { samples, sleepSamples: sleep.samples, workouts, unknownTypes: [...unknownTypes], badLines: badLines + sleep.badLines };
+  return { samples: preferRmssd(samples), sleepSamples: sleep.samples, workouts, unknownTypes: [...unknownTypes], badLines: badLines + sleep.badLines };
 }
 
 const qtyOf = (x) => (x && typeof x === 'object' ? x.qty ?? x.Avg ?? x.avg ?? null : x);
@@ -188,7 +211,12 @@ export function parseAutoExport(body) {
       if (t == null) { badLines++; continue; }
       const v = normalize(metric, parseValue(qtyOf(p), metric), m.units);
       if (v == null) continue;
-      if (metric === 'hrv' && isAppleWatch(p.source)) continue;
+      if (metric === 'hrv') {
+        const kind = hrvKindOf(m.name);
+        if (!keepHrv(kind, p.source)) continue;
+        samples.push({ metric, kind, start: t, end: t, value: v, source: String(p.source || '').slice(0, 60) });
+        continue;
+      }
       samples.push({ metric, start: t, end: t, value: v, source: String(p.source || '').slice(0, 60) });
       if (metric === 'hr' && p.Max != null) {
         const mx = normalize('hr', parseValue(p.Max, 'hr'));
@@ -213,7 +241,7 @@ export function parseAutoExport(body) {
     }
   }
   const sleep = parseSamples(sleepLines);
-  return { samples, sleepSamples: sleep.samples, nights, workouts, unknownTypes: [...unknownTypes], badLines: badLines + sleep.badLines };
+  return { samples: preferRmssd(samples), sleepSamples: sleep.samples, nights, workouts, unknownTypes: [...unknownTypes], badLines: badLines + sleep.badLines };
 }
 
 // ---------------- daily aggregation ----------------

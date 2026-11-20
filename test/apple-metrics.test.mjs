@@ -11,7 +11,7 @@ import { openDb } from '../server/db.mjs';
 import { createUser, upsertWellness, upsertActivity, effectiveWellness, saveManualDay } from '../server/store.mjs';
 import {
   metricOf, parseValue, parseShortcutLines, aggregateDaily, trimp, ingestAll, setAppleMode, getAppleMode,
-  compareSources, workoutsWithIcu, listDaily, isAppleWatch, hrvSourceInfo, setHrvSourceSetting,
+  compareSources, workoutsWithIcu, listDaily, isAppleWatch, hrvSourceInfo, setHrvSourceSetting, hrvKindOf, parseAutoExport,
 } from '../server/apple-metrics.mjs';
 import { listNights } from '../server/apple-health.mjs';
 import { hrvModel } from '../server/signals.mjs';
@@ -75,6 +75,41 @@ describe('apple metrics: parsing', () => {
     assert.equal(isAppleWatch('Health Sync'), false);
     const r = parseShortcutLines(L('Độ biến thiên nhịp tim', T('03:00'), T('03:00'), '80', 'ms', 'Apple Watch của Hyden'));
     assert.equal(r.samples.length, 0);
+  });
+  test('iOS 27 RMSSD type: recognised in any language, Apple Watch RMSSD kept, SDNN still dropped', () => {
+    for (const t of ['Heart Rate Variability (RMSSD)', 'Biến thiên nhịp tim (RMSSD)', 'Độ biến thiên nhịp tim RMSSD', 'HRV RMSSD', 'heart_rate_variability_rmssd']) {
+      assert.equal(metricOf(t), 'hrv', t);
+      assert.equal(hrvKindOf(t), 'rmssd', t);
+    }
+    assert.equal(hrvKindOf('Heart Rate Variability'), 'sdnn');
+    const r = parseShortcutLines([
+      L('Heart Rate Variability (RMSSD)', T('03:00'), T('03:00'), '55', 'ms', 'Apple Watch của Hyden'),
+      L('Heart Rate Variability', T('03:00'), T('03:00'), '80', 'ms', 'Apple Watch của Hyden'),
+    ].join('\n'));
+    assert.deepEqual(r.samples.map((x) => [x.kind, x.value]), [['rmssd', 55]]);
+  });
+  test('one source sending both HRV types on a day: only RMSSD used; older SDNN-only days kept', () => {
+    const r = parseShortcutLines([
+      L('Heart Rate Variability', T('03:00'), T('03:00'), '48', 'ms'),
+      L('Heart Rate Variability (RMSSD)', T('03:00'), T('03:00'), '48', 'ms'),
+      L('Heart Rate Variability (RMSSD)', T('04:00'), T('04:00'), '52', 'ms'),
+      L('Heart Rate Variability', T('03:00', '2026-11-06'), T('03:00', '2026-11-06'), '40', 'ms'),
+    ].join('\n'));
+    const hrv = r.samples.filter((x) => x.metric === 'hrv');
+    assert.deepEqual(hrv.map((x) => [x.kind, x.value]), [['rmssd', 48], ['rmssd', 52], ['sdnn', 40]]);
+    const ax = parseAutoExport({ data: { metrics: [
+      { name: 'heart_rate_variability', units: 'ms', data: [{ date: '2026-11-09 03:10:00 +0700', qty: 47, source: 'Health Sync' }] },
+      { name: 'heart_rate_variability_rmssd', units: 'ms', data: [{ date: '2026-11-09 03:10:00 +0700', qty: 47, source: 'Health Sync' }] },
+    ] } });
+    assert.deepEqual(ax.samples.filter((x) => x.metric === 'hrv').map((x) => x.kind), ['rmssd']);
+  });
+  test('a night sent only as RMSSD still makes the night HRV', () => {
+    const lines = morning().map((l) => l.replace('Độ biến thiên nhịp tim|', 'Biến thiên nhịp tim (RMSSD)|'));
+    const db = tmpDb();
+    const uid = newUser(db);
+    ingestAll(db, uid, { samples: lines.join('\n') });
+    const [d] = listDaily(db, uid, '2026-11-08', '2026-11-08');
+    assert.equal(d.hrv, 48);
   });
 });
 

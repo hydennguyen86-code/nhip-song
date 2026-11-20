@@ -253,7 +253,9 @@ Với HUAWEI Watch, dữ liệu đi theo đường HUAWEI Health → Intervals.i
 
 Intervals.icu về chậm, hay thiếu ngày, và không có giai đoạn ngủ, nhịp thở, SpO2 hay nhịp tim lúc ngủ. Apple Health trên iPhone thì có đủ, vì Health Sync ghi dữ liệu của đồng hồ HUAWEI vào đó.
 
-Apple Health không có API web, nên iPhone phải tự gửi dữ liệu về Nhịp Sống qua Tailscale. Có hai cách:
+Apple Health không có API web, nên iPhone phải tự gửi dữ liệu về Nhịp Sống qua Tailscale.
+
+**HRV từ iOS 27:** Apple Health có thêm loại **HRV RMSSD** bên cạnh loại HRV cũ (SDNN). App nhận cả hai. Cùng một nguồn gửi cả hai loại trong một ngày thì chỉ lấy RMSSD, để không đếm hai lần. HRV RMSSD từ Apple Watch giờ cũng được nhận (cùng đại lượng với HUAWEI); SDNN từ Apple Watch vẫn bị bỏ vì là đại lượng khác. Có hai cách:
 
 - **Phím tắt** (miễn phí): dựng bằng app Phím tắt của Apple. Xem Bước 2, cách A.
 - **Health Auto Export** (trả phí): app bên thứ ba, tự chạy theo lịch. Xem Bước 2, cách B.
@@ -328,6 +330,7 @@ Tạo phím tắt mới tên **Nhịp Sống – Sức khỏe**. Thêm các hàn
    - Ngay sau đó: **Thêm vào biến** (Add to Variable), tên biến `Mẫu`
 2. Lặp lại cặp **Tìm mẫu sức khỏe** + **Thêm vào biến `Mẫu`** cho từng loại dưới đây. Mỗi loại lọc **trong 2 ngày gần nhất**:
    - **Độ biến thiên nhịp tim** (Heart Rate Variability)
+   - **Độ biến thiên nhịp tim (RMSSD)** (Heart Rate Variability (RMSSD)), nếu iPhone có loại này (iOS 27 trở lên). Từ iOS 27, Health Sync ghi HRV của HUAWEI vào loại RMSSD mới; thiếu dòng này thì phím tắt chỉ gửi được nhịp tim nghỉ và giấc ngủ, HRV trống.
    - **Nhịp tim lúc nghỉ** (Resting Heart Rate)
    - **Nhịp thở** (Respiratory Rate)
    - **Độ bão hòa oxy trong máu** (Blood Oxygen)
